@@ -104,6 +104,12 @@ cp .env.example .env
 npm run dev
 ```
 
+Required environment variables (see `backend/.env.example`):
+- Firebase Admin SDK credentials
+- Google Cloud KMS configuration
+- Pinata API keys
+- Contract addresses
+
 ### Smart Contracts
 
 ```bash
@@ -117,6 +123,11 @@ npm test
 npm run deploy:mumbai  # Testnet
 ```
 
+Required environment variables (see `contracts/.env.example`):
+- Private key for deployment
+- RPC URLs for Polygon networks
+- Polygonscan API key for verification
+
 ### Flutter App
 
 ```bash
@@ -124,6 +135,28 @@ cd flutter
 flutter pub get
 flutter run -d chrome
 ```
+
+## Development
+
+### Running Tests
+
+```bash
+# Flutter
+cd flutter && flutter test
+
+# Backend
+cd backend && npm test
+
+# Contracts
+cd contracts && npm test
+```
+
+### CI/CD
+
+GitHub Actions runs on push/PR to `main` and `develop`:
+- Flutter: format, analyze, test
+- Backend: npm test
+- Contracts: compile, test
 
 ## API Endpoints
 

@@ -23,6 +23,31 @@ Flutter Web App  →  Node.js Backend  →  Polygon Blockchain
 
 **License Types**: Display (personal use, $1), Commercial (monetization rights, $5), Transfer (full copyright, $10)
 
+## Project Structure
+
+```
+flutter/lib/
+├── main.dart           # App entry, providers setup
+├── router.dart         # GoRouter configuration
+├── theme.dart          # Light/dark theme definitions
+├── models/             # Data models (Token)
+├── pages/              # Screen widgets
+├── providers/          # State management (Provider)
+├── services/           # API communication
+└── widgets/            # Reusable components
+
+backend/src/
+├── index.js            # Express app setup
+├── middleware/         # Auth, validation
+├── routes/             # API endpoints
+└── services/           # Business logic
+
+contracts/
+├── TindartNFT.sol      # Main ERC-721 contract
+├── scripts/            # Deployment scripts
+└── test/               # Contract tests
+```
+
 ## Commands
 
 ### Backend (Node.js/Express)
@@ -52,6 +77,9 @@ npm run deploy:polygon             # Deploy to Polygon mainnet
 cd flutter
 flutter pub get
 flutter run -d chrome              # Run in Chrome
+flutter test                       # Run tests
+flutter analyze                    # Static analysis
+dart format .                      # Format code
 flutter build web                  # Build for production
 ```
 
@@ -86,3 +114,16 @@ Backend requires: `POLYGON_RPC_URL`, `TINDART_CONTRACT_ADDRESS`, `MINTER_PRIVATE
 Contracts require: `PRIVATE_KEY`, RPC URLs for target networks, `POLYGONSCAN_API_KEY` for verification.
 
 Both components have `.env.example` files with all required variables.
+
+## File Conventions
+
+- Flutter: Standard Flutter/Dart conventions, flutter_lints
+- Backend: CommonJS modules, camelCase
+- Contracts: Solidity style guide, custom errors over require strings
+
+## Important Notes
+
+- Watermark engine is external C++ (referenced but not in this repo)
+- Encrypted originals stored on IPFS, keys in Cloud KMS
+- Contract uses OpenZeppelin v5.0 base contracts
+- Platform wallet receives 2.5% of marketplace sales
