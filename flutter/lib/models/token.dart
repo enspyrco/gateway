@@ -111,7 +111,7 @@ class Token {
     };
   }
 
-  bool get isOwnedBy => (wallet) => currentOwner.toLowerCase() == wallet.toLowerCase();
+  bool isOwnedBy(String wallet) => currentOwner.toLowerCase() == wallet.toLowerCase();
 }
 
 class MintResult {
