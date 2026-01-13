@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
-import 'package:tindart/providers/wallet_provider.dart';
-import 'package:tindart/providers/mint_provider.dart';
+import 'package:nftmarket/providers/wallet_provider.dart';
+import 'package:nftmarket/providers/mint_provider.dart';
 
 void main() {
-  group('TindartApp', () {
+  group('NFTmarketApp', () {
     testWidgets('app renders without crashing', (tester) async {
       await tester.pumpWidget(
         MultiProvider(
@@ -18,13 +18,13 @@ void main() {
           ],
           child: const MaterialApp(
             home: Scaffold(
-              body: Center(child: Text('Tindart')),
+              body: Center(child: Text('NFTmarket')),
             ),
           ),
         ),
       );
 
-      expect(find.text('Tindart'), findsOneWidget);
+      expect(find.text('NFTmarket'), findsOneWidget);
     });
   });
 

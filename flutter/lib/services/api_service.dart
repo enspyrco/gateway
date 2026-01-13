@@ -170,7 +170,8 @@ class ApiService {
   // ============ Public Verification ============
 
   /// Verify an image against a token's watermark (public)
-  Future<Map<String, dynamic>> verifyImage(int tokenId, Uint8List imageBytes) async {
+  Future<Map<String, dynamic>> verifyImage(
+      int tokenId, Uint8List imageBytes) async {
     final uri = Uri.parse('$baseUrl/api/verify/$tokenId/check');
     final request = http.MultipartRequest('POST', uri);
 

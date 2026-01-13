@@ -49,7 +49,7 @@ router.get('/:tokenId', async (req, res, next) => {
 
     res.json({
       tokenId: Number(tokenId),
-      name: firestoreData?.name || `Tindart #${tokenId}`,
+      name: firestoreData?.name || `NFTmarket #${tokenId}`,
       description: firestoreData?.description || '',
       previewUrl,
       creator: tokenData.creator,
@@ -58,9 +58,9 @@ router.get('/:tokenId', async (req, res, next) => {
       mintedAt: tokenData.mintedAt.toISOString(),
       watermarkId: firestoreData?.watermarkId || null,
       verified: true,
-      contractAddress: process.env.TINDART_CONTRACT_ADDRESS,
+      contractAddress: process.env.NFTMARKET_CONTRACT_ADDRESS,
       chain: 'Polygon',
-      explorerUrl: `https://polygonscan.com/token/${process.env.TINDART_CONTRACT_ADDRESS}?a=${tokenId}`
+      explorerUrl: `https://polygonscan.com/token/${process.env.NFTMARKET_CONTRACT_ADDRESS}?a=${tokenId}`
     });
 
   } catch (error) {
@@ -128,7 +128,7 @@ router.get('/stats', async (req, res, next) => {
     res.json({
       totalTokens: totalSupply,
       chain: 'Polygon',
-      contractAddress: process.env.TINDART_CONTRACT_ADDRESS
+      contractAddress: process.env.NFTMARKET_CONTRACT_ADDRESS
     });
 
   } catch (error) {

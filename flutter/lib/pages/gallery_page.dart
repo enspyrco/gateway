@@ -44,10 +44,16 @@ class GalleryPage extends StatelessWidget {
                     DropdownButton<String>(
                       value: 'recent',
                       items: const [
-                        DropdownMenuItem(value: 'recent', child: Text('Most Recent')),
-                        DropdownMenuItem(value: 'popular', child: Text('Most Popular')),
-                        DropdownMenuItem(value: 'price_low', child: Text('Price: Low to High')),
-                        DropdownMenuItem(value: 'price_high', child: Text('Price: High to Low')),
+                        DropdownMenuItem(
+                            value: 'recent', child: Text('Most Recent')),
+                        DropdownMenuItem(
+                            value: 'popular', child: Text('Most Popular')),
+                        DropdownMenuItem(
+                            value: 'price_low',
+                            child: Text('Price: Low to High')),
+                        DropdownMenuItem(
+                            value: 'price_high',
+                            child: Text('Price: High to Low')),
                       ],
                       onChanged: (value) {},
                     ),

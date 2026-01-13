@@ -75,7 +75,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
           children: [
             Icon(Icons.error_outline, size: 48, color: Colors.grey.shade400),
             const SizedBox(height: 16),
-            Text('Error loading token', style: Theme.of(context).textTheme.titleLarge),
+            Text('Error loading token',
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(_error!, style: TextStyle(color: Colors.grey.shade600)),
             const SizedBox(height: 24),
@@ -128,7 +129,10 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                     children: [
                       Text(
                         token.name,
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
                               fontWeight: FontWeight.bold,
                             ),
                       ),
@@ -264,7 +268,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
   }
 
   void _copyLink() {
-    final url = 'https://tindart.com/token/${widget.tokenId}';
+    final url = 'https://nftmarket.com/token/${widget.tokenId}';
     Clipboard.setData(ClipboardData(text: url));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Link copied to clipboard')),

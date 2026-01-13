@@ -8,11 +8,11 @@ import 'theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const TindartApp());
+  runApp(const NFTmarketApp());
 }
 
-class TindartApp extends StatelessWidget {
-  const TindartApp({super.key});
+class NFTmarketApp extends StatelessWidget {
+  const NFTmarketApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -25,9 +25,9 @@ class TindartApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp.router(
-        title: 'Tindart',
-        theme: TindartTheme.light,
-        darkTheme: TindartTheme.dark,
+        title: 'NFTmarket',
+        theme: NFTmarketTheme.light,
+        darkTheme: NFTmarketTheme.dark,
         themeMode: ThemeMode.system,
         routerConfig: router,
         debugShowCheckedModeBanner: false,

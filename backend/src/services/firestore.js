@@ -17,7 +17,7 @@ function getDb() {
 
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        projectId: process.env.FIREBASE_PROJECT_ID || 'tindart'
+        projectId: process.env.FIREBASE_PROJECT_ID || 'nftmarket'
       });
     }
     db = admin.firestore();

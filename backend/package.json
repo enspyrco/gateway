@@ -1,7 +1,7 @@
 {
-  "name": "tindart-backend",
+  "name": "nftmarket-backend",
   "version": "1.0.0",
-  "description": "Tindart API - watermarking, encryption, minting",
+  "description": "NFTmarket API - watermarking, encryption, minting",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
@@ -15,7 +15,7 @@
     "ethers": "^6.9.0",
     "firebase-admin": "^11.11.0",
     "@google-cloud/kms": "^4.0.0",
-    "pinata-web3": "^0.1.0",
+    "pinata": "^2.5.2",
     "sharp": "^0.33.0",
     "crypto": "^1.0.1",
     "uuid": "^9.0.0",

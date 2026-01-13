@@ -3,21 +3,21 @@
  * Uses Pinata for pinning files to IPFS
  */
 
-const { PinataSDK } = require('pinata-web3');
+const { PinataSDK } = require("pinata");
 
 const PINATA_JWT = process.env.PINATA_JWT;
-const PINATA_GATEWAY = process.env.PINATA_GATEWAY || 'gateway.pinata.cloud';
+const PINATA_GATEWAY = process.env.PINATA_GATEWAY || "gateway.pinata.cloud";
 
 let pinata = null;
 
 function getPinata() {
   if (!pinata) {
     if (!PINATA_JWT) {
-      throw new Error('PINATA_JWT environment variable required');
+      throw new Error("PINATA_JWT environment variable required");
     }
     pinata = new PinataSDK({
       pinataJwt: PINATA_JWT,
-      pinataGateway: PINATA_GATEWAY
+      pinataGateway: PINATA_GATEWAY,
     });
   }
   return pinata;
@@ -34,7 +34,7 @@ async function upload(data, filename) {
 
   // Create a File object from buffer
   const file = new File([data], filename, {
-    type: getMimeType(filename)
+    type: getMimeType(filename),
   });
 
   const result = await client.upload.file(file);
@@ -53,8 +53,8 @@ async function uploadJson(json, filename) {
 
   const result = await client.upload.json(json, {
     metadata: {
-      name: filename
-    }
+      name: filename,
+    },
   });
 
   return `ipfs://${result.IpfsHash}`;
@@ -66,10 +66,10 @@ async function uploadJson(json, filename) {
  * @returns {string} - HTTP gateway URL
  */
 function getGatewayUrl(ipfsUri) {
-  if (!ipfsUri.startsWith('ipfs://')) {
+  if (!ipfsUri.startsWith("ipfs://")) {
     return ipfsUri;
   }
-  const hash = ipfsUri.replace('ipfs://', '');
+  const hash = ipfsUri.replace("ipfs://", "");
   return `https://${PINATA_GATEWAY}/ipfs/${hash}`;
 }
 
@@ -80,7 +80,7 @@ function getGatewayUrl(ipfsUri) {
  */
 async function fetch(ipfsUri) {
   const client = getPinata();
-  const hash = ipfsUri.replace('ipfs://', '');
+  const hash = ipfsUri.replace("ipfs://", "");
 
   const response = await client.gateways.get(hash);
   return Buffer.from(await response.arrayBuffer());
@@ -90,21 +90,21 @@ async function fetch(ipfsUri) {
  * Get MIME type from filename
  */
 function getMimeType(filename) {
-  const ext = filename.split('.').pop()?.toLowerCase();
+  const ext = filename.split(".").pop()?.toLowerCase();
   const types = {
-    'png': 'image/png',
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'gif': 'image/gif',
-    'webp': 'image/webp',
-    'json': 'application/json'
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    webp: "image/webp",
+    json: "application/json",
   };
-  return types[ext] || 'application/octet-stream';
+  return types[ext] || "application/octet-stream";
 }
 
 module.exports = {
   upload,
   uploadJson,
   getGatewayUrl,
-  fetch
+  fetch,
 };

@@ -85,7 +85,7 @@ function createRouter(upload) {
 
       // Step 2: Apply watermark
       console.log(`[${mintId}] Applying watermark...`);
-      const watermarkId = `TIND${mintId.slice(0, 8).toUpperCase()}`;
+      const watermarkId = `NFTM${mintId.slice(0, 8).toUpperCase()}`;
       const watermarkedBuffer = await watermarkService.applyWatermark(
         imageBuffer,
         watermarkId
@@ -230,7 +230,7 @@ function generateLicenseText(type, creatorWallet, artworkName) {
 
   const templates = {
     display: `
-TINDART LICENSE AGREEMENT - DISPLAY
+NFTMARKET LICENSE AGREEMENT - DISPLAY
 
 Artwork: ${artworkName}
 Creator: ${creatorWallet}
@@ -251,7 +251,7 @@ Copyright remains with the creator.
     `.trim(),
 
     commercial: `
-TINDART LICENSE AGREEMENT - COMMERCIAL
+NFTMARKET LICENSE AGREEMENT - COMMERCIAL
 
 Artwork: ${artworkName}
 Creator: ${creatorWallet}
@@ -275,7 +275,7 @@ Copyright remains with the creator. Commercial rights transfer with the NFT.
     `.trim(),
 
     transfer: `
-TINDART LICENSE AGREEMENT - COPYRIGHT TRANSFER
+NFTMARKET LICENSE AGREEMENT - COPYRIGHT TRANSFER
 
 Artwork: ${artworkName}
 Creator: ${creatorWallet}
@@ -308,7 +308,7 @@ This is a complete and irrevocable transfer of copyright.
 function generateLicenseTemplate(type) {
   const templates = {
     display: `
-TINDART LICENSE AGREEMENT - DISPLAY
+NFTMARKET LICENSE AGREEMENT - DISPLAY
 
 This license grants personal, non-commercial display rights only.
 
@@ -325,7 +325,7 @@ Copyright remains with the creator.
     `.trim(),
 
     commercial: `
-TINDART LICENSE AGREEMENT - COMMERCIAL
+NFTMARKET LICENSE AGREEMENT - COMMERCIAL
 
 This license grants commercial usage rights.
 
@@ -344,7 +344,7 @@ Copyright remains with the creator. Commercial rights transfer with the NFT.
     `.trim(),
 
     transfer: `
-TINDART LICENSE AGREEMENT - COPYRIGHT TRANSFER
+NFTMARKET LICENSE AGREEMENT - COPYRIGHT TRANSFER
 
 This agreement transfers full copyright ownership to you.
 

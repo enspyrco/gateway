@@ -48,8 +48,10 @@ class MintProvider extends ChangeNotifier {
   double get progress => _progress;
 
   bool get hasImage => _imageBytes != null;
-  bool get canMint => hasImage && _name.isNotEmpty && _wallet?.isConnected == true;
-  bool get isMinting => _state == MintState.uploading || _state == MintState.minting;
+  bool get canMint =>
+      hasImage && _name.isNotEmpty && _wallet?.isConnected == true;
+  bool get isMinting =>
+      _state == MintState.uploading || _state == MintState.minting;
 
   ApiService get _api => ApiService(authToken: _wallet?.authToken);
 

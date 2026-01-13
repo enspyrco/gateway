@@ -1,4 +1,4 @@
-# Tindart Backend API
+# NFTmarket Backend API
 
 Node.js API for watermarking, encryption, IPFS upload, and NFT minting.
 
@@ -44,7 +44,7 @@ cp .env.example .env
 
 4. **Polygon wallet** - Fund with MATIC for gas
 
-5. **Smart contract** - Deploy TindartNFT and set address in .env
+5. **Smart contract** - Deploy NFTmarketNFT and set address in .env
 
 ## Run
 
@@ -67,10 +67,10 @@ Uses Sign-In with Ethereum (SIWE). Client must:
 Example:
 ```javascript
 const message = new SiweMessage({
-  domain: 'tindart.com',
+  domain: 'nftmarket.com',
   address: wallet.address,
-  statement: 'Sign in to Tindart',
-  uri: 'https://api.tindart.com',
+  statement: 'Sign in to NFTmarket',
+  uri: 'https://api.nftmarket.com',
   version: '1',
   chainId: 137
 });
@@ -108,7 +108,7 @@ Response:
   "success": true,
   "tokenId": 42,
   "transactionHash": "0x...",
-  "watermarkId": "TIND12345678",
+  "watermarkId": "NFTM12345678",
   "encryptedBlobUri": "ipfs://...",
   "previewUri": "ipfs://...",
   "metadataUri": "ipfs://..."

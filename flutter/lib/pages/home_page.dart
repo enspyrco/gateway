@@ -12,7 +12,7 @@ class HomePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Tindart'),
+        title: const Text('NFTmarket'),
         actions: const [
           WalletButton(),
           SizedBox(width: 16),
@@ -82,7 +82,9 @@ class HomePage extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.account_balance_wallet),
-              label: Text(wallet.isConnecting ? 'Connecting...' : 'Connect Wallet to Start'),
+              label: Text(wallet.isConnecting
+                  ? 'Connecting...'
+                  : 'Connect Wallet to Start'),
             );
           },
         ),
@@ -99,7 +101,8 @@ class HomePage extends StatelessWidget {
         _FeatureCard(
           icon: Icons.fingerprint,
           title: 'Invisible Watermark',
-          description: 'Survives print, scan, and screenshot. Your proof of origin.',
+          description:
+              'Survives print, scan, and screenshot. Your proof of origin.',
         ),
         _FeatureCard(
           icon: Icons.gavel,
@@ -135,10 +138,22 @@ class HomePage extends StatelessWidget {
           runSpacing: 24,
           alignment: WrapAlignment.center,
           children: [
-            _StepCard(number: '1', title: 'Upload', description: 'Select your AI artwork'),
-            _StepCard(number: '2', title: 'Choose License', description: 'Display, commercial, or transfer'),
-            _StepCard(number: '3', title: 'Sign & Mint', description: 'Watermark applied, NFT created'),
-            _StepCard(number: '4', title: 'Sell or Verify', description: 'Trade or prove authenticity'),
+            _StepCard(
+                number: '1',
+                title: 'Upload',
+                description: 'Select your AI artwork'),
+            _StepCard(
+                number: '2',
+                title: 'Choose License',
+                description: 'Display, commercial, or transfer'),
+            _StepCard(
+                number: '3',
+                title: 'Sign & Mint',
+                description: 'Watermark applied, NFT created'),
+            _StepCard(
+                number: '4',
+                title: 'Sell or Verify',
+                description: 'Trade or prove authenticity'),
           ],
         ),
       ],
@@ -174,7 +189,9 @@ class HomePage extends StatelessWidget {
                           wallet.connect();
                         }
                       },
-                      child: Text(wallet.isConnected ? 'Start Minting' : 'Connect Wallet'),
+                      child: Text(wallet.isConnected
+                          ? 'Start Minting'
+                          : 'Connect Wallet'),
                     );
                   },
                 ),
@@ -207,7 +224,8 @@ class _FeatureCard extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              Icon(icon, size: 48, color: Theme.of(context).colorScheme.primary),
+              Icon(icon,
+                  size: 48, color: Theme.of(context).colorScheme.primary),
               const SizedBox(height: 16),
               Text(
                 title,

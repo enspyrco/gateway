@@ -6,7 +6,7 @@
 const { ethers } = require('ethers');
 
 // Contract ABI (minimal, just what we need)
-const TINDART_ABI = [
+const NFTMARKET_ABI = [
   'function mint(address to, string uri, uint8 licenseType, bytes32 imageHash, bytes32 licenseHash, string encryptedBlobUri) returns (uint256)',
   'function ownerOf(uint256 tokenId) view returns (address)',
   'function tokenURI(uint256 tokenId) view returns (string)',
@@ -17,7 +17,7 @@ const TINDART_ABI = [
 ];
 
 const RPC_URL = process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com';
-const CONTRACT_ADDRESS = process.env.TINDART_CONTRACT_ADDRESS;
+const CONTRACT_ADDRESS = process.env.NFTMARKET_CONTRACT_ADDRESS;
 const MINTER_PRIVATE_KEY = process.env.MINTER_PRIVATE_KEY;
 
 let provider = null;
@@ -44,9 +44,9 @@ function getWallet() {
 function getContract() {
   if (!contract) {
     if (!CONTRACT_ADDRESS) {
-      throw new Error('TINDART_CONTRACT_ADDRESS environment variable required');
+      throw new Error('NFTMARKET_CONTRACT_ADDRESS environment variable required');
     }
-    contract = new ethers.Contract(CONTRACT_ADDRESS, TINDART_ABI, getWallet());
+    contract = new ethers.Contract(CONTRACT_ADDRESS, NFTMARKET_ABI, getWallet());
   }
   return contract;
 }
@@ -62,7 +62,7 @@ function getContract() {
  * @returns {Promise<{tokenId: number, transactionHash: string}>}
  */
 async function mint(to, uri, licenseType, imageHash, licenseHash, encryptedBlobUri) {
-  const tindart = getContract();
+  const nftmarket = getContract();
 
   console.log('Minting NFT...');
   console.log('  To:', to);
@@ -70,7 +70,7 @@ async function mint(to, uri, licenseType, imageHash, licenseHash, encryptedBlobU
   console.log('  License:', licenseType);
 
   // Estimate gas first
-  const gasEstimate = await tindart.mint.estimateGas(
+  const gasEstimate = await nftmarket.mint.estimateGas(
     to,
     uri,
     licenseType,
@@ -82,7 +82,7 @@ async function mint(to, uri, licenseType, imageHash, licenseHash, encryptedBlobU
   console.log('  Gas estimate:', gasEstimate.toString());
 
   // Send transaction with 20% gas buffer
-  const tx = await tindart.mint(
+  const tx = await nftmarket.mint(
     to,
     uri,
     licenseType,
@@ -103,7 +103,7 @@ async function mint(to, uri, licenseType, imageHash, licenseHash, encryptedBlobU
   const mintedEvent = receipt.logs
     .map(log => {
       try {
-        return tindart.interface.parseLog(log);
+        return nftmarket.interface.parseLog(log);
       } catch {
         return null;
       }
@@ -130,8 +130,8 @@ async function mint(to, uri, licenseType, imageHash, licenseHash, encryptedBlobU
  * Check if a wallet owns a specific token
  */
 async function isOwner(tokenId, walletAddress) {
-  const tindart = getContract();
-  const owner = await tindart.ownerOf(tokenId);
+  const nftmarket = getContract();
+  const owner = await nftmarket.ownerOf(tokenId);
   return owner.toLowerCase() === walletAddress.toLowerCase();
 }
 
@@ -139,8 +139,8 @@ async function isOwner(tokenId, walletAddress) {
  * Get token data
  */
 async function getTokenData(tokenId) {
-  const tindart = getContract();
-  const data = await tindart.getTokenData(tokenId);
+  const nftmarket = getContract();
+  const data = await nftmarket.getTokenData(tokenId);
 
   return {
     creator: data.creator,
@@ -158,16 +158,16 @@ async function getTokenData(tokenId) {
  * Check if an image hash is already registered
  */
 async function isImageRegistered(imageHash) {
-  const tindart = getContract();
-  return tindart.isImageRegistered(imageHash);
+  const nftmarket = getContract();
+  return nftmarket.isImageRegistered(imageHash);
 }
 
 /**
  * Get total supply
  */
 async function totalSupply() {
-  const tindart = getContract();
-  return Number(await tindart.totalSupply());
+  const nftmarket = getContract();
+  return Number(await nftmarket.totalSupply());
 }
 
 module.exports = {

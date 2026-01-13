@@ -8,11 +8,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /**
- * @title TindartNFT
- * @notice NFT contract for Tindart AI art marketplace with watermark verification
+ * @title NFTmarketNFT
+ * @notice NFT contract for NFTmarket AI art marketplace with watermark verification
  * @dev ERC721 with license types, marketplace, and royalties
  */
-contract TindartNFT is ERC721, ERC721URIStorage, ERC721Royalty, Ownable, ReentrancyGuard {
+contract NFTmarketNFT is ERC721, ERC721URIStorage, ERC721Royalty, Ownable, ReentrancyGuard {
 
     // ============ Enums ============
 
@@ -92,7 +92,7 @@ contract TindartNFT is ERC721, ERC721URIStorage, ERC721Royalty, Ownable, Reentra
     // ============ Constructor ============
 
     constructor(address _platformWallet)
-        ERC721("Tindart", "TIND")
+        ERC721("NFTmarket", "NFTM")
         Ownable(msg.sender)
     {
         platformWallet = _platformWallet;

@@ -124,7 +124,8 @@ class _VerifyPageState extends State<VerifyPage> {
           children: [
             Icon(Icons.error_outline, size: 48, color: Colors.grey.shade400),
             const SizedBox(height: 16),
-            Text('Error loading token', style: Theme.of(context).textTheme.titleLarge),
+            Text('Error loading token',
+                style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(_tokenError!, style: TextStyle(color: Colors.grey.shade600)),
             const SizedBox(height: 24),
@@ -215,7 +216,8 @@ class _VerifyPageState extends State<VerifyPage> {
                       const SizedBox(width: 4),
                       Text(
                         token.licenseType.displayName,
-                        style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                        style: TextStyle(
+                            color: Colors.grey.shade600, fontSize: 13),
                       ),
                     ],
                   ),
@@ -308,14 +310,16 @@ class _VerifyPageState extends State<VerifyPage> {
                       bottom: 8,
                       left: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: Colors.black54,
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(
                           _imageName ?? 'Image',
-                          style: const TextStyle(color: Colors.white, fontSize: 12),
+                          style: const TextStyle(
+                              color: Colors.white, fontSize: 12),
                         ),
                       ),
                     ),
@@ -423,7 +427,9 @@ class _VerifyPageState extends State<VerifyPage> {
               isMatch ? 'Watermark Verified!' : 'No Match Found',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: isMatch ? Colors.green.shade700 : Colors.orange.shade700,
+                    color: isMatch
+                        ? Colors.green.shade700
+                        : Colors.orange.shade700,
                   ),
             ),
             const SizedBox(height: 8),
@@ -442,7 +448,8 @@ class _VerifyPageState extends State<VerifyPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildStatChip('Confidence', '${(result.confidence * 100).toStringAsFixed(1)}%'),
+                _buildStatChip('Confidence',
+                    '${(result.confidence * 100).toStringAsFixed(1)}%'),
                 const SizedBox(width: 16),
                 _buildStatChip('Watermark ID', result.watermarkId ?? '-'),
               ],
