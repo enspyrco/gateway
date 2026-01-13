@@ -1,5 +1,5 @@
 /**
- * Tindart Backend API
+ * NFTmarket Backend API
  * Handles: watermarking, encryption, IPFS upload, NFT minting
  */
 
@@ -27,7 +27,7 @@ app.use(express.json());
 app.get('/', (req, res) => {
   res.json({
     status: 'healthy',
-    service: 'tindart-api',
+    service: 'nftmarket-api',
     version: '1.0.0'
   });
 });
@@ -54,7 +54,7 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Tindart API running on port ${PORT}`);
+  console.log(`NFTmarket API running on port ${PORT}`);
 });
 
 module.exports = app;

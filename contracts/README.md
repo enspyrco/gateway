@@ -1,6 +1,6 @@
-# Tindart Smart Contracts
+# NFTmarket Smart Contracts
 
-ERC-721 NFT contract with integrated marketplace for Tindart.
+ERC-721 NFT contract with integrated marketplace for NFTmarket.
 
 ## Features
 

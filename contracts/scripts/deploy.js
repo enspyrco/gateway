@@ -9,20 +9,20 @@ async function main() {
   // Use deployer as platform wallet for now (change in production)
   const platformWallet = process.env.PLATFORM_WALLET || deployer.address;
 
-  const TindartNFT = await hre.ethers.getContractFactory("TindartNFT");
-  const tindart = await TindartNFT.deploy(platformWallet);
+  const NFTmarketNFT = await hre.ethers.getContractFactory("NFTmarketNFT");
+  const nftmarket = await NFTmarketNFT.deploy(platformWallet);
 
-  await tindart.waitForDeployment();
+  await nftmarket.waitForDeployment();
 
-  const address = await tindart.getAddress();
+  const address = await nftmarket.getAddress();
 
-  console.log("TindartNFT deployed to:", address);
+  console.log("NFTmarketNFT deployed to:", address);
   console.log("Platform wallet:", platformWallet);
 
   // Verify on Etherscan/Polygonscan (if not localhost)
   if (hre.network.name !== "localhost" && hre.network.name !== "hardhat") {
     console.log("Waiting for block confirmations...");
-    await tindart.deploymentTransaction().wait(6);
+    await nftmarket.deploymentTransaction().wait(6);
 
     console.log("Verifying contract on Etherscan...");
     try {

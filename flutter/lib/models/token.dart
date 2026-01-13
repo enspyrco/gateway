@@ -85,7 +85,8 @@ class Token {
       previewUrl: json['previewUrl'] as String?,
       creator: json['creator'] as String,
       currentOwner: json['currentOwner'] as String,
-      licenseType: LicenseType.fromString(json['licenseType'] as String? ?? 'display'),
+      licenseType:
+          LicenseType.fromString(json['licenseType'] as String? ?? 'display'),
       mintedAt: DateTime.parse(json['mintedAt'] as String),
       watermarkId: json['watermarkId'] as String?,
       transactionHash: json['transactionHash'] as String?,
@@ -111,7 +112,8 @@ class Token {
     };
   }
 
-  bool isOwnedBy(String wallet) => currentOwner.toLowerCase() == wallet.toLowerCase();
+  bool isOwnedBy(String wallet) =>
+      currentOwner.toLowerCase() == wallet.toLowerCase();
 }
 
 class MintResult {

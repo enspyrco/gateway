@@ -94,7 +94,8 @@ class _ImageUploader extends StatelessWidget {
                       top: 8,
                       right: 8,
                       child: IconButton.filled(
-                        onPressed: mint.isMinting ? null : () => mint.clearImage(),
+                        onPressed:
+                            mint.isMinting ? null : () => mint.clearImage(),
                         icon: const Icon(Icons.close),
                         style: IconButton.styleFrom(
                           backgroundColor: Colors.black54,
@@ -212,7 +213,9 @@ class _LicenseSelector extends StatelessWidget {
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: InkWell(
-                  onTap: mint.isMinting ? null : () => mint.setLicenseType(license),
+                  onTap: mint.isMinting
+                      ? null
+                      : () => mint.setLicenseType(license),
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     padding: const EdgeInsets.all(16),
@@ -225,7 +228,10 @@ class _LicenseSelector extends StatelessWidget {
                         width: isSelected ? 2 : 1,
                       ),
                       color: isSelected
-                          ? Theme.of(context).colorScheme.primary.withOpacity(0.05)
+                          ? Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.05)
                           : null,
                     ),
                     child: Row(
@@ -243,7 +249,8 @@ class _LicenseSelector extends StatelessWidget {
                             children: [
                               Text(
                                 license.displayName,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold),
                               ),
                               Text(
                                 license.description,
@@ -257,7 +264,10 @@ class _LicenseSelector extends StatelessWidget {
                         ),
                         Text(
                           '\$${license.price.toStringAsFixed(0)}',
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          style: Theme.of(context)
+                              .textTheme
+                              .titleLarge
+                              ?.copyWith(
                                 fontWeight: FontWeight.bold,
                                 color: Theme.of(context).colorScheme.primary,
                               ),
@@ -389,7 +399,8 @@ class _MintSuccess extends StatelessWidget {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   const SizedBox(height: 24),
-                  _InfoRow(label: 'Watermark ID', value: result.watermarkId ?? '-'),
+                  _InfoRow(
+                      label: 'Watermark ID', value: result.watermarkId ?? '-'),
                   const SizedBox(height: 8),
                   _InfoRow(
                     label: 'Transaction',

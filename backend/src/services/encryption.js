@@ -7,9 +7,9 @@
 const { KeyManagementServiceClient } = require('@google-cloud/kms');
 const crypto = require('crypto');
 
-const PROJECT_ID = process.env.GCP_PROJECT_ID || 'tindart';
+const PROJECT_ID = process.env.GCP_PROJECT_ID || 'nftmarket';
 const LOCATION = process.env.KMS_LOCATION || 'global';
-const KEY_RING = process.env.KMS_KEY_RING || 'tindart-keys';
+const KEY_RING = process.env.KMS_KEY_RING || 'nftmarket-keys';
 const KEY_NAME = process.env.KMS_KEY_NAME || 'master-key';
 
 // KMS client (lazy initialized)

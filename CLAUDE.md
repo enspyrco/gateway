@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Tindart is an AI art marketplace that combines invisible watermarking, NFT minting on Polygon, and legal licensing. The platform solves the problem of NFT ownership not conveying actual copyright by embedding watermarks and attaching explicit license agreements to each mint.
+NFTmarket is an AI art marketplace that combines invisible watermarking, NFT minting on Polygon, and legal licensing. The platform solves the problem of NFT ownership not conveying actual copyright by embedding watermarks and attaching explicit license agreements to each mint.
 
 ## Architecture
 
@@ -14,7 +14,7 @@ Three independent components that communicate via API and blockchain:
 Flutter Web App  →  Node.js Backend  →  Polygon Blockchain
      ↓                    ↓                    ↓
   WalletConnect      Watermark C++        ERC-721 Contract
-                     IPFS (Pinata)        (TindartNFT.sol)
+                     IPFS (Pinata)        (NFTmarketNFT.sol)
                      Cloud KMS
                      Firestore
 ```
@@ -43,7 +43,7 @@ backend/src/
 └── services/           # Business logic
 
 contracts/
-├── TindartNFT.sol      # Main ERC-721 contract
+├── NFTmarketNFT.sol    # Main ERC-721 contract
 ├── scripts/            # Deployment scripts
 └── test/               # Contract tests
 ```
@@ -65,7 +65,7 @@ cd contracts
 npm install
 npm run compile                    # Compile contracts
 npm test                           # Run all tests
-npx hardhat test test/TindartNFT.test.js  # Single test file
+npx hardhat test test/NFTmarketNFT.test.js  # Single test file
 npm run node                       # Start local Hardhat node
 npm run deploy:local               # Deploy to local node
 npm run deploy:mumbai              # Deploy to Polygon Mumbai testnet
@@ -85,7 +85,7 @@ flutter build web                  # Build for production
 
 ## Key Technical Details
 
-### Smart Contract (contracts/TindartNFT.sol)
+### Smart Contract (contracts/NFTmarketNFT.sol)
 - ERC-721 with ERC-2981 royalties (2.5% to creator on secondary sales)
 - 2.5% platform fee on marketplace sales
 - Duplicate prevention via `imageHashExists` mapping
@@ -109,7 +109,7 @@ Uses Sign-In with Ethereum (SIWE). Client creates message, signs with wallet, se
 
 ## Environment Configuration
 
-Backend requires: `POLYGON_RPC_URL`, `TINDART_CONTRACT_ADDRESS`, `MINTER_PRIVATE_KEY`, `PINATA_JWT`, Firebase credentials, and optionally KMS config.
+Backend requires: `POLYGON_RPC_URL`, `NFTMARKET_CONTRACT_ADDRESS`, `MINTER_PRIVATE_KEY`, `PINATA_JWT`, Firebase credentials, and optionally KMS config.
 
 Contracts require: `PRIVATE_KEY`, RPC URLs for target networks, `POLYGONSCAN_API_KEY` for verification.
 

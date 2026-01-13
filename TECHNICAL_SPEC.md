@@ -1,4 +1,4 @@
-# Tindart Technical Specification
+# NFTmarket Technical Specification
 
 AI art marketplace with verifiable provenance, watermark-based authentication, and clear copyright licensing.
 
@@ -35,7 +35,7 @@ Anyone can verify authenticity via watermark detection
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                         Tindart Platform                         │
+│                        NFTmarket Platform                        │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
@@ -68,7 +68,7 @@ Reuse `watermarking-functions/` C++ library:
 
 ```solidity
 // Polygon deployment
-contract TindartNFT is ERC721, ERC721URIStorage {
+contract NFTmarketNFT is ERC721, ERC721URIStorage {
     struct TokenData {
         string licenseType;      // "display" | "commercial" | "transfer"
         bytes32 imageHash;       // SHA-256 of original
@@ -144,7 +144,7 @@ Response:
 {
   "detected": true,
   "confidence": 8.2,
-  "message": "TIND4582",
+  "message": "NFTM4582",
   "owner": "0x...",
   "license": "commercial"
 }
@@ -199,7 +199,7 @@ Access control:
 
 ```
 1. Anyone photographs suspected artwork
-2. Uploads to Tindart verification page
+2. Uploads to NFTmarket verification page
 3. System:
    a. Checks all registered images
    b. Runs watermark detection against matches
@@ -258,7 +258,7 @@ Attaches to back of artwork
 Anyone can scan → verify → see provenance
 
 QR Code links to:
-https://tindart.com/verify/{tokenId}
+https://nftmarket.com/verify/{tokenId}
 
 Page shows:
 - Artwork image

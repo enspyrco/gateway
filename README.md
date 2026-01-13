@@ -1,4 +1,4 @@
-# Tindart NFT
+# NFTmarket
 
 AI art marketplace with verifiable provenance, watermark-based authentication, and clear copyright licensing.
 
@@ -32,7 +32,7 @@ Anyone can verify authenticity via watermark detection
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      Tindart Platform                        │
+│                     NFTmarket Platform                       │
 ├─────────────────────────────────────────────────────────────┤
 │  Flutter Web    │    Node.js API    │    Watermark Engine   │
 │   (Frontend)    │     (Backend)     │        (C++)          │
@@ -45,14 +45,14 @@ Anyone can verify authenticity via watermark detection
 ## Project Structure
 
 ```
-tindartNFT/
+NFTmarket/
 ├── backend/          # Node.js Express API
 │   └── src/
 │       ├── routes/       # mint, detect, verify endpoints
 │       ├── services/     # watermark, encryption, IPFS, blockchain
 │       └── middleware/   # SIWE authentication
 ├── contracts/        # Solidity smart contracts
-│   ├── TindartNFT.sol    # ERC-721 with marketplace
+│   ├── NFTmarketNFT.sol  # ERC-721 with marketplace
 │   ├── scripts/          # Deployment scripts
 │   └── test/             # Contract tests
 └── flutter/          # Flutter web frontend
