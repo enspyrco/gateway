@@ -28,3 +28,4 @@ contracts/artifacts/
 
 # Coverage
 coverage/
+firebase-debug.log
