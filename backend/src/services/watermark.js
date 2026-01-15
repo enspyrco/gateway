@@ -3,15 +3,18 @@
  * Interfaces with C++ watermarking binaries
  */
 
-const { spawn } = require('child_process');
-const fs = require('fs').promises;
-const path = require('path');
-const os = require('os');
-const sharp = require('sharp');
-const { v4: uuidv4 } = require('uuid');
+const { spawn } = require("child_process");
+const fs = require("fs").promises;
+const path = require("path");
+const os = require("os");
+const sharp = require("sharp");
+const { v4: uuidv4 } = require("uuid");
 
-const WATERMARK_BINARY = process.env.WATERMARK_BINARY || './mark-image';
-const WATERMARK_STRENGTH = process.env.WATERMARK_STRENGTH || '1.0';
+const WATERMARK_BINARY = process.env.WATERMARK_BINARY || "./mark-image";
+const WATERMARK_STRENGTH = process.env.WATERMARK_STRENGTH || "1.0";
+const USE_MOCK_WATERMARK =
+  process.env.USE_MOCK_WATERMARK === "true" ||
+  process.env.NODE_ENV !== "production";
 
 /**
  * Apply invisible watermark to image
@@ -20,6 +23,14 @@ const WATERMARK_STRENGTH = process.env.WATERMARK_STRENGTH || '1.0';
  * @returns {Promise<Buffer>} - Watermarked image
  */
 async function applyWatermark(imageBuffer, message) {
+  // In development mode without the C++ binary, return the image as-is
+  if (USE_MOCK_WATERMARK) {
+    console.log(`MOCK WATERMARK: Would embed message "${message}" into image`);
+    // Just convert to PNG and return (simulating watermark process)
+    const pngBuffer = await sharp(imageBuffer).png().toBuffer();
+    return pngBuffer;
+  }
+
   const tempId = uuidv4();
   const tempDir = os.tmpdir();
   const inputPath = path.join(tempDir, `${tempId}-input.png`);
@@ -27,9 +38,7 @@ async function applyWatermark(imageBuffer, message) {
 
   try {
     // Convert to PNG (required by watermark binary)
-    const pngBuffer = await sharp(imageBuffer)
-      .png()
-      .toBuffer();
+    const pngBuffer = await sharp(imageBuffer).png().toBuffer();
 
     // Write to temp file
     await fs.writeFile(inputPath, pngBuffer);
@@ -41,7 +50,6 @@ async function applyWatermark(imageBuffer, message) {
     const watermarkedBuffer = await fs.readFile(outputPath);
 
     return watermarkedBuffer;
-
   } finally {
     // Cleanup temp files
     await cleanup(inputPath, outputPath);
@@ -57,40 +65,42 @@ function runWatermarkBinary(filePath, message) {
       filePath,
       path.basename(filePath),
       message,
-      WATERMARK_STRENGTH
+      WATERMARK_STRENGTH,
     ];
 
-    console.log(`Running: ${WATERMARK_BINARY} ${args.join(' ')}`);
+    console.log(`Running: ${WATERMARK_BINARY} ${args.join(" ")}`);
 
     const proc = spawn(WATERMARK_BINARY, args);
 
-    let stdout = '';
-    let stderr = '';
+    let stdout = "";
+    let stderr = "";
 
-    proc.stdout.on('data', (data) => {
+    proc.stdout.on("data", (data) => {
       stdout += data.toString();
       // Log progress updates
-      const lines = data.toString().split('\n');
+      const lines = data.toString().split("\n");
       for (const line of lines) {
-        if (line.startsWith('PROGRESS:')) {
-          console.log(`Watermark: ${line.replace('PROGRESS:', '')}`);
+        if (line.startsWith("PROGRESS:")) {
+          console.log(`Watermark: ${line.replace("PROGRESS:", "")}`);
         }
       }
     });
 
-    proc.stderr.on('data', (data) => {
+    proc.stderr.on("data", (data) => {
       stderr += data.toString();
     });
 
-    proc.on('close', (code) => {
+    proc.on("close", (code) => {
       if (code === 0) {
         resolve(stdout);
       } else {
-        reject(new Error(`Watermark binary exited with code ${code}: ${stderr}`));
+        reject(
+          new Error(`Watermark binary exited with code ${code}: ${stderr}`),
+        );
       }
     });
 
-    proc.on('error', (err) => {
+    proc.on("error", (err) => {
       reject(new Error(`Failed to run watermark binary: ${err.message}`));
     });
   });
@@ -104,8 +114,8 @@ function runWatermarkBinary(filePath, message) {
 async function generatePreview(imageBuffer) {
   return sharp(imageBuffer)
     .resize(800, 800, {
-      fit: 'inside',
-      withoutEnlargement: true
+      fit: "inside",
+      withoutEnlargement: true,
     })
     .jpeg({ quality: 85 })
     .toBuffer();
@@ -126,5 +136,5 @@ async function cleanup(...paths) {
 
 module.exports = {
   applyWatermark,
-  generatePreview
+  generatePreview,
 };
