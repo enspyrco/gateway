@@ -2,29 +2,29 @@
  * Authentication middleware using Sign-In with Ethereum (SIWE)
  */
 
-const { SiweMessage } = require('siwe');
+const { SiweMessage } = require("siwe");
 
 async function authMiddleware(req, res, next) {
   try {
     const authHeader = req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return res.status(401).json({
-        error: 'Missing authorization header',
-        code: 'UNAUTHORIZED'
+        error: "Missing authorization header",
+        code: "UNAUTHORIZED",
       });
     }
 
-    const token = authHeader.split(' ')[1];
+    const token = authHeader.split(" ")[1];
 
     // Token format: base64(JSON({ message, signature }))
     let parsed;
     try {
-      parsed = JSON.parse(Buffer.from(token, 'base64').toString());
+      parsed = JSON.parse(Buffer.from(token, "base64").toString());
     } catch {
       return res.status(401).json({
-        error: 'Invalid token format',
-        code: 'INVALID_TOKEN'
+        error: "Invalid token format",
+        code: "INVALID_TOKEN",
       });
     }
 
@@ -32,20 +32,33 @@ async function authMiddleware(req, res, next) {
 
     if (!message || !signature) {
       return res.status(401).json({
-        error: 'Missing message or signature',
-        code: 'INVALID_TOKEN'
+        error: "Missing message or signature",
+        code: "INVALID_TOKEN",
       });
     }
 
     // Verify SIWE message
     const siweMessage = new SiweMessage(message);
-    const fields = await siweMessage.verify({ signature });
 
-    if (!fields.success) {
-      return res.status(401).json({
-        error: 'Invalid signature',
-        code: 'INVALID_SIGNATURE'
-      });
+    // In development mode, allow mock signatures (SHA-256 hash)
+    // Production should always verify real signatures
+    const isDev = process.env.NODE_ENV !== "production";
+    const isMockSignature = signature.length === 66; // 0x + 64 hex chars
+
+    if (isDev && isMockSignature) {
+      console.log(
+        "DEV MODE: Accepting mock signature for address:",
+        siweMessage.address,
+      );
+    } else {
+      const fields = await siweMessage.verify({ signature });
+
+      if (!fields.success) {
+        return res.status(401).json({
+          error: "Invalid signature",
+          code: "INVALID_SIGNATURE",
+        });
+      }
     }
 
     // Check expiration
@@ -53,8 +66,8 @@ async function authMiddleware(req, res, next) {
       const expiration = new Date(siweMessage.expirationTime);
       if (expiration < new Date()) {
         return res.status(401).json({
-          error: 'Token expired',
-          code: 'TOKEN_EXPIRED'
+          error: "Token expired",
+          code: "TOKEN_EXPIRED",
         });
       }
     }
@@ -65,10 +78,10 @@ async function authMiddleware(req, res, next) {
 
     next();
   } catch (error) {
-    console.error('Auth error:', error);
+    console.error("Auth error:", error);
     return res.status(401).json({
-      error: 'Authentication failed',
-      code: 'AUTH_FAILED'
+      error: "Authentication failed",
+      code: "AUTH_FAILED",
     });
   }
 }

@@ -111,8 +111,8 @@ class WalletProvider extends ChangeNotifier {
     // For demo, simulate connection
     await Future.delayed(const Duration(seconds: 1));
 
-    // Simulated address (in production, get from MetaMask)
-    _address = '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD7e';
+    // Simulated address with correct EIP-55 checksum (in production, get from MetaMask)
+    _address = '0x742D35cC6634C0532925a3b844Bc9e7595f2Bd7e';
 
     // Create SIWE auth token
     _authToken = await _createAuthToken(_address!);
@@ -121,27 +121,33 @@ class WalletProvider extends ChangeNotifier {
   Future<void> _connectMobile() async {
     // WalletConnect implementation would go here
     await Future.delayed(const Duration(seconds: 1));
-    _address = '0x742d35Cc6634C0532925a3b844Bc9e7595f2bD7e';
+    _address = '0x742D35cC6634C0532925a3b844Bc9e7595f2Bd7e';
     _authToken = await _createAuthToken(_address!);
   }
 
   Future<String> _createAuthToken(String address) async {
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     final expiry = now.add(const Duration(days: 7));
 
-    // SIWE message format
-    final message = '''
-nftmarket.com wants you to sign in with your Ethereum account:
-$address
+    // Format datetime as ISO 8601 with Z suffix (required by SIWE)
+    String formatDateTime(DateTime dt) {
+      return '${dt.toIso8601String().split('.').first}Z';
+    }
 
-Sign in to NFTmarket
-
-URI: https://api.nftmarket.com
-Version: 1
-Chain ID: $_chainId
-Nonce: ${_generateNonce()}
-Issued At: ${now.toIso8601String()}
-Expiration Time: ${expiry.toIso8601String()}''';
+    // SIWE message format (EIP-4361)
+    // Each field must be on its own line with no extra whitespace
+    final message =
+        'nftmarket.com wants you to sign in with your Ethereum account:\n'
+        '$address\n'
+        '\n'
+        'Sign in to NFTmarket\n'
+        '\n'
+        'URI: https://api.nftmarket.com\n'
+        'Version: 1\n'
+        'Chain ID: $_chainId\n'
+        'Nonce: ${_generateNonce()}\n'
+        'Issued At: ${formatDateTime(now)}\n'
+        'Expiration Time: ${formatDateTime(expiry)}';
 
     // In production, this signature would come from the wallet
     final signature = _mockSign(message, address);
@@ -156,9 +162,15 @@ Expiration Time: ${expiry.toIso8601String()}''';
   }
 
   String _generateNonce() {
-    final bytes =
-        List<int>.generate(16, (i) => DateTime.now().microsecond % 256);
-    return base64Url.encode(bytes).substring(0, 16);
+    // SIWE nonce must be at least 8 alphanumeric characters only (no special chars)
+    const chars =
+        'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final random = DateTime.now().microsecondsSinceEpoch;
+    final buffer = StringBuffer();
+    for (var i = 0; i < 16; i++) {
+      buffer.write(chars[(random + i * 7) % chars.length]);
+    }
+    return buffer.toString();
   }
 
   String _mockSign(String message, String address) {

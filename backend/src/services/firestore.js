@@ -3,7 +3,7 @@
  * Token metadata and key storage
  */
 
-const admin = require('firebase-admin');
+const admin = require("firebase-admin");
 
 // Initialize Firebase Admin (lazy)
 let db = null;
@@ -11,14 +11,22 @@ let db = null;
 function getDb() {
   if (!db) {
     if (!admin.apps.length) {
-      const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT
-        ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-        : require('../../keys/firebase-service-account.json');
+      const projectId = process.env.FIREBASE_PROJECT_ID || "enspyr-experiments";
 
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        projectId: process.env.FIREBASE_PROJECT_ID || 'nftmarket'
-      });
+      if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+        // Use explicit service account JSON
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        admin.initializeApp({
+          credential: admin.credential.cert(serviceAccount),
+          projectId,
+        });
+      } else {
+        // Use Application Default Credentials (gcloud auth application-default login)
+        admin.initializeApp({
+          credential: admin.credential.applicationDefault(),
+          projectId,
+        });
+      }
     }
     db = admin.firestore();
   }
@@ -36,7 +44,7 @@ async function createToken(data) {
     mintId: data.mintId,
     wallet: data.wallet,
     name: data.name,
-    description: data.description || '',
+    description: data.description || "",
     licenseType: data.licenseType,
     imageHash: data.imageHash,
     licenseHash: data.licenseHash,
@@ -46,10 +54,10 @@ async function createToken(data) {
     previewUri: data.previewUri,
     metadataUri: data.metadataUri,
     transactionHash: data.transactionHash,
-    createdAt: admin.firestore.Timestamp.fromDate(data.createdAt)
+    createdAt: admin.firestore.Timestamp.fromDate(data.createdAt),
   };
 
-  await db.collection('tokens').doc(String(data.tokenId)).set(tokenDoc);
+  await db.collection("tokens").doc(String(data.tokenId)).set(tokenDoc);
 
   return tokenDoc;
 }
@@ -59,7 +67,7 @@ async function createToken(data) {
  */
 async function getToken(tokenId) {
   const db = getDb();
-  const doc = await db.collection('tokens').doc(String(tokenId)).get();
+  const doc = await db.collection("tokens").doc(String(tokenId)).get();
 
   if (!doc.exists) {
     return null;
@@ -73,13 +81,14 @@ async function getToken(tokenId) {
  */
 async function getTokensByWallet(wallet, limit = 50) {
   const db = getDb();
-  const snapshot = await db.collection('tokens')
-    .where('wallet', '==', wallet.toLowerCase())
-    .orderBy('createdAt', 'desc')
+  const snapshot = await db
+    .collection("tokens")
+    .where("wallet", "==", wallet.toLowerCase())
+    .orderBy("createdAt", "desc")
     .limit(limit)
     .get();
 
-  return snapshot.docs.map(doc => doc.data());
+  return snapshot.docs.map((doc) => doc.data());
 }
 
 /**
@@ -88,11 +97,11 @@ async function getTokensByWallet(wallet, limit = 50) {
 async function storeKey(tokenId, keyData) {
   const db = getDb();
 
-  await db.collection('keys').doc(String(tokenId)).set({
+  await db.collection("keys").doc(String(tokenId)).set({
     tokenId,
     keyId: keyData.keyId,
     imageHash: keyData.imageHash,
-    createdAt: admin.firestore.FieldValue.serverTimestamp()
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
 
@@ -101,7 +110,7 @@ async function storeKey(tokenId, keyData) {
  */
 async function getKey(tokenId) {
   const db = getDb();
-  const doc = await db.collection('keys').doc(String(tokenId)).get();
+  const doc = await db.collection("keys").doc(String(tokenId)).get();
 
   if (!doc.exists) {
     return null;
@@ -116,13 +125,13 @@ async function getKey(tokenId) {
 async function logDetection(data) {
   const db = getDb();
 
-  await db.collection('detections').add({
+  await db.collection("detections").add({
     tokenId: data.tokenId,
     requester: data.requester,
     capturedImageHash: data.capturedImageHash,
     result: data.result,
     confidence: data.confidence,
-    timestamp: admin.firestore.FieldValue.serverTimestamp()
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
 
@@ -131,21 +140,23 @@ async function logDetection(data) {
  */
 async function getDetectionHistory(tokenId, limit = 20) {
   const db = getDb();
-  const snapshot = await db.collection('detections')
-    .where('tokenId', '==', tokenId)
-    .orderBy('timestamp', 'desc')
+  const snapshot = await db
+    .collection("detections")
+    .where("tokenId", "==", tokenId)
+    .orderBy("timestamp", "desc")
     .limit(limit)
     .get();
 
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
 module.exports = {
+  getDb,
   createToken,
   getToken,
   getTokensByWallet,
   storeKey,
   getKey,
   logDetection,
-  getDetectionHistory
+  getDetectionHistory,
 };
