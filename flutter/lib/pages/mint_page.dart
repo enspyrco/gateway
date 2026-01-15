@@ -5,7 +5,6 @@ import 'package:file_picker/file_picker.dart';
 
 import '../models/token.dart';
 import '../providers/mint_provider.dart';
-import '../providers/wallet_provider.dart';
 import '../widgets/wallet_button.dart';
 
 class MintPage extends StatelessWidget {
@@ -231,18 +230,20 @@ class _LicenseSelector extends StatelessWidget {
                           ? Theme.of(context)
                               .colorScheme
                               .primary
-                              .withOpacity(0.05)
+                              .withValues(alpha: 0.05)
                           : null,
                     ),
                     child: Row(
                       children: [
-                        Radio<LicenseType>(
-                          value: license,
-                          groupValue: mint.licenseType,
-                          onChanged: mint.isMinting
-                              ? null
-                              : (value) => mint.setLicenseType(value!),
+                        Icon(
+                          isSelected
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_unchecked,
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.primary
+                              : Colors.grey.shade400,
                         ),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,7 +290,6 @@ class _MintButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mint = context.watch<MintProvider>();
-    final wallet = context.watch<WalletProvider>();
 
     if (mint.isMinting) {
       return Card(
