@@ -9,7 +9,7 @@ async function main() {
   // Use deployer as platform wallet for now (change in production)
   const platformWallet = process.env.PLATFORM_WALLET || deployer.address;
 
-  const NFTmarketNFT = await hre.ethers.getContractFactory("NFTmarketNFT");
+  const NFTmarketNFT = await hre.ethers.getContractFactory("contracts/NFTmarketNFT.sol:NFTmarketNFT");
   const nftmarket = await NFTmarketNFT.deploy(platformWallet);
 
   await nftmarket.waitForDeployment();

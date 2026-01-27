@@ -6,6 +6,8 @@ import 'providers/wallet_provider.dart';
 import 'pages/home_page.dart';
 import 'pages/mint_page.dart';
 import 'pages/gallery_page.dart';
+import 'pages/marketplace_page.dart';
+import 'pages/generate_page.dart';
 import 'pages/token_detail_page.dart';
 import 'pages/verify_page.dart';
 
@@ -18,7 +20,14 @@ final router = GoRouter(
     ),
     GoRoute(
       path: '/mint',
-      builder: (context, state) => const MintPage(),
+      builder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>?;
+        return MintPage(
+          generatedImageUrl: extra?['generatedImageUrl'] as String?,
+          prompt: extra?['prompt'] as String?,
+          style: extra?['style'] as String?,
+        );
+      },
       redirect: (context, state) {
         final wallet = context.read<WalletProvider>();
         if (!wallet.isConnected) {
@@ -30,6 +39,14 @@ final router = GoRouter(
     GoRoute(
       path: '/gallery',
       builder: (context, state) => const GalleryPage(),
+    ),
+    GoRoute(
+      path: '/marketplace',
+      builder: (context, state) => const MarketplacePage(),
+    ),
+    GoRoute(
+      path: '/generate',
+      builder: (context, state) => const GeneratePage(),
     ),
     GoRoute(
       path: '/token/:tokenId',

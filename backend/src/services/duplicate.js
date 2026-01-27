@@ -8,6 +8,11 @@ const sharp = require("sharp");
 const admin = require("firebase-admin");
 const { getDb } = require("./firestore");
 
+const USE_MOCK_FIRESTORE = process.env.USE_MOCK_FIRESTORE === "true";
+
+// In-memory store for mock mode
+const mockImageHashes = new Map();
+
 /**
  * Check if an image is a duplicate
  * Uses multiple methods:
@@ -19,6 +24,30 @@ const { getDb } = require("./firestore");
  * @returns {Promise<boolean>} - true if duplicate found
  */
 async function checkDuplicate(imageBuffer, exactHash) {
+  if (USE_MOCK_FIRESTORE) {
+    // Check exact hash in mock store
+    for (const [, data] of mockImageHashes) {
+      if (data.exactHash === exactHash) {
+        console.log("MOCK: Duplicate exact hash match found");
+        return true;
+      }
+    }
+
+    // Check perceptual hash
+    const pHash = await computePerceptualHash(imageBuffer);
+    for (const [, data] of mockImageHashes) {
+      if (data.pHash) {
+        const similarity = hammingSimilarity(pHash, data.pHash);
+        if (similarity > 0.95) {
+          console.log(`MOCK: Duplicate perceptual hash match (${similarity * 100}% similar)`);
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
   const db = getDb();
 
   // Check 1: Exact hash match
@@ -62,7 +91,19 @@ async function checkDuplicate(imageBuffer, exactHash) {
 /**
  * Register an image hash after successful mint
  */
-async function registerHash(exactHash, tokenId) {
+async function registerHash(exactHash, tokenId, imageBuffer) {
+  if (USE_MOCK_FIRESTORE) {
+    const pHash = imageBuffer ? await computePerceptualHash(imageBuffer) : null;
+    mockImageHashes.set(exactHash, {
+      exactHash,
+      pHash,
+      tokenId,
+      createdAt: new Date(),
+    });
+    console.log(`MOCK: Registered hash for token ${tokenId}`);
+    return;
+  }
+
   const db = getDb();
 
   // We should compute pHash here too, but for now just store exact
@@ -153,8 +194,16 @@ function hexToBinary(hex) {
   return binary;
 }
 
+/**
+ * Reset mock state (for testing)
+ */
+function resetMock() {
+  mockImageHashes.clear();
+}
+
 module.exports = {
   checkDuplicate,
   registerHash,
   computePerceptualHash,
+  resetMock,
 };
