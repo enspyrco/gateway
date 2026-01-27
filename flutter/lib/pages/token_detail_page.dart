@@ -22,6 +22,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
   Token? _token;
   bool _loading = true;
   String? _error;
+  Map<String, dynamic>? _listing;
+  bool _actionLoading = false;
 
   @override
   void initState() {
@@ -33,8 +35,22 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     try {
       final api = ApiService();
       final token = await api.getTokenInfo(widget.tokenId);
+
+      // Try to get listing info (may fail if not listed or not authed)
+      Map<String, dynamic>? listing;
+      try {
+        final wallet = context.read<WalletProvider>();
+        if (wallet.isConnected) {
+          final authedApi = ApiService(authToken: wallet.authToken);
+          listing = await authedApi.getListing(widget.tokenId);
+        }
+      } catch (_) {
+        // Token may not be listed, that's okay
+      }
+
       setState(() {
         _token = token;
+        _listing = listing;
         _loading = false;
       });
     } catch (e) {
@@ -234,9 +250,85 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
   }
 
   Widget _buildActionButtons(Token token, bool isOwner) {
+    final isListed = _listing?['listed'] == true;
+    final price = _listing?['priceEth'];
+    final wallet = context.read<WalletProvider>();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Marketplace actions
+        if (isOwner && !isListed) ...[
+          ElevatedButton.icon(
+            onPressed: _actionLoading ? null : () => _showListDialog(),
+            icon: _actionLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.sell),
+            label: const Text('List for Sale'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.green,
+              foregroundColor: Colors.white,
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (isOwner && isListed) ...[
+          Card(
+            color: Colors.green.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  const Icon(Icons.local_offer, color: Colors.green),
+                  const SizedBox(width: 8),
+                  Text('Listed for $price ETH',
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _actionLoading ? null : () => _delist(),
+            icon: const Icon(Icons.remove_shopping_cart),
+            label: const Text('Remove Listing'),
+            style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (!isOwner && isListed && wallet.isConnected) ...[
+          ElevatedButton.icon(
+            onPressed: _actionLoading ? null : () => _buy(),
+            icon: _actionLoading
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
+                  )
+                : const Icon(Icons.shopping_cart),
+            label: Text('Buy for $price ETH'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.all(16),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (!isOwner && isListed && !wallet.isConnected) ...[
+          ElevatedButton.icon(
+            onPressed: () => wallet.connect(),
+            icon: const Icon(Icons.account_balance_wallet),
+            label: Text('Connect Wallet to Buy ($price ETH)'),
+          ),
+          const SizedBox(height: 8),
+        ],
+        const Divider(height: 24),
         OutlinedButton.icon(
           onPressed: () => context.go('/verify/${widget.tokenId}'),
           icon: const Icon(Icons.verified),
@@ -258,6 +350,113 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
         ],
       ],
     );
+  }
+
+  Future<void> _showListDialog() async {
+    final priceController = TextEditingController();
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('List for Sale'),
+        content: TextField(
+          controller: priceController,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Price in ETH',
+            hintText: '0.1',
+            suffixText: 'ETH',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, priceController.text),
+            child: const Text('List'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null && result.isNotEmpty) {
+      await _list(result);
+    }
+  }
+
+  Future<void> _list(String priceEth) async {
+    setState(() => _actionLoading = true);
+
+    try {
+      final wallet = context.read<WalletProvider>();
+      final api = ApiService(authToken: wallet.authToken);
+
+      // Convert ETH to Wei (1 ETH = 10^18 Wei)
+      final priceWei = (double.parse(priceEth) * 1e18).toStringAsFixed(0);
+
+      await api.listToken(tokenId: widget.tokenId, priceWei: priceWei);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Listed for $priceEth ETH!')),
+      );
+
+      await _loadToken(); // Refresh
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to list: $e')),
+      );
+    } finally {
+      setState(() => _actionLoading = false);
+    }
+  }
+
+  Future<void> _delist() async {
+    setState(() => _actionLoading = true);
+
+    try {
+      final wallet = context.read<WalletProvider>();
+      final api = ApiService(authToken: wallet.authToken);
+
+      await api.delistToken(widget.tokenId);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Listing removed')),
+      );
+
+      await _loadToken(); // Refresh
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delist: $e')),
+      );
+    } finally {
+      setState(() => _actionLoading = false);
+    }
+  }
+
+  Future<void> _buy() async {
+    setState(() => _actionLoading = true);
+
+    try {
+      final wallet = context.read<WalletProvider>();
+      final api = ApiService(authToken: wallet.authToken);
+
+      await api.buyToken(widget.tokenId);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+            content: Text('Purchase successful! You now own this NFT.')),
+      );
+
+      await _loadToken(); // Refresh to show new owner
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to buy: $e')),
+      );
+    } finally {
+      setState(() => _actionLoading = false);
+    }
   }
 
   String _shortAddress(String address) {

@@ -4,9 +4,14 @@
  */
 
 const { PinataSDK } = require("pinata");
+const crypto = require("crypto");
 
 const PINATA_JWT = process.env.PINATA_JWT;
 const PINATA_GATEWAY = process.env.PINATA_GATEWAY || "gateway.pinata.cloud";
+const USE_MOCK_IPFS = process.env.USE_MOCK_IPFS === "true";
+
+// In-memory store for mock mode
+const mockStore = new Map();
 
 let pinata = null;
 
@@ -30,6 +35,13 @@ function getPinata() {
  * @returns {Promise<string>} - IPFS URI (ipfs://...)
  */
 async function upload(data, filename) {
+  if (USE_MOCK_IPFS) {
+    const hash = "Qm" + crypto.createHash("sha256").update(data).digest("hex").slice(0, 44);
+    mockStore.set(hash, data);
+    console.log(`MOCK IPFS: Stored ${filename} as ${hash}`);
+    return `ipfs://${hash}`;
+  }
+
   const client = getPinata();
 
   // Create a File object from buffer
@@ -49,6 +61,14 @@ async function upload(data, filename) {
  * @returns {Promise<string>} - IPFS URI
  */
 async function uploadJson(json, filename) {
+  if (USE_MOCK_IPFS) {
+    const data = Buffer.from(JSON.stringify(json));
+    const hash = "Qm" + crypto.createHash("sha256").update(data).digest("hex").slice(0, 44);
+    mockStore.set(hash, data);
+    console.log(`MOCK IPFS: Stored ${filename} as ${hash}`);
+    return `ipfs://${hash}`;
+  }
+
   const client = getPinata();
 
   const result = await client.upload.json(json, {
@@ -70,6 +90,12 @@ function getGatewayUrl(ipfsUri) {
     return ipfsUri;
   }
   const hash = ipfsUri.replace("ipfs://", "");
+
+  // In mock mode, serve from local backend
+  if (USE_MOCK_IPFS) {
+    return `http://localhost:3000/ipfs/${hash}`;
+  }
+
   return `https://${PINATA_GATEWAY}/ipfs/${hash}`;
 }
 
@@ -79,9 +105,17 @@ function getGatewayUrl(ipfsUri) {
  * @returns {Promise<Buffer>} - File contents
  */
 async function fetch(ipfsUri) {
-  const client = getPinata();
   const hash = ipfsUri.replace("ipfs://", "");
 
+  if (USE_MOCK_IPFS) {
+    const data = mockStore.get(hash);
+    if (!data) {
+      throw new Error(`Mock IPFS: Hash ${hash} not found`);
+    }
+    return data;
+  }
+
+  const client = getPinata();
   const response = await client.gateways.get(hash);
   return Buffer.from(await response.arrayBuffer());
 }

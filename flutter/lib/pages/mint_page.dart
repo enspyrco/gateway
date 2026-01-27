@@ -1,14 +1,66 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/token.dart';
 import '../providers/mint_provider.dart';
 import '../widgets/wallet_button.dart';
 
-class MintPage extends StatelessWidget {
-  const MintPage({super.key});
+class MintPage extends StatefulWidget {
+  final String? generatedImageUrl;
+  final String? prompt;
+  final String? style;
+
+  const MintPage({
+    super.key,
+    this.generatedImageUrl,
+    this.prompt,
+    this.style,
+  });
+
+  @override
+  State<MintPage> createState() => _MintPageState();
+}
+
+class _MintPageState extends State<MintPage> {
+  bool _loadingGeneratedImage = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.generatedImageUrl != null) {
+      _loadGeneratedImage();
+    }
+  }
+
+  Future<void> _loadGeneratedImage() async {
+    setState(() => _loadingGeneratedImage = true);
+
+    try {
+      final response = await http.get(Uri.parse(widget.generatedImageUrl!));
+      if (response.statusCode == 200) {
+        final bytes = response.bodyBytes;
+        if (mounted) {
+          final mint = context.read<MintProvider>();
+          mint.setImage(Uint8List.fromList(bytes), 'generated-art.png');
+          // Pre-fill description with the prompt
+          if (widget.prompt != null) {
+            mint.setDescription(
+                'Generated with AI: "${widget.prompt}" (${widget.style ?? "photographic"} style)');
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load generated image: $e');
+    }
+
+    if (mounted) {
+      setState(() => _loadingGeneratedImage = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,6 +80,19 @@ class MintPage extends StatelessWidget {
         builder: (context, mint, _) {
           if (mint.state == MintState.success) {
             return _MintSuccess(result: mint.result!);
+          }
+
+          if (_loadingGeneratedImage) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Loading generated image...'),
+                ],
+              ),
+            );
           }
 
           return SingleChildScrollView(

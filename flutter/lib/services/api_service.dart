@@ -185,4 +185,154 @@ class ApiService {
     final response = await http.Response.fromStream(streamedResponse);
     return _handleResponse(response);
   }
+
+  // ============ Marketplace ============
+
+  /// Get all active listings (public)
+  Future<List<Map<String, dynamic>>> getListings() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/marketplace'),
+    );
+    final data = await _handleResponse(response);
+    return List<Map<String, dynamic>>.from(data['listings'] ?? []);
+  }
+
+  /// Get listing for a specific token
+  Future<Map<String, dynamic>> getListing(int tokenId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/marketplace/$tokenId'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
+  /// List a token for sale
+  Future<Map<String, dynamic>> listToken({
+    required int tokenId,
+    required String priceWei,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/marketplace/list'),
+      headers: _headers,
+      body: jsonEncode({
+        'tokenId': tokenId,
+        'price': priceWei,
+      }),
+    );
+    return _handleResponse(response);
+  }
+
+  /// Remove a listing
+  Future<Map<String, dynamic>> delistToken(int tokenId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/marketplace/delist'),
+      headers: _headers,
+      body: jsonEncode({'tokenId': tokenId}),
+    );
+    return _handleResponse(response);
+  }
+
+  /// Buy a listed token
+  Future<Map<String, dynamic>> buyToken(int tokenId) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/marketplace/buy'),
+      headers: _headers,
+      body: jsonEncode({'tokenId': tokenId}),
+    );
+    return _handleResponse(response);
+  }
+
+  // ============ AI Generation ============
+
+  /// Get available style presets (public)
+  Future<List<Map<String, dynamic>>> getGenerationStyles() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/generate/styles'),
+    );
+    final data = await _handleResponse(response);
+    return List<Map<String, dynamic>>.from(data['styles'] ?? []);
+  }
+
+  /// Generate images from a prompt
+  /// Note: AI generation can take 30-60 seconds
+  Future<GenerationResult> generate({
+    required String prompt,
+    String style = 'photographic',
+    int count = 4,
+  }) async {
+    final client = http.Client();
+    try {
+      final response = await client
+          .post(
+            Uri.parse('$baseUrl/api/generate'),
+            headers: _headers,
+            body: jsonEncode({
+              'prompt': prompt,
+              'style': style,
+              'count': count,
+            }),
+          )
+          .timeout(const Duration(minutes: 2));
+      final data = await _handleResponse(response);
+      return GenerationResult.fromJson(data);
+    } finally {
+      client.close();
+    }
+  }
+
+  /// Get full URL for a generated image
+  String getGeneratedImageUrl(String relativePath) {
+    return '$baseUrl$relativePath';
+  }
+}
+
+class GenerationResult {
+  final bool success;
+  final String? generationId;
+  final String? prompt;
+  final String? style;
+  final List<GeneratedImage> images;
+  final String? error;
+
+  GenerationResult({
+    required this.success,
+    this.generationId,
+    this.prompt,
+    this.style,
+    this.images = const [],
+    this.error,
+  });
+
+  factory GenerationResult.fromJson(Map<String, dynamic> json) {
+    return GenerationResult(
+      success: json['success'] ?? false,
+      generationId: json['generationId'],
+      prompt: json['prompt'],
+      style: json['style'],
+      images: (json['images'] as List<dynamic>?)
+              ?.map((img) => GeneratedImage.fromJson(img))
+              .toList() ??
+          [],
+    );
+  }
+
+  factory GenerationResult.error(String message) {
+    return GenerationResult(success: false, error: message);
+  }
+}
+
+class GeneratedImage {
+  final String id;
+  final int seed;
+  final String url;
+
+  GeneratedImage({required this.id, required this.seed, required this.url});
+
+  factory GeneratedImage.fromJson(Map<String, dynamic> json) {
+    return GeneratedImage(
+      id: json['id'] ?? '',
+      seed: json['seed'] ?? 0,
+      url: json['url'] ?? '',
+    );
+  }
 }

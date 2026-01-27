@@ -5,10 +5,20 @@
 
 const admin = require("firebase-admin");
 
+const USE_MOCK_FIRESTORE = process.env.USE_MOCK_FIRESTORE === "true";
+
+// In-memory stores for mock mode
+const mockTokens = new Map();
+const mockKeys = new Map();
+const mockDetections = [];
+
 // Initialize Firebase Admin (lazy)
 let db = null;
 
 function getDb() {
+  if (USE_MOCK_FIRESTORE) {
+    return null;
+  }
   if (!db) {
     if (!admin.apps.length) {
       const projectId = process.env.FIREBASE_PROJECT_ID || "enspyr-experiments";
@@ -37,8 +47,6 @@ function getDb() {
  * Create a new token record
  */
 async function createToken(data) {
-  const db = getDb();
-
   const tokenDoc = {
     tokenId: data.tokenId,
     mintId: data.mintId,
@@ -54,9 +62,17 @@ async function createToken(data) {
     previewUri: data.previewUri,
     metadataUri: data.metadataUri,
     transactionHash: data.transactionHash,
-    createdAt: admin.firestore.Timestamp.fromDate(data.createdAt),
+    createdAt: data.createdAt,
   };
 
+  if (USE_MOCK_FIRESTORE) {
+    mockTokens.set(String(data.tokenId), tokenDoc);
+    console.log(`MOCK FIRESTORE: Created token ${data.tokenId}`);
+    return tokenDoc;
+  }
+
+  tokenDoc.createdAt = admin.firestore.Timestamp.fromDate(data.createdAt);
+  const db = getDb();
   await db.collection("tokens").doc(String(data.tokenId)).set(tokenDoc);
 
   return tokenDoc;
@@ -66,6 +82,10 @@ async function createToken(data) {
  * Get token by ID
  */
 async function getToken(tokenId) {
+  if (USE_MOCK_FIRESTORE) {
+    return mockTokens.get(String(tokenId)) || null;
+  }
+
   const db = getDb();
   const doc = await db.collection("tokens").doc(String(tokenId)).get();
 
@@ -80,6 +100,13 @@ async function getToken(tokenId) {
  * Get tokens by wallet
  */
 async function getTokensByWallet(wallet, limit = 50) {
+  if (USE_MOCK_FIRESTORE) {
+    const tokens = Array.from(mockTokens.values())
+      .filter((t) => t.wallet?.toLowerCase() === wallet.toLowerCase())
+      .slice(0, limit);
+    return tokens;
+  }
+
   const db = getDb();
   const snapshot = await db
     .collection("tokens")
@@ -95,12 +122,22 @@ async function getTokensByWallet(wallet, limit = 50) {
  * Store encrypted key reference
  */
 async function storeKey(tokenId, keyData) {
-  const db = getDb();
-
-  await db.collection("keys").doc(String(tokenId)).set({
+  const keyDoc = {
     tokenId,
     keyId: keyData.keyId,
     imageHash: keyData.imageHash,
+    createdAt: new Date(),
+  };
+
+  if (USE_MOCK_FIRESTORE) {
+    mockKeys.set(String(tokenId), keyDoc);
+    console.log(`MOCK FIRESTORE: Stored key for token ${tokenId}`);
+    return;
+  }
+
+  const db = getDb();
+  await db.collection("keys").doc(String(tokenId)).set({
+    ...keyDoc,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 }
@@ -109,6 +146,10 @@ async function storeKey(tokenId, keyData) {
  * Get key reference
  */
 async function getKey(tokenId) {
+  if (USE_MOCK_FIRESTORE) {
+    return mockKeys.get(String(tokenId)) || null;
+  }
+
   const db = getDb();
   const doc = await db.collection("keys").doc(String(tokenId)).get();
 
@@ -123,8 +164,23 @@ async function getKey(tokenId) {
  * Log a detection request
  */
 async function logDetection(data) {
-  const db = getDb();
+  const detectionDoc = {
+    id: `detection_${Date.now()}`,
+    tokenId: data.tokenId,
+    requester: data.requester,
+    capturedImageHash: data.capturedImageHash,
+    result: data.result,
+    confidence: data.confidence,
+    timestamp: new Date(),
+  };
 
+  if (USE_MOCK_FIRESTORE) {
+    mockDetections.push(detectionDoc);
+    console.log(`MOCK FIRESTORE: Logged detection for token ${data.tokenId}`);
+    return;
+  }
+
+  const db = getDb();
   await db.collection("detections").add({
     tokenId: data.tokenId,
     requester: data.requester,
@@ -139,6 +195,12 @@ async function logDetection(data) {
  * Get detection history for a token
  */
 async function getDetectionHistory(tokenId, limit = 20) {
+  if (USE_MOCK_FIRESTORE) {
+    return mockDetections
+      .filter((d) => d.tokenId === tokenId)
+      .slice(0, limit);
+  }
+
   const db = getDb();
   const snapshot = await db
     .collection("detections")
@@ -150,6 +212,15 @@ async function getDetectionHistory(tokenId, limit = 20) {
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
+/**
+ * Reset mock state (for testing)
+ */
+function resetMock() {
+  mockTokens.clear();
+  mockKeys.clear();
+  mockDetections.length = 0;
+}
+
 module.exports = {
   getDb,
   createToken,
@@ -159,4 +230,5 @@ module.exports = {
   getKey,
   logDetection,
   getDetectionHistory,
+  resetMock,
 };

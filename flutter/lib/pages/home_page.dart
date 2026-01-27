@@ -99,6 +99,14 @@ class HomePage extends StatelessWidget {
       alignment: WrapAlignment.center,
       children: [
         _FeatureCard(
+          icon: Icons.auto_awesome,
+          title: 'AI Art Generation',
+          description:
+              'Create stunning artwork with AI, then mint it as an NFT.',
+          actionLabel: 'Generate Art',
+          onAction: () => context.go('/generate'),
+        ),
+        _FeatureCard(
           icon: Icons.fingerprint,
           title: 'Invisible Watermark',
           description:
@@ -113,11 +121,6 @@ class HomePage extends StatelessWidget {
           icon: Icons.verified,
           title: 'NFT Provenance',
           description: 'On-chain record of ownership and transfer history.',
-        ),
-        _FeatureCard(
-          icon: Icons.attach_money,
-          title: 'Low Cost',
-          description: 'Starting at \$1. No gas fees on Polygon.',
         ),
       ],
     );
@@ -171,29 +174,32 @@ class HomePage extends StatelessWidget {
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 16),
-            Row(
-              mainAxisSize: MainAxisSize.min,
+            Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              alignment: WrapAlignment.center,
               children: [
+                ElevatedButton.icon(
+                  onPressed: () => context.go('/generate'),
+                  icon: const Icon(Icons.auto_awesome),
+                  label: const Text('Generate AI Art'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: () => context.go('/marketplace'),
+                  icon: const Icon(Icons.storefront),
+                  label: const Text('Browse Marketplace'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
                 OutlinedButton(
                   onPressed: () => context.go('/gallery'),
-                  child: const Text('Browse Gallery'),
-                ),
-                const SizedBox(width: 16),
-                Consumer<WalletProvider>(
-                  builder: (context, wallet, _) {
-                    return ElevatedButton(
-                      onPressed: () {
-                        if (wallet.isConnected) {
-                          context.go('/mint');
-                        } else {
-                          wallet.connect();
-                        }
-                      },
-                      child: Text(wallet.isConnected
-                          ? 'Start Minting'
-                          : 'Connect Wallet'),
-                    );
-                  },
+                  child: const Text('View Gallery'),
                 ),
               ],
             ),
@@ -208,11 +214,15 @@ class _FeatureCard extends StatelessWidget {
   final IconData icon;
   final String title;
   final String description;
+  final String? actionLabel;
+  final VoidCallback? onAction;
 
   const _FeatureCard({
     required this.icon,
     required this.title,
     required this.description,
+    this.actionLabel,
+    this.onAction,
   });
 
   @override
@@ -239,6 +249,13 @@ class _FeatureCard extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey.shade600),
               ),
+              if (actionLabel != null && onAction != null) ...[
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: onAction,
+                  child: Text(actionLabel!),
+                ),
+              ],
             ],
           ),
         ),
