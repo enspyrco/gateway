@@ -41,6 +41,13 @@ final router = GoRouter(
       builder: (context, state) => const GalleryPage(),
     ),
     GoRoute(
+      path: '/gallery/:address',
+      builder: (context, state) {
+        final address = state.pathParameters['address'];
+        return GalleryPage(address: address);
+      },
+    ),
+    GoRoute(
       path: '/marketplace',
       builder: (context, state) => const MarketplacePage(),
     ),

@@ -362,11 +362,47 @@ class _MintButton extends StatelessWidget {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              LinearProgressIndicator(value: mint.progress),
-              const SizedBox(height: 16),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: 80,
+                height: 80,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 80,
+                      height: 80,
+                      child: CircularProgressIndicator(
+                        value: mint.progress,
+                        strokeWidth: 6,
+                        backgroundColor: Colors.grey.shade200,
+                      ),
+                    ),
+                    Text(
+                      '${(mint.progress * 100).toInt()}%',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
               Text(
                 mint.statusMessage,
                 style: Theme.of(context).textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Please wait, this may take a few minutes...',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 16),
+              LinearProgressIndicator(
+                value: mint.progress,
+                backgroundColor: Colors.grey.shade200,
               ),
             ],
           ),
@@ -377,6 +413,27 @@ class _MintButton extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.amber.shade50,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.amber.shade200),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.schedule, color: Colors.amber.shade700),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Minting can take up to 5 minutes due to watermarking and blockchain processing.',
+                  style: TextStyle(color: Colors.amber.shade900, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
         ElevatedButton(
           onPressed: mint.canMint ? () => mint.mint() : null,
           style: ElevatedButton.styleFrom(

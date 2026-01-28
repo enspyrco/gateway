@@ -12,9 +12,10 @@ Express.js API handling watermarking, encryption, IPFS uploads, and blockchain i
 npm install              # Install dependencies
 npm run dev              # Development with nodemon
 npm start                # Production
-npm test                 # Run all Jest tests
+npm test                 # Run all Jest tests (mocked)
 npm test -- --testPathPattern=marketplace  # Run tests matching pattern
 npm test -- test/services/blockchain.test.js  # Run single test file
+npm run test:integration # Run integration tests against local Anvil
 ```
 
 ### Development Scripts
@@ -85,3 +86,21 @@ In dev mode (`NODE_ENV=development`), mock signatures are accepted for testing w
 - All async errors propagate to Express error handler
 - Mock mode checks happen at service level: `if (USE_MOCK) { ... }`
 - Token IDs stored as numbers internally; convert with `Number(tokenId)` when querying
+
+## Integration Tests
+
+Integration tests for `NFTLicensingSystem` contract run against a local Anvil node:
+
+```bash
+# Terminal 1: Start Anvil
+cd contracts && anvil
+
+# Terminal 2: Deploy contract
+cd contracts && forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast
+
+# Terminal 3: Run tests (set contract address from deployment output)
+cd backend
+NFT_LICENSING_ADDRESS=0x... npm run test:integration
+```
+
+Tests cover: artwork creation, license minting, marketplace (list/offer/accept), and pause mechanism.

@@ -121,7 +121,6 @@ class _ConnectedButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final testAccount = wallet.testAccount;
-    final displayName = testAccount?.name ?? wallet.shortAddress;
 
     return PopupMenuButton<String>(
       offset: const Offset(0, 48),

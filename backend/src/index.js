@@ -14,6 +14,7 @@ const detectRouter = require('./routes/detect');
 const verifyRouter = require('./routes/verify');
 const marketplaceRouter = require('./routes/marketplace');
 const generateRouter = require('./routes/generate');
+const galleryRouter = require('./routes/gallery');
 
 const app = express();
 const upload = multer({
@@ -140,6 +141,9 @@ app.get('/api/generate/:id/image/:index', (req, res) => {
   res.set('Content-Length', buffer.length);
   res.send(buffer);
 });
+
+// Public gallery viewing (no auth needed)
+app.use('/api/gallery', galleryRouter);
 
 // Public marketplace browsing (must be before authenticated marketplace routes)
 app.get('/api/marketplace', async (req, res, next) => {

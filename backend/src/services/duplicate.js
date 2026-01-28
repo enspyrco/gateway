@@ -75,6 +75,8 @@ async function checkDuplicate(imageBuffer, exactHash) {
 
   for (const doc of pHashDocs.docs) {
     const storedPHash = doc.data().pHash;
+    if (!storedPHash) continue;
+
     const similarity = hammingSimilarity(pHash, storedPHash);
 
     if (similarity > 0.95) {

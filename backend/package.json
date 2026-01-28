@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "jest"
+    "test": "jest --testPathIgnorePatterns=integration",
+    "test:integration": "RUN_INTEGRATION_TESTS=true jest --testPathPattern=integration"
   },
   "dependencies": {
     "@google-cloud/kms": "^4.0.0",
@@ -17,6 +18,7 @@
     "express": "^4.18.2",
     "express-rate-limit": "^8.2.1",
     "firebase-admin": "^11.11.0",
+    "form-data": "^4.0.5",
     "multer": "^1.4.5-lts.1",
     "pinata": "^2.5.2",
     "sharp": "^0.33.0",

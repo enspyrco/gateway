@@ -51,6 +51,7 @@ async function createToken(data) {
     tokenId: data.tokenId,
     mintId: data.mintId,
     wallet: data.wallet,
+    currentOwner: data.wallet, // Initially, creator is the owner
     name: data.name,
     description: data.description || "",
     licenseType: data.licenseType,
@@ -97,7 +98,7 @@ async function getToken(tokenId) {
 }
 
 /**
- * Get tokens by wallet
+ * Get tokens by wallet (creator)
  */
 async function getTokensByWallet(wallet, limit = 50) {
   if (USE_MOCK_FIRESTORE) {
@@ -116,6 +117,138 @@ async function getTokensByWallet(wallet, limit = 50) {
     .get();
 
   return snapshot.docs.map((doc) => doc.data());
+}
+
+/**
+ * Get tokens by current owner
+ * Falls back to wallet (creator) for older tokens without currentOwner field
+ */
+async function getTokensByOwner(ownerAddress, limit = 50) {
+  const normalizedAddress = ownerAddress.toLowerCase();
+
+  if (USE_MOCK_FIRESTORE) {
+    const tokens = Array.from(mockTokens.values())
+      .filter((t) =>
+        t.currentOwner?.toLowerCase() === normalizedAddress ||
+        (!t.currentOwner && t.wallet?.toLowerCase() === normalizedAddress)
+      )
+      .slice(0, limit);
+    return tokens;
+  }
+
+  const db = getDb();
+
+  // Query tokens with currentOwner set
+  const currentOwnerSnapshot = await db
+    .collection("tokens")
+    .where("currentOwner", "==", normalizedAddress)
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+
+  // Query tokens by wallet (creator) for backward compatibility
+  // These are tokens where the creator still owns them (no transfers)
+  const walletSnapshot = await db
+    .collection("tokens")
+    .where("wallet", "==", normalizedAddress)
+    .orderBy("createdAt", "desc")
+    .limit(limit)
+    .get();
+
+  // Merge results, avoiding duplicates
+  const tokenMap = new Map();
+
+  for (const doc of currentOwnerSnapshot.docs) {
+    tokenMap.set(doc.id, doc.data());
+  }
+
+  for (const doc of walletSnapshot.docs) {
+    const data = doc.data();
+    // Only include if no currentOwner set (legacy token still with creator)
+    if (!data.currentOwner && !tokenMap.has(doc.id)) {
+      tokenMap.set(doc.id, data);
+    }
+  }
+
+  return Array.from(tokenMap.values())
+    .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+    .slice(0, limit);
+}
+
+/**
+ * Update token owner (after purchase)
+ */
+async function updateTokenOwner(tokenId, newOwner) {
+  if (USE_MOCK_FIRESTORE) {
+    const token = mockTokens.get(String(tokenId));
+    if (token) {
+      token.currentOwner = newOwner.toLowerCase();
+      mockTokens.set(String(tokenId), token);
+      console.log(`MOCK FIRESTORE: Updated token ${tokenId} owner to ${newOwner}`);
+    }
+    return;
+  }
+
+  const db = getDb();
+  await db.collection("tokens").doc(String(tokenId)).update({
+    currentOwner: newOwner.toLowerCase(),
+  });
+}
+
+/**
+ * Get list of galleries (unique wallets with NFTs)
+ */
+async function getGalleryList(limit = 20) {
+  if (USE_MOCK_FIRESTORE) {
+    const ownerMap = new Map();
+    for (const token of mockTokens.values()) {
+      const owner = token.currentOwner || token.wallet;
+      if (owner) {
+        const existing = ownerMap.get(owner.toLowerCase()) || { tokenCount: 0, latestToken: null };
+        existing.tokenCount++;
+        if (!existing.latestToken || (token.createdAt > existing.latestToken.createdAt)) {
+          existing.latestToken = token;
+        }
+        ownerMap.set(owner.toLowerCase(), existing);
+      }
+    }
+    return Array.from(ownerMap.entries())
+      .map(([address, data]) => ({
+        address,
+        tokenCount: data.tokenCount,
+        previewTokenName: data.latestToken?.name || `NFTmarket #${data.latestToken?.tokenId}`,
+      }))
+      .slice(0, limit);
+  }
+
+  const db = getDb();
+  const snapshot = await db
+    .collection("tokens")
+    .orderBy("createdAt", "desc")
+    .limit(200)
+    .get();
+
+  const ownerMap = new Map();
+  for (const doc of snapshot.docs) {
+    const token = doc.data();
+    const owner = (token.currentOwner || token.wallet || '').toLowerCase();
+    if (owner) {
+      const existing = ownerMap.get(owner) || { tokenCount: 0, latestToken: null };
+      existing.tokenCount++;
+      if (!existing.latestToken) {
+        existing.latestToken = token;
+      }
+      ownerMap.set(owner, existing);
+    }
+  }
+
+  return Array.from(ownerMap.entries())
+    .map(([address, data]) => ({
+      address,
+      tokenCount: data.tokenCount,
+      previewTokenName: data.latestToken?.name || `NFTmarket #${data.latestToken?.tokenId}`,
+    }))
+    .slice(0, limit);
 }
 
 /**
@@ -226,6 +359,9 @@ module.exports = {
   createToken,
   getToken,
   getTokensByWallet,
+  getTokensByOwner,
+  updateTokenOwner,
+  getGalleryList,
   storeKey,
   getKey,
   logDetection,

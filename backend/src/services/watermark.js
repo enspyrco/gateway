@@ -1,6 +1,6 @@
 /**
  * Watermark Service
- * Interfaces with C++ watermarking binaries
+ * Interfaces with watermarking API or local C++ binary
  */
 
 const { spawn } = require("child_process");
@@ -10,11 +10,11 @@ const os = require("os");
 const sharp = require("sharp");
 const { v4: uuidv4 } = require("uuid");
 
+const WATERMARK_API_URL = process.env.WATERMARK_API_URL;
+const WATERMARK_API_KEY = process.env.WATERMARK_API_KEY;
 const WATERMARK_BINARY = process.env.WATERMARK_BINARY || "./mark-image";
 const WATERMARK_STRENGTH = process.env.WATERMARK_STRENGTH || "1.0";
-const USE_MOCK_WATERMARK =
-  process.env.USE_MOCK_WATERMARK === "true" ||
-  process.env.NODE_ENV !== "production";
+const USE_MOCK_WATERMARK = process.env.USE_MOCK_WATERMARK === "true";
 
 /**
  * Apply invisible watermark to image
@@ -31,6 +31,114 @@ async function applyWatermark(imageBuffer, message) {
     return pngBuffer;
   }
 
+  // Use API if configured
+  if (WATERMARK_API_URL && WATERMARK_API_KEY) {
+    return applyWatermarkViaAPI(imageBuffer, message);
+  }
+
+  // Fall back to local binary
+  return applyWatermarkViaBinary(imageBuffer, message);
+}
+
+/**
+ * Apply watermark via cloud API
+ * Uses multipart/form-data upload with SSE progress streaming
+ */
+async function applyWatermarkViaAPI(imageBuffer, message) {
+  console.log(`Calling watermark API for message "${message}"`);
+
+  // Convert to PNG
+  const pngBuffer = await sharp(imageBuffer).png().toBuffer();
+
+  // Create form data using node-fetch compatible approach
+  const FormData = (await import("form-data")).default;
+  const form = new FormData();
+  form.append("image", pngBuffer, {
+    filename: "image.png",
+    contentType: "image/png",
+  });
+  form.append("message", message);
+  form.append("strength", WATERMARK_STRENGTH);
+
+  // Use node-fetch or http request for proper form-data streaming
+  const response = await new Promise((resolve, reject) => {
+    const https = require("https");
+    const url = new URL(`${WATERMARK_API_URL}/watermark`);
+
+    const options = {
+      hostname: url.hostname,
+      port: url.port || 443,
+      path: url.pathname,
+      method: "POST",
+      headers: {
+        "X-API-Key": WATERMARK_API_KEY,
+        ...form.getHeaders(),
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = "";
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+      res.on("end", () => {
+        resolve({ status: res.statusCode, data });
+      });
+    });
+
+    req.on("error", reject);
+    form.pipe(req);
+  });
+
+  if (response.status !== 200) {
+    throw new Error(`Watermark API error: ${response.status} - ${response.data}`);
+  }
+
+  // Parse SSE stream to get the download URL
+  const lines = response.data.split("\n");
+  let downloadUrl = null;
+
+  for (const line of lines) {
+    if (line.startsWith("data: ")) {
+      try {
+        const data = JSON.parse(line.slice(6));
+        if (data.progress) {
+          console.log(`Watermark progress: ${data.progress} (${data.percent}%)`);
+        }
+        if (data.complete && data.downloadUrl) {
+          downloadUrl = data.downloadUrl;
+        }
+      } catch {
+        // Ignore non-JSON lines
+      }
+    }
+  }
+
+  if (!downloadUrl) {
+    throw new Error("Watermark API did not return a download URL");
+  }
+
+  // Download the watermarked image
+  console.log(`Downloading watermarked image from ${downloadUrl}`);
+  const downloadResponse = await fetch(`${WATERMARK_API_URL}${downloadUrl}`, {
+    headers: {
+      "X-API-Key": WATERMARK_API_KEY,
+    },
+  });
+
+  if (!downloadResponse.ok) {
+    const error = await downloadResponse.text();
+    throw new Error(`Watermark download error: ${downloadResponse.status} - ${error}`);
+  }
+
+  const arrayBuffer = await downloadResponse.arrayBuffer();
+  return Buffer.from(arrayBuffer);
+}
+
+/**
+ * Apply watermark via local C++ binary
+ */
+async function applyWatermarkViaBinary(imageBuffer, message) {
   const tempId = uuidv4();
   const tempDir = os.tmpdir();
   const inputPath = path.join(tempDir, `${tempId}-input.png`);
