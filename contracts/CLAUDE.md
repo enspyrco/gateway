@@ -16,7 +16,7 @@ npm run deploy:polygon       # Deploy to Polygon mainnet
 npx hardhat test test/NFTmarketNFT.test.js
 ```
 
-## Architecture
+## Contracts
 
 **NFTmarketNFT.sol** - ERC-721 NFT contract with integrated marketplace for AI art.
 
@@ -28,8 +28,14 @@ Key features:
 - **Platform Fee**: 2.5% on marketplace sales to `platformWallet`
 - **Auto-delist**: Tokens automatically delist when transferred outside marketplace
 
-Inherits from OpenZeppelin v5.0:
-- ERC721, ERC721URIStorage, ERC721Royalty, Ownable, ReentrancyGuard
+Inherits from OpenZeppelin v5.0: ERC721, ERC721URIStorage, ERC721Royalty, Ownable, ReentrancyGuard
+
+**NFTmarketPayments.sol** - USDC payment handler for generation and minting fees.
+
+Key features:
+- **Fees**: $0.50 for 1 image, $1.50 for 4 images, $1.00 for minting (USDC 6 decimals)
+- **Replay Protection**: `paymentProcessed` mapping prevents double-spend
+- **Fee Withdrawal**: Owner can withdraw accumulated fees
 
 ## Contract Data Structures
 
@@ -57,3 +63,4 @@ Copy `.env.example` to `.env`:
 - Uses custom errors (e.g., `ImageAlreadyRegistered()`) instead of require strings
 - Deploy script uses fully qualified name: `contracts/NFTmarketNFT.sol:NFTmarketNFT`
 - Solidity 0.8.20 with viaIR optimizer enabled
+- Contract address changes each time Hardhat node restarts - update backend config accordingly

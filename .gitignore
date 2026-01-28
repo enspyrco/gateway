@@ -26,6 +26,13 @@ Thumbs.db
 contracts/cache/
 contracts/artifacts/
 
+# Foundry
+contracts/out/
+
 # Coverage
 coverage/
+
+# Firebase
 firebase-debug.log
+firestore-debug.log
+emulator-data/

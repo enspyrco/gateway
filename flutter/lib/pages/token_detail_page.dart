@@ -203,7 +203,14 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            _buildInfoRow('Creator', _shortAddress(token.creator)),
+            _buildInfoRow(
+              'Creator',
+              _shortAddress(token.creator),
+              trailing: InkWell(
+                onTap: () => context.go('/gallery/${token.creator}'),
+                child: const Icon(Icons.collections, size: 20),
+              ),
+            ),
             const Divider(),
             _buildInfoRow(
               'Owner',
@@ -216,7 +223,10 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                       padding: EdgeInsets.zero,
                       visualDensity: VisualDensity.compact,
                     )
-                  : null,
+                  : InkWell(
+                      onTap: () => context.go('/gallery/${token.currentOwner}'),
+                      child: const Icon(Icons.collections, size: 20),
+                    ),
             ),
             const Divider(),
             _buildInfoRow('License', token.licenseType.displayName),

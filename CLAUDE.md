@@ -110,12 +110,27 @@ flutter build web                  # Build for production
 - `GET /api/generate/:id/image/:index` - Retrieve generated image
 
 ### Backend Services (backend/src/services/)
-- `watermark.js`: Interfaces with external C++ binaries (`WATERMARK_BINARY` env var)
+- `watermark.js`: Cloud API or local C++ binary for invisible watermarking
 - `encryption.js`: AES-256 encryption, supports Google Cloud KMS or dev key
 - `ipfs.js`: Pinata uploads for encrypted blobs and metadata
 - `blockchain.js`: Ethers.js contract interactions, marketplace functions, mock mode support
 - `duplicate.js`: SHA-256 hash + perceptual hash checking
 - `ai-generation.js`: Stability AI integration for image generation, 10 style presets
+
+### Watermark Service (backend/src/services/watermark.js)
+- Supports cloud API via `WATERMARK_API_URL` and `WATERMARK_API_KEY` environment variables
+- Falls back to local C++ binary (`WATERMARK_BINARY` env var) if API not configured
+- Mock mode available via `USE_MOCK_WATERMARK=true`
+
+### Watermark Cloud API (WATERMARK_API_URL)
+- `POST /watermark`: multipart/form-data with `image` (file), `message`, `strength` fields
+- Returns SSE stream with progress updates, then `downloadUrl`
+- `GET /download/{jobId}`: Download watermarked image (available 5 minutes)
+- Header: `X-API-Key` required
+
+### Rate Limiting
+- AI generation endpoint: 10 requests per hour per wallet (Stability AI is expensive)
+- Stored generations have 1-hour TTL with automatic cleanup every 10 minutes
 
 ### Mock Mode Environment Variables
 All services support mock mode for testing without external dependencies:
@@ -139,11 +154,27 @@ In debug mode, the Flutter app shows a test account picker instead of real walle
 
 ## Environment Configuration
 
-Backend requires: `POLYGON_RPC_URL`, `NFTMARKET_CONTRACT_ADDRESS`, `MINTER_PRIVATE_KEY`, `PINATA_JWT`, `STABILITY_API_KEY`, Firebase credentials, and optionally KMS config.
+Backend requires: `POLYGON_RPC_URL`, `NFTMARKET_CONTRACT_ADDRESS`, `MINTER_PRIVATE_KEY`, `PINATA_JWT`, `STABILITY_API_KEY`, Firebase credentials, and optionally `WATERMARK_API_URL`/`WATERMARK_API_KEY` or KMS config.
 
 Contracts require: `PRIVATE_KEY`, RPC URLs for target networks, `POLYGONSCAN_API_KEY` for verification.
 
 Both components have `.env.example` files with all required variables.
+
+### Quick Start (Local Development)
+
+```bash
+# Terminal 1: Start Hardhat node
+cd contracts && npx hardhat node
+
+# Terminal 2: Deploy contract
+cd contracts && npx hardhat run scripts/deploy.js --network localhost
+
+# Terminal 3: Start backend
+cd backend && npm run dev
+
+# Terminal 4: Start Flutter
+cd flutter && flutter run -d chrome
+```
 
 ### Local Development Mode
 

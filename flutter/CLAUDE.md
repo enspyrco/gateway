@@ -37,7 +37,7 @@ lib/
 │   ├── generate_page.dart     # AI art generation UI
 │   ├── mint_page.dart         # Upload/mint flow
 │   ├── marketplace_page.dart  # Browse listings
-│   ├── gallery_page.dart      # User's owned tokens
+│   ├── gallery_page.dart      # Gallery browser + user collections
 │   ├── token_detail_page.dart # Single token view
 │   └── verify_page.dart       # Watermark verification
 └── widgets/
@@ -87,3 +87,8 @@ ChainId is 31337 (Hardhat) in debug mode, 137 (Polygon) in release.
 - Use `context.read<Provider>()` for one-time reads, `context.watch<Provider>()` in build
 - Images from generated art passed to mint page via `GoRouter.extra`
 - All API errors caught and displayed in UI with retry buttons
+
+## Gallery Routes
+
+- `/gallery` - Browse all galleries, search by address, view own collection
+- `/gallery/:address` - View specific user's gallery

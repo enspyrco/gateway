@@ -193,6 +193,9 @@ router.post('/buy', async (req, res, next) => {
 
     const result = await blockchainService.buyToken(tokenId, req.wallet);
 
+    // Update ownership in Firestore
+    await firestoreService.updateTokenOwner(tokenId, req.wallet);
+
     console.log(`[MARKETPLACE] Token ${tokenId} bought by ${req.wallet} for ${result.price} wei`);
 
     res.json({
