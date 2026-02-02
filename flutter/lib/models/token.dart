@@ -55,7 +55,6 @@ class Token {
   final String? previewUrl;
   final String creator;
   final String currentOwner;
-  final LicenseType licenseType;
   final DateTime mintedAt;
   final String? watermarkId;
   final String? transactionHash;
@@ -69,7 +68,6 @@ class Token {
     this.previewUrl,
     required this.creator,
     required this.currentOwner,
-    required this.licenseType,
     required this.mintedAt,
     this.watermarkId,
     this.transactionHash,
@@ -85,8 +83,6 @@ class Token {
       previewUrl: json['previewUrl'] as String?,
       creator: json['creator'] as String,
       currentOwner: json['currentOwner'] as String,
-      licenseType:
-          LicenseType.fromString(json['licenseType'] as String? ?? 'display'),
       mintedAt: DateTime.parse(json['mintedAt'] as String),
       watermarkId: json['watermarkId'] as String?,
       transactionHash: json['transactionHash'] as String?,
@@ -103,7 +99,6 @@ class Token {
       'previewUrl': previewUrl,
       'creator': creator,
       'currentOwner': currentOwner,
-      'licenseType': licenseType.name,
       'mintedAt': mintedAt.toIso8601String(),
       'watermarkId': watermarkId,
       'transactionHash': transactionHash,

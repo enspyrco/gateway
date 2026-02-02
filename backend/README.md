@@ -131,8 +131,7 @@ src/
     ├── encryption.js     # KMS/AES encryption
     ├── ipfs.js           # Pinata upload
     ├── blockchain.js     # Polygon contract interaction
-    ├── firestore.js      # Firebase database
-    └── duplicate.js      # Duplicate detection
+    └── firestore.js      # Firebase database
 ```
 
 ## Cost Estimates

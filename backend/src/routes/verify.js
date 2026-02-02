@@ -18,7 +18,7 @@ const ipfsService = require('../services/ipfs');
  * - token info
  * - current owner
  * - creator
- * - license type
+ * - watermarkId: format is "walletAddress:tokenId" (embedded in image)
  * - provenance (transfer history)
  */
 router.get('/:tokenId', async (req, res, next) => {
@@ -44,9 +44,6 @@ router.get('/:tokenId', async (req, res, next) => {
       ? ipfsService.getGatewayUrl(firestoreData.previewUri)
       : null;
 
-    // License type names
-    const licenseTypes = ['Display', 'Commercial', 'Full Transfer'];
-
     res.json({
       tokenId: Number(tokenId),
       name: firestoreData?.name || `NFTmarket #${tokenId}`,
@@ -54,9 +51,9 @@ router.get('/:tokenId', async (req, res, next) => {
       previewUrl,
       creator: tokenData.creator,
       currentOwner: tokenData.currentOwner,
-      licenseType: licenseTypes[tokenData.licenseType] || 'Unknown',
       mintedAt: tokenData.mintedAt.toISOString(),
       watermarkId: firestoreData?.watermarkId || null,
+      transactionHash: firestoreData?.transactionHash || null,
       verified: true,
       contractAddress: process.env.NFTMARKET_CONTRACT_ADDRESS,
       chain: 'Polygon',

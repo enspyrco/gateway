@@ -10,8 +10,16 @@ const PINATA_JWT = process.env.PINATA_JWT;
 const PINATA_GATEWAY = process.env.PINATA_GATEWAY || "gateway.pinata.cloud";
 const USE_MOCK_IPFS = process.env.USE_MOCK_IPFS === "true";
 
-// In-memory store for mock mode
-const mockStore = new Map();
+// Persistent store for mock mode
+const persistence = require('./mock-persistence');
+const mockStore = USE_MOCK_IPFS ? persistence.loadMap('ipfs') : new Map();
+
+// Auto-save on changes
+function saveMockStore() {
+  if (USE_MOCK_IPFS) {
+    persistence.saveMap('ipfs', mockStore);
+  }
+}
 
 let pinata = null;
 
@@ -38,7 +46,8 @@ async function upload(data, filename) {
   if (USE_MOCK_IPFS) {
     const hash = "Qm" + crypto.createHash("sha256").update(data).digest("hex").slice(0, 44);
     mockStore.set(hash, data);
-    console.log(`MOCK IPFS: Stored ${filename} as ${hash}`);
+    saveMockStore();
+    console.log(`[MOCK IPFS] Stored ${filename} as ${hash}`);
     return `ipfs://${hash}`;
   }
 
@@ -65,7 +74,8 @@ async function uploadJson(json, filename) {
     const data = Buffer.from(JSON.stringify(json));
     const hash = "Qm" + crypto.createHash("sha256").update(data).digest("hex").slice(0, 44);
     mockStore.set(hash, data);
-    console.log(`MOCK IPFS: Stored ${filename} as ${hash}`);
+    saveMockStore();
+    console.log(`[MOCK IPFS] Stored ${filename} as ${hash}`);
     return `ipfs://${hash}`;
   }
 

@@ -15,6 +15,7 @@ const verifyRouter = require('./routes/verify');
 const marketplaceRouter = require('./routes/marketplace');
 const generateRouter = require('./routes/generate');
 const galleryRouter = require('./routes/gallery');
+const licenseRouter = require('./routes/license');
 
 const app = express();
 const upload = multer({
@@ -67,6 +68,18 @@ app.get('/ipfs/:hash', async (req, res) => {
     } else if (data[0] === 0x7b) {
       res.type('application/json');
     }
+    res.send(data);
+  } catch (e) {
+    res.status(404).json({ error: 'Not found' });
+  }
+});
+
+// Mock Arweave gateway (for development only)
+const arweaveService = require('./services/arweave');
+app.get('/arweave/:txId', async (req, res) => {
+  try {
+    const data = await arweaveService.fetchData(req.params.txId);
+    res.type('application/json');
     res.send(data);
   } catch (e) {
     res.status(404).json({ error: 'Not found' });
@@ -180,7 +193,40 @@ app.get('/api/marketplace', async (req, res, next) => {
         }
       })
     );
-    res.json({ listings: enrichedListings });
+    // Get contract info
+    const domain = await blockchainService.getEIP712Domain();
+
+    res.json({
+      contract: {
+        name: domain.name,
+        address: domain.verifyingContract,
+        chainId: domain.chainId
+      },
+      listings: enrichedListings
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Public EIP-712 domain endpoint (needed for signing)
+app.get('/api/marketplace/eip712/domain', async (req, res, next) => {
+  try {
+    const blockchainService = require('./services/blockchain');
+    const domain = await blockchainService.getEIP712Domain();
+    res.json({ domain });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Public nonce endpoint (needed for signing)
+app.get('/api/marketplace/nonce/:address', async (req, res, next) => {
+  try {
+    const blockchainService = require('./services/blockchain');
+    const { address } = req.params;
+    const nonce = await blockchainService.getNonce(address);
+    res.json({ address, nonce });
   } catch (error) {
     next(error);
   }
@@ -191,6 +237,7 @@ app.use('/api/mint', authMiddleware, mintRouter(upload));
 app.use('/api/detect', authMiddleware, detectRouter(upload));
 app.use('/api/marketplace', authMiddleware, marketplaceRouter);
 app.use('/api/generate', authMiddleware, generateRouter());
+app.use('/api/license', licenseRouter);
 
 // Error handler
 app.use((err, req, res, next) => {

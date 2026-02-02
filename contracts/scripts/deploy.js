@@ -1,4 +1,6 @@
 const hre = require("hardhat");
+const fs = require("fs");
+const path = require("path");
 
 async function main() {
   const [deployer] = await hre.ethers.getSigners();
@@ -18,6 +20,19 @@ async function main() {
 
   console.log("NFTmarketNFT deployed to:", address);
   console.log("Platform wallet:", platformWallet);
+
+  // Write deployed address to file for other services to read
+  const deploymentInfo = {
+    address,
+    platformWallet,
+    network: hre.network.name,
+    chainId: (await hre.ethers.provider.getNetwork()).chainId.toString(),
+    deployedAt: new Date().toISOString(),
+  };
+
+  const deploymentPath = path.join(__dirname, "..", "deployment.json");
+  fs.writeFileSync(deploymentPath, JSON.stringify(deploymentInfo, null, 2));
+  console.log("Deployment info written to:", deploymentPath);
 
   // Verify on Etherscan/Polygonscan (if not localhost)
   if (hre.network.name !== "localhost" && hre.network.name !== "hardhat") {

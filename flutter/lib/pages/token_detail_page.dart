@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/token.dart';
 import '../services/api_service.dart';
+import '../services/contract_service.dart';
 import '../providers/wallet_provider.dart';
 import '../widgets/wallet_button.dart';
 
@@ -36,15 +37,13 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       final api = ApiService();
       final token = await api.getTokenInfo(widget.tokenId);
 
-      // Try to get listing info (may fail if not listed or not authed)
+      // Try to get listing info (public endpoint, no auth needed)
       Map<String, dynamic>? listing;
       try {
-        final wallet = context.read<WalletProvider>();
-        if (wallet.isConnected) {
-          final authedApi = ApiService(authToken: wallet.authToken);
-          listing = await authedApi.getListing(widget.tokenId);
-        }
-      } catch (_) {
+        listing = await api.getListing(widget.tokenId);
+        debugPrint('Listing data for token ${widget.tokenId}: $listing');
+      } catch (e) {
+        debugPrint('Failed to get listing: $e');
         // Token may not be listed, that's okay
       }
 
@@ -160,8 +159,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                         ),
                         const SizedBox(height: 16),
                       ],
-                      _buildChip(token.licenseType.displayName, Icons.gavel),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 8),
                       _buildInfoCard(token, isOwner),
                       const SizedBox(height: 16),
                       _buildActionButtons(token, isOwner),
@@ -187,17 +185,10 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     );
   }
 
-  Widget _buildChip(String label, IconData icon) {
-    return Chip(
-      avatar: Icon(icon, size: 16),
-      label: Text(label),
-      backgroundColor:
-          Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-      side: BorderSide.none,
-    );
-  }
-
   Widget _buildInfoCard(Token token, bool isOwner) {
+    final isListed = _listing?['listed'] == true;
+    final listingLicenseType = _listing?['licenseType'];
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -228,8 +219,10 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                       child: const Icon(Icons.collections, size: 20),
                     ),
             ),
-            const Divider(),
-            _buildInfoRow('License', token.licenseType.displayName),
+            if (isListed && listingLicenseType != null) ...[
+              const Divider(),
+              _buildInfoRow('License Offered', _getLicenseDisplayName(listingLicenseType)),
+            ],
             const Divider(),
             _buildInfoRow('Minted', _formatDate(token.mintedAt)),
             if (token.watermarkId != null) ...[
@@ -240,6 +233,19 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
         ),
       ),
     );
+  }
+
+  String _getLicenseDisplayName(String licenseType) {
+    switch (licenseType) {
+      case 'display':
+        return 'Display Only';
+      case 'commercial':
+        return 'Commercial';
+      case 'transfer':
+        return 'Full Transfer';
+      default:
+        return licenseType;
+    }
   }
 
   Widget _buildInfoRow(String label, String value, {Widget? trailing}) {
@@ -263,6 +269,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     final isListed = _listing?['listed'] == true;
     final price = _listing?['priceEth'];
     final wallet = context.read<WalletProvider>();
+
+    debugPrint('Action buttons: isOwner=$isOwner, isListed=$isListed, isConnected=${wallet.isConnected}, listing=$_listing');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -311,6 +319,39 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
           const SizedBox(height: 8),
         ],
         if (!isOwner && isListed && wallet.isConnected) ...[
+          Card(
+            color: Colors.blue.shade50,
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.verified_user, color: Colors.blue, size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Bilateral Agreement Required',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue.shade800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'By clicking Buy, you will sign a license agreement that will be recorded on-chain.',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           ElevatedButton.icon(
             onPressed: _actionLoading ? null : () => _buy(),
             icon: _actionLoading
@@ -364,59 +405,222 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
   Future<void> _showListDialog() async {
     final priceController = TextEditingController();
+    LicenseType selectedLicense = LicenseType.display;
+    String? priceError;
 
-    final result = await showDialog<String>(
+    bool isValidPrice(String value) {
+      if (value.isEmpty) return false;
+      final parsed = double.tryParse(value);
+      return parsed != null && parsed > 0;
+    }
+
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('List for Sale'),
-        content: TextField(
-          controller: priceController,
-          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-          decoration: const InputDecoration(
-            labelText: 'Price in ETH',
-            hintText: '0.1',
-            suffixText: 'ETH',
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('List for Sale'),
+          content: SizedBox(
+            width: 400,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Card(
+                  color: Colors.amber.shade50,
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_document, color: Colors.amber.shade800, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'You will sign a binding agreement to sell under the chosen license terms.',
+                            style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: priceController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: InputDecoration(
+                    labelText: 'Price in ETH',
+                    hintText: '0.1',
+                    suffixText: 'ETH',
+                    errorText: priceError,
+                  ),
+                  onChanged: (value) {
+                    setDialogState(() {
+                      priceError = null;
+                    });
+                  },
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'License Type',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Choose what rights the buyer will receive',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                ...LicenseType.values.map((license) {
+                  final isSelected = selectedLicense == license;
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: InkWell(
+                      onTap: () => setDialogState(() => selectedLicense = license),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : Colors.grey.shade300,
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              isSelected
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Colors.grey.shade400,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    license.displayName,
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                                  Text(
+                                    license.description,
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                }),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.edit, size: 18),
+              onPressed: () {
+                if (!isValidPrice(priceController.text)) {
+                  setDialogState(() {
+                    priceError = 'Please enter a valid price';
+                  });
+                  return;
+                }
+                Navigator.pop(context, {
+                  'price': priceController.text,
+                  'license': selectedLicense,
+                });
+              },
+              label: const Text('Sign & List'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, priceController.text),
-            child: const Text('List'),
-          ),
-        ],
       ),
     );
 
-    if (result != null && result.isNotEmpty) {
-      await _list(result);
+    debugPrint('Dialog result: $result');
+    if (result != null && result['price'] != null && result['price'].isNotEmpty) {
+      await _list(result['price'], result['license']);
+    } else {
+      debugPrint('List cancelled or no price entered');
     }
   }
 
-  Future<void> _list(String priceEth) async {
+  Future<void> _list(String priceEth, LicenseType licenseType) async {
+    debugPrint('_list called with price: $priceEth, license: $licenseType');
     setState(() => _actionLoading = true);
 
     try {
       final wallet = context.read<WalletProvider>();
+
+      // Step 1: Call backend to prepare listing (backend handles all logic)
       final api = ApiService(authToken: wallet.authToken);
-
-      // Convert ETH to Wei (1 ETH = 10^18 Wei)
-      final priceWei = (double.parse(priceEth) * 1e18).toStringAsFixed(0);
-
-      await api.listToken(tokenId: widget.tokenId, priceWei: priceWei);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Listed for $priceEth ETH!')),
+      final prepareResult = await api.prepareListing(
+        tokenId: widget.tokenId,
+        priceEth: priceEth,
+        licenseType: licenseType.name,
       );
+
+      debugPrint('Prepare result: $prepareResult');
+
+      // Step 2: Sign the typed data via wallet service
+      final typedData = prepareResult['typedData'] as Map<String, dynamic>;
+      final contractCall = prepareResult['contractCall'] as Map<String, dynamic>;
+
+      final signature = await wallet.signTypedData(typedData);
+
+      // Step 3: Submit transaction via wallet service
+      // Get contract address from contract service
+      final contractService = await ContractService.getInstance();
+      final contractAddress = contractService.contractAddress;
+
+      // Build transaction data for list() call
+      final txData = _encodeListCall(
+        tokenId: contractCall['params']['tokenId'] as int,
+        price: BigInt.parse(contractCall['params']['price'].toString()),
+        licenseType: contractCall['params']['licenseType'] as int,
+        licenseHash: contractCall['params']['licenseHash'] as String,
+        expiry: BigInt.from(contractCall['params']['expiry'] as int),
+        signature: signature,
+      );
+
+      final txResult = await wallet.sendTransaction(
+        to: contractAddress,
+        data: txData,
+      );
+
+      debugPrint('List transaction hash: ${txResult.hash}');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Listed for $priceEth ETH with ${licenseType.displayName} license!')),
+        );
+      }
 
       await _loadToken(); // Refresh
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to list: $e')),
-      );
+    } catch (e, stackTrace) {
+      debugPrint('List error: $e');
+      debugPrint('Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to list: $e')),
+        );
+      }
     } finally {
       setState(() => _actionLoading = false);
     }
@@ -427,19 +631,44 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
     try {
       final wallet = context.read<WalletProvider>();
+
+      // Step 1: Call backend to validate and prepare delisting
       final api = ApiService(authToken: wallet.authToken);
+      final prepareResult = await api.prepareDelisting(tokenId: widget.tokenId);
 
-      await api.delistToken(widget.tokenId);
+      debugPrint('Delist prepare result: $prepareResult');
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Listing removed')),
+      // Step 2: Submit transaction via wallet service
+      final contractService = await ContractService.getInstance();
+      final contractAddress = contractService.contractAddress;
+      final contractCall = prepareResult['contractCall'] as Map<String, dynamic>;
+
+      // Build transaction data for delist() call
+      final txData = _encodeDelistCall(
+        tokenId: contractCall['params']['tokenId'] as int,
       );
+
+      final txResult = await wallet.sendTransaction(
+        to: contractAddress,
+        data: txData,
+      );
+
+      debugPrint('Delist transaction hash: ${txResult.hash}');
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Listing removed')),
+        );
+      }
 
       await _loadToken(); // Refresh
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delist: $e')),
-      );
+      debugPrint('Delist error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delist: $e')),
+        );
+      }
     } finally {
       setState(() => _actionLoading = false);
     }
@@ -450,23 +679,133 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
     try {
       final wallet = context.read<WalletProvider>();
+
+      // Step 1: Call backend to prepare purchase (backend handles all logic)
       final api = ApiService(authToken: wallet.authToken);
-
-      await api.buyToken(widget.tokenId);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text('Purchase successful! You now own this NFT.')),
+      final prepareResult = await api.preparePurchase(
+        tokenId: widget.tokenId,
       );
+
+      if (prepareResult['success'] != true) {
+        throw Exception(prepareResult['error'] ?? 'Failed to prepare purchase');
+      }
+
+      // Step 2: Sign the typed data via wallet service
+      final typedData = prepareResult['typedData'] as Map<String, dynamic>;
+      final contractCall = prepareResult['contractCall'] as Map<String, dynamic>;
+
+      final signature = await wallet.signTypedData(typedData);
+
+      // Step 3: Submit transaction via wallet service
+      final contractService = await ContractService.getInstance();
+      final contractAddress = contractService.contractAddress;
+
+      // Build transaction data for buy() call
+      final txData = _encodeBuyCall(
+        tokenId: contractCall['params']['tokenId'] as int,
+        signature: signature,
+      );
+
+      final txResult = await wallet.sendTransaction(
+        to: contractAddress,
+        data: txData,
+        value: contractCall['value'] as String,
+      );
+
+      debugPrint('Buy transaction hash: ${txResult.hash}');
+
+      // Sync backend with blockchain state so galleries reflect new ownership
+      await ApiService().syncGallery();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Purchase successful! Bilateral agreement recorded on-chain.')),
+        );
+      }
 
       await _loadToken(); // Refresh to show new owner
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to buy: $e')),
-      );
+      debugPrint('Buy error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to buy: $e')),
+        );
+      }
     } finally {
       setState(() => _actionLoading = false);
     }
+  }
+
+  // ABI encoding helpers
+
+  /// Encode list(uint256,uint256,uint8,bytes32,uint256,bytes) call
+  String _encodeListCall({
+    required int tokenId,
+    required BigInt price,
+    required int licenseType,
+    required String licenseHash,
+    required BigInt expiry,
+    required Uint8List signature,
+  }) {
+    // Function selector: list(uint256,uint256,uint8,bytes32,uint256,bytes)
+    // keccak256("list(uint256,uint256,uint8,bytes32,uint256,bytes)")[0:4] = 0x69c6945f
+    const selector = '0x69c6945f';
+
+    // Encode fixed-size parameters
+    final tokenIdHex = tokenId.toRadixString(16).padLeft(64, '0');
+    final priceHex = price.toRadixString(16).padLeft(64, '0');
+    final licenseTypeHex = licenseType.toRadixString(16).padLeft(64, '0');
+    final licenseHashHex = licenseHash.replaceFirst('0x', '').padLeft(64, '0');
+    final expiryHex = expiry.toRadixString(16).padLeft(64, '0');
+
+    // Offset for dynamic bytes parameter (6 * 32 = 192 = 0xc0)
+    final signatureOffset = 'c0'.padLeft(64, '0');
+
+    // Signature length
+    final signatureLengthHex = signature.length.toRadixString(16).padLeft(64, '0');
+
+    // Signature data (padded to 32-byte boundary)
+    final signatureHex = signature.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final paddedLength = ((signature.length + 31) ~/ 32) * 64;
+    final signatureDataHex = signatureHex.padRight(paddedLength, '0');
+
+    return '$selector$tokenIdHex$priceHex$licenseTypeHex$licenseHashHex$expiryHex$signatureOffset$signatureLengthHex$signatureDataHex';
+  }
+
+  /// Encode delist(uint256) call
+  String _encodeDelistCall({required int tokenId}) {
+    // Function selector: delist(uint256)
+    // keccak256("delist(uint256)")[0:4] = 0x964bc33f
+    const selector = '0x964bc33f';
+    final tokenIdHex = tokenId.toRadixString(16).padLeft(64, '0');
+    return '$selector$tokenIdHex';
+  }
+
+  /// Encode buy(uint256,bytes) call
+  String _encodeBuyCall({
+    required int tokenId,
+    required Uint8List signature,
+  }) {
+    // Function selector: buy(uint256,bytes)
+    // keccak256("buy(uint256,bytes)")[0:4] = 0x82189551
+    const selector = '0x82189551';
+
+    // Token ID
+    final tokenIdHex = tokenId.toRadixString(16).padLeft(64, '0');
+
+    // Offset for dynamic bytes parameter (2 * 32 = 64 = 0x40)
+    final signatureOffset = '40'.padLeft(64, '0');
+
+    // Signature length
+    final signatureLengthHex = signature.length.toRadixString(16).padLeft(64, '0');
+
+    // Signature data (padded to 32-byte boundary)
+    final signatureHex = signature.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final paddedLength = ((signature.length + 31) ~/ 32) * 64;
+    final signatureDataHex = signatureHex.padRight(paddedLength, '0');
+
+    return '$selector$tokenIdHex$signatureOffset$signatureLengthHex$signatureDataHex';
   }
 
   String _shortAddress(String address) {

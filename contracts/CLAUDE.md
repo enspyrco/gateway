@@ -24,11 +24,10 @@ Key features:
 - **License Types**: Display (personal use), Commercial (monetization), Transfer (full copyright)
 - **Duplicate Prevention**: `imageHashExists` mapping prevents re-minting same image
 - **Integrated Marketplace**: `list()`, `delist()`, `buy()` functions
-- **Royalties**: 2.5% to creator on secondary sales (EIP-2981)
 - **Platform Fee**: 2.5% on marketplace sales to `platformWallet`
 - **Auto-delist**: Tokens automatically delist when transferred outside marketplace
 
-Inherits from OpenZeppelin v5.0: ERC721, ERC721URIStorage, ERC721Royalty, Ownable, ReentrancyGuard
+Inherits from OpenZeppelin v5.0: ERC721, ERC721URIStorage, Ownable, ReentrancyGuard
 
 **NFTmarketPayments.sol** - USDC payment handler for generation and minting fees.
 

@@ -7,10 +7,22 @@ const admin = require("firebase-admin");
 
 const USE_MOCK_FIRESTORE = process.env.USE_MOCK_FIRESTORE === "true";
 
-// In-memory stores for mock mode
-const mockTokens = new Map();
-const mockKeys = new Map();
-const mockDetections = [];
+// Persistent stores for mock mode
+const persistence = require('./mock-persistence');
+let mockTokens = USE_MOCK_FIRESTORE ? persistence.loadMap('firestore-tokens') : new Map();
+let mockKeys = USE_MOCK_FIRESTORE ? persistence.loadMap('firestore-keys') : new Map();
+let mockDetections = USE_MOCK_FIRESTORE ? persistence.loadArray('firestore-detections') : [];
+let mockLicenses = USE_MOCK_FIRESTORE ? persistence.loadMap('firestore-licenses') : new Map();
+
+// Auto-save helpers
+function saveMockData() {
+  if (USE_MOCK_FIRESTORE) {
+    persistence.saveMap('firestore-tokens', mockTokens);
+    persistence.saveMap('firestore-keys', mockKeys);
+    persistence.saveArray('firestore-detections', mockDetections);
+    persistence.saveMap('firestore-licenses', mockLicenses);
+  }
+}
 
 // Initialize Firebase Admin (lazy)
 let db = null;
@@ -54,12 +66,10 @@ async function createToken(data) {
     currentOwner: data.wallet, // Initially, creator is the owner
     name: data.name,
     description: data.description || "",
-    licenseType: data.licenseType,
     imageHash: data.imageHash,
-    licenseHash: data.licenseHash,
     watermarkId: data.watermarkId,
     keyId: data.keyId,
-    encryptedBlobUri: data.encryptedBlobUri,
+    storagePath: data.storagePath,  // Firebase Storage path for encrypted original
     previewUri: data.previewUri,
     metadataUri: data.metadataUri,
     transactionHash: data.transactionHash,
@@ -68,7 +78,8 @@ async function createToken(data) {
 
   if (USE_MOCK_FIRESTORE) {
     mockTokens.set(String(data.tokenId), tokenDoc);
-    console.log(`MOCK FIRESTORE: Created token ${data.tokenId}`);
+    saveMockData();
+    console.log(`[MOCK FIRESTORE] Created token ${data.tokenId}`);
     return tokenDoc;
   }
 
@@ -184,7 +195,8 @@ async function updateTokenOwner(tokenId, newOwner) {
     if (token) {
       token.currentOwner = newOwner.toLowerCase();
       mockTokens.set(String(tokenId), token);
-      console.log(`MOCK FIRESTORE: Updated token ${tokenId} owner to ${newOwner}`);
+      saveMockData();
+      console.log(`[MOCK FIRESTORE] Updated token ${tokenId} owner to ${newOwner}`);
     }
     return;
   }
@@ -192,6 +204,33 @@ async function updateTokenOwner(tokenId, newOwner) {
   const db = getDb();
   await db.collection("tokens").doc(String(tokenId)).update({
     currentOwner: newOwner.toLowerCase(),
+  });
+}
+
+/**
+ * Update token listing info (when listing for sale)
+ */
+async function updateTokenListing(tokenId, listingData) {
+  if (USE_MOCK_FIRESTORE) {
+    const token = mockTokens.get(String(tokenId));
+    if (token) {
+      token.licenseType = listingData.licenseType;
+      token.licenseHash = listingData.licenseHash;
+      token.listingPrice = listingData.listingPrice;
+      token.listedAt = listingData.listedAt;
+      mockTokens.set(String(tokenId), token);
+      saveMockData();
+      console.log(`[MOCK FIRESTORE] Updated listing for token ${tokenId}`);
+    }
+    return;
+  }
+
+  const db = getDb();
+  await db.collection("tokens").doc(String(tokenId)).update({
+    licenseType: listingData.licenseType,
+    licenseHash: listingData.licenseHash,
+    listingPrice: listingData.listingPrice,
+    listedAt: admin.firestore.Timestamp.fromDate(listingData.listedAt),
   });
 }
 
@@ -264,7 +303,8 @@ async function storeKey(tokenId, keyData) {
 
   if (USE_MOCK_FIRESTORE) {
     mockKeys.set(String(tokenId), keyDoc);
-    console.log(`MOCK FIRESTORE: Stored key for token ${tokenId}`);
+    saveMockData();
+    console.log(`[MOCK FIRESTORE] Stored key for token ${tokenId}`);
     return;
   }
 
@@ -309,7 +349,8 @@ async function logDetection(data) {
 
   if (USE_MOCK_FIRESTORE) {
     mockDetections.push(detectionDoc);
-    console.log(`MOCK FIRESTORE: Logged detection for token ${data.tokenId}`);
+    saveMockData();
+    console.log(`[MOCK FIRESTORE] Logged detection for token ${data.tokenId}`);
     return;
   }
 
@@ -346,12 +387,84 @@ async function getDetectionHistory(tokenId, limit = 20) {
 }
 
 /**
+ * Store license info for a token
+ */
+async function storeLicenseInfo(tokenId, licenseData) {
+  if (USE_MOCK_FIRESTORE) {
+    mockLicenses.set(String(tokenId), licenseData);
+    saveMockData();
+    console.log(`[MOCK FIRESTORE] Stored license info for token ${tokenId}`);
+    return;
+  }
+
+  const db = getDb();
+  await db.collection("licenses").doc(String(tokenId)).set(licenseData, { merge: true });
+}
+
+/**
+ * Get license info for a token
+ */
+async function getLicenseInfo(tokenId) {
+  if (USE_MOCK_FIRESTORE) {
+    return mockLicenses.get(String(tokenId)) || null;
+  }
+
+  const db = getDb();
+  const doc = await db.collection("licenses").doc(String(tokenId)).get();
+
+  if (!doc.exists) {
+    return null;
+  }
+
+  return doc.data();
+}
+
+/**
+ * Get license history for a token (all versions)
+ */
+async function getLicenseHistory(tokenId, limit = 20) {
+  if (USE_MOCK_FIRESTORE) {
+    const license = mockLicenses.get(String(tokenId));
+    return license ? [license] : [];
+  }
+
+  const db = getDb();
+  const snapshot = await db
+    .collection("license_history")
+    .where("tokenId", "==", Number(tokenId))
+    .orderBy("timestamp", "desc")
+    .limit(limit)
+    .get();
+
+  return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
+/**
+ * Archive a license to history (called after sale)
+ */
+async function archiveLicense(tokenId, licenseData) {
+  if (USE_MOCK_FIRESTORE) {
+    console.log(`[MOCK FIRESTORE] Archived license for token ${tokenId}`);
+    return;
+  }
+
+  const db = getDb();
+  await db.collection("license_history").add({
+    tokenId: Number(tokenId),
+    ...licenseData,
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
+/**
  * Reset mock state (for testing)
  */
 function resetMock() {
   mockTokens.clear();
   mockKeys.clear();
   mockDetections.length = 0;
+  mockLicenses.clear();
+  saveMockData();
 }
 
 module.exports = {
@@ -361,10 +474,15 @@ module.exports = {
   getTokensByWallet,
   getTokensByOwner,
   updateTokenOwner,
+  updateTokenListing,
   getGalleryList,
   storeKey,
   getKey,
   logDetection,
   getDetectionHistory,
+  storeLicenseInfo,
+  getLicenseInfo,
+  getLicenseHistory,
+  archiveLicense,
   resetMock,
 };

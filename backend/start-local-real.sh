@@ -31,8 +31,8 @@ export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 export FIREBASE_PROJECT_ID=demo-nftmarket
 export USE_MOCK_FIRESTORE=false
 
-# Still mock IPFS
-export USE_MOCK_IPFS=true
+# Real IPFS (Pinata)
+export USE_MOCK_IPFS=false
 export USE_KMS=false
 export DEV_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
@@ -41,6 +41,7 @@ echo "  - Hardhat blockchain: $POLYGON_RPC_URL"
 echo "  - Contract: $NFTMARKET_CONTRACT_ADDRESS"
 echo "  - Firestore emulator: $FIRESTORE_EMULATOR_HOST"
 echo "  - Watermark: Cloud API"
+echo "  - IPFS: Pinata (real)"
 echo ""
 echo "Make sure you have running:"
 echo "  - firebase emulators:start --only firestore --import ./emulator-data --export-on-exit ./emulator-data"

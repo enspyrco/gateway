@@ -209,18 +209,6 @@ class _VerifyPageState extends State<VerifyPage> {
                     'Token #${token.tokenId}',
                     style: TextStyle(color: Colors.grey.shade600),
                   ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(Icons.gavel, size: 14, color: Colors.grey.shade600),
-                      const SizedBox(width: 4),
-                      Text(
-                        token.licenseType.displayName,
-                        style: TextStyle(
-                            color: Colors.grey.shade600, fontSize: 13),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
