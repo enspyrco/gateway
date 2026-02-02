@@ -106,41 +106,89 @@ describe('Marketplace Route', () => {
     });
   });
 
-  describe('POST /api/marketplace/list (deprecated)', () => {
-    it('should return USE_WALLET_DIRECTLY', async () => {
+  describe('POST /api/marketplace/list', () => {
+    it('should return typed data for listing', async () => {
+      const { tokenId } = await mintToken(userA);
+
       const res = await request(app)
         .post('/api/marketplace/list')
         .set('Authorization', `Bearer ${authTokenA}`)
-        .send({ tokenId: 1, price: '1000000000000000000' })
+        .send({ tokenId, priceEth: '1.0', licenseType: 'display' })
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(res.body.typedData).toBeDefined();
+      expect(res.body.contractCall).toBeDefined();
+      expect(res.body.summary.tokenId).toBe(tokenId);
+    });
+
+    it('should reject invalid price', async () => {
+      const res = await request(app)
+        .post('/api/marketplace/list')
+        .set('Authorization', `Bearer ${authTokenA}`)
+        .send({ tokenId: 1 })
         .expect(400);
 
-      expect(res.body.code).toBe('USE_WALLET_DIRECTLY');
-      expect(res.body.hint).toContain('typed-data');
+      expect(res.body.code).toBe('INVALID_PRICE');
     });
   });
 
-  describe('POST /api/marketplace/delist (deprecated)', () => {
-    it('should return USE_WALLET_DIRECTLY', async () => {
+  describe('POST /api/marketplace/delist', () => {
+    it('should return contract call for delisting', async () => {
+      const { tokenId } = await mintToken(userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
+
       const res = await request(app)
         .post('/api/marketplace/delist')
         .set('Authorization', `Bearer ${authTokenA}`)
-        .send({ tokenId: 1 })
-        .expect(400);
+        .send({ tokenId })
+        .expect(200);
 
-      expect(res.body.code).toBe('USE_WALLET_DIRECTLY');
+      expect(res.body.success).toBe(true);
+      expect(res.body.contractCall).toBeDefined();
+      expect(res.body.contractCall.method).toBe('delist');
+    });
+
+    it('should reject if not owner', async () => {
+      const { tokenId } = await mintToken(userA);
+
+      const res = await request(app)
+        .post('/api/marketplace/delist')
+        .set('Authorization', `Bearer ${authTokenB}`)
+        .send({ tokenId })
+        .expect(403);
+
+      expect(res.body.code).toBe('NOT_OWNER');
     });
   });
 
-  describe('POST /api/marketplace/buy (deprecated)', () => {
-    it('should return USE_WALLET_DIRECTLY', async () => {
+  describe('POST /api/marketplace/buy', () => {
+    it('should return typed data for buying', async () => {
+      const { tokenId } = await mintToken(userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
+
       const res = await request(app)
         .post('/api/marketplace/buy')
-        .set('Authorization', `Bearer ${authTokenA}`)
-        .send({ tokenId: 1 })
-        .expect(400);
+        .set('Authorization', `Bearer ${authTokenB}`)
+        .send({ tokenId })
+        .expect(200);
 
-      expect(res.body.code).toBe('USE_WALLET_DIRECTLY');
-      expect(res.body.hint).toContain('typed-data');
+      expect(res.body.success).toBe(true);
+      expect(res.body.typedData).toBeDefined();
+      expect(res.body.contractCall).toBeDefined();
+      expect(res.body.summary.priceEth).toBe('1.0000');
+    });
+
+    it('should reject if not listed', async () => {
+      const { tokenId } = await mintToken(userA);
+
+      const res = await request(app)
+        .post('/api/marketplace/buy')
+        .set('Authorization', `Bearer ${authTokenB}`)
+        .send({ tokenId })
+        .expect(404);
+
+      expect(res.body.code).toBe('NOT_LISTED');
     });
   });
 });
