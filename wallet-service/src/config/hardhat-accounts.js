@@ -1,7 +1,21 @@
 /**
- * Hardhat test accounts for local development
- * These are the default Hardhat accounts with well-known private keys
- * DO NOT use these in production!
+ * ============================================================================
+ * WARNING: HARDHAT TEST ACCOUNTS - DO NOT USE IN PRODUCTION!
+ * ============================================================================
+ *
+ * These are the default Hardhat accounts with WELL-KNOWN private keys.
+ * Anyone can access funds sent to these addresses on any network.
+ *
+ * These accounts are ONLY for local development with Hardhat's built-in node.
+ * The private keys are publicly documented at:
+ * https://hardhat.org/hardhat-network/docs/reference#initial-state
+ *
+ * NEVER:
+ * - Send real ETH/MATIC to these addresses
+ * - Use these keys on mainnet or testnets
+ * - Store actual value in these accounts
+ *
+ * ============================================================================
  */
 
 const accounts = [
