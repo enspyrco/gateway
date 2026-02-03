@@ -242,6 +242,22 @@ cd backend && npm run dev
 cd flutter && flutter run -d chrome
 ```
 
+### Quick Start (Local Development)
+
+```bash
+# Terminal 1: Start Hardhat node
+cd contracts && npx hardhat node
+
+# Terminal 2: Deploy contract
+cd contracts && npx hardhat run scripts/deploy.js --network localhost
+
+# Terminal 3: Start backend
+cd backend && npm run dev
+
+# Terminal 4: Start Flutter
+cd flutter && flutter run -d chrome
+```
+
 ### Local Development Mode
 
 **Full Mock Mode** (no external services):
