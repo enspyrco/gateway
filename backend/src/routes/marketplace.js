@@ -14,9 +14,13 @@ const blockchainService = require('../services/blockchain');
 const ipfsService = require('../services/ipfs');
 const arweaveService = require('../services/arweave');
 const authMiddleware = require('../middleware/auth');
-
-// License type names (matches contract enum)
-const licenseTypeNames = ['display', 'commercial', 'transfer'];
+const {
+  LICENSE_TYPE_NAMES,
+  parseLicenseType,
+  getLicenseTypeName,
+  buildListingsArray,
+  hasAnyListing
+} = require('../utils/license-utils');
 
 /**
  * GET /api/marketplace
@@ -61,9 +65,9 @@ router.get('/', async (req, res, next) => {
             priceEth: (Number(listing.price) / 1e18).toFixed(4),
             seller: listing.seller,
             // License type being offered in this listing (from listing, not token)
-            licenseType: licenseTypeNames[listing.licenseType] || 'unknown',
+            licenseType: LICENSE_TYPE_NAMES[listing.licenseType] || 'unknown',
             // Current owner's max license (what they could sell)
-            ownerLicense: licenseTypeNames[blockchainData?.ownerLicense] || 'unknown',
+            ownerLicense: LICENSE_TYPE_NAMES[blockchainData?.ownerLicense] || 'unknown',
             creator: blockchainData?.creator,
             copyrightOwner: blockchainData?.copyrightOwner,
             nonce: listing.nonce,
@@ -79,7 +83,7 @@ router.get('/', async (req, res, next) => {
             price: listing.price,
             priceEth: (Number(listing.price) / 1e18).toFixed(4),
             seller: listing.seller,
-            licenseType: licenseTypeNames[listing.licenseType] || 'unknown',
+            licenseType: LICENSE_TYPE_NAMES[listing.licenseType] || 'unknown',
             nonce: listing.nonce,
             expiry: listing.expiry
           };
@@ -148,12 +152,7 @@ router.get('/:tokenId', async (req, res, next) => {
     // Get all listings for this token (multi-license support)
     const allListings = await blockchainService.getAllListingsForToken(tokenId);
 
-    const hasDisplayListing = allListings.display && allListings.display.active;
-    const hasCommercialListing = allListings.commercial && allListings.commercial.active;
-    const hasTransferListing = allListings.transfer && allListings.transfer.active;
-    const isListed = hasDisplayListing || hasCommercialListing || hasTransferListing;
-
-    if (!isListed) {
+    if (!hasAnyListing(allListings)) {
       return res.json({ listed: false, tokenId: Number(tokenId) });
     }
 
@@ -175,41 +174,8 @@ router.get('/:tokenId', async (req, res, next) => {
       ? ipfsService.getGatewayUrl(blockchainData.ipfsUri)
       : null;
 
-    // Build listings array
-    const listings = [];
-    if (hasDisplayListing) {
-      listings.push({
-        licenseType: 'display',
-        price: allListings.display.price,
-        priceEth: (Number(allListings.display.price) / 1e18).toFixed(4),
-        seller: allListings.display.seller,
-        nonce: allListings.display.nonce,
-        expiry: allListings.display.expiry,
-        licenseHash: allListings.display.licenseHash
-      });
-    }
-    if (hasCommercialListing) {
-      listings.push({
-        licenseType: 'commercial',
-        price: allListings.commercial.price,
-        priceEth: (Number(allListings.commercial.price) / 1e18).toFixed(4),
-        seller: allListings.commercial.seller,
-        nonce: allListings.commercial.nonce,
-        expiry: allListings.commercial.expiry,
-        licenseHash: allListings.commercial.licenseHash
-      });
-    }
-    if (hasTransferListing) {
-      listings.push({
-        licenseType: 'transfer',
-        price: allListings.transfer.price,
-        priceEth: (Number(allListings.transfer.price) / 1e18).toFixed(4),
-        seller: allListings.transfer.seller,
-        nonce: allListings.transfer.nonce,
-        expiry: allListings.transfer.expiry,
-        licenseHash: allListings.transfer.licenseHash
-      });
-    }
+    // Build listings array with full details
+    const listings = buildListingsArray(allListings, true); // true = include details
 
     res.json({
       listed: true,
@@ -223,7 +189,7 @@ router.get('/:tokenId', async (req, res, next) => {
       // Token metadata from blockchain
       creator: blockchainData?.creator,
       copyrightOwner: blockchainData?.copyrightOwner,
-      ownerLicense: licenseTypeNames[blockchainData?.ownerLicense] || 'unknown',
+      ownerLicense: LICENSE_TYPE_NAMES[blockchainData?.ownerLicense] || 'unknown',
       // Legacy single-listing fields (for backwards compatibility)
       seller: listings[0]?.seller,
       price: listings[0]?.price,
@@ -330,15 +296,10 @@ router.post('/list', authMiddleware, async (req, res, next) => {
     if (!priceEth || isNaN(parseFloat(priceEth))) {
       return res.status(400).json({ error: 'Invalid price', code: 'INVALID_PRICE' });
     }
-    if (licenseType === undefined) {
-      return res.status(400).json({ error: 'Missing licenseType', code: 'MISSING_LICENSE_TYPE' });
-    }
-
-    // Convert license type string to number if needed
-    const licenseTypeMap = { display: 0, commercial: 1, transfer: 2 };
-    const licenseTypeNum = typeof licenseType === 'string' ? licenseTypeMap[licenseType] : licenseType;
-    if (licenseTypeNum === undefined || licenseTypeNum < 0 || licenseTypeNum > 2) {
-      return res.status(400).json({ error: 'Invalid licenseType', code: 'INVALID_LICENSE_TYPE' });
+    // Parse and validate license type
+    const { valid, licenseTypeNum, error: licenseError } = parseLicenseType(licenseType);
+    if (!valid) {
+      return res.status(400).json({ error: licenseError, code: 'INVALID_LICENSE_TYPE' });
     }
 
     // Verify ownership
@@ -426,7 +387,7 @@ router.post('/list', authMiddleware, async (req, res, next) => {
         tokenId,
         priceEth,
         priceWei,
-        licenseType: licenseTypeNames[licenseTypeNum],
+        licenseType: LICENSE_TYPE_NAMES[licenseTypeNum],
         seller: sellerAddress
       }
     });
@@ -477,15 +438,10 @@ router.post('/delist', authMiddleware, async (req, res, next) => {
         summary: { tokenId, action: 'delistAll' }
       });
     } else {
-      // Delist specific license type
-      if (licenseType === undefined) {
-        return res.status(400).json({ error: 'Missing licenseType (or set all: true)', code: 'MISSING_LICENSE_TYPE' });
-      }
-
-      const licenseTypeMap = { display: 0, commercial: 1, transfer: 2 };
-      const licenseTypeNum = typeof licenseType === 'string' ? licenseTypeMap[licenseType] : licenseType;
-      if (licenseTypeNum === undefined || licenseTypeNum < 0 || licenseTypeNum > 2) {
-        return res.status(400).json({ error: 'Invalid licenseType', code: 'INVALID_LICENSE_TYPE' });
+      // Delist specific license type - parse and validate
+      const { valid, licenseTypeNum, error: licenseError } = parseLicenseType(licenseType);
+      if (!valid) {
+        return res.status(400).json({ error: licenseError + ' (or set all: true)', code: 'INVALID_LICENSE_TYPE' });
       }
 
       // Check this specific license type is listed
@@ -499,11 +455,10 @@ router.post('/delist', authMiddleware, async (req, res, next) => {
         params: { tokenId, licenseType: licenseTypeNum }
       };
 
-      const licenseTypeNames = ['display', 'commercial', 'transfer'];
       res.json({
         success: true,
         contractCall,
-        summary: { tokenId, licenseType: licenseTypeNames[licenseTypeNum], action: 'delist' }
+        summary: { tokenId, licenseType: getLicenseTypeName(licenseTypeNum), action: 'delist' }
       });
     }
   } catch (error) {
@@ -528,15 +483,10 @@ router.post('/buy', authMiddleware, async (req, res, next) => {
       return res.status(400).json({ error: 'Missing tokenId', code: 'MISSING_TOKEN_ID' });
     }
 
-    if (licenseType === undefined) {
-      return res.status(400).json({ error: 'Missing licenseType', code: 'MISSING_LICENSE_TYPE' });
-    }
-
-    // Convert license type string to number if needed
-    const licenseTypeMap = { display: 0, commercial: 1, transfer: 2 };
-    const licenseTypeNum = typeof licenseType === 'string' ? licenseTypeMap[licenseType] : licenseType;
-    if (licenseTypeNum === undefined || licenseTypeNum < 0 || licenseTypeNum > 2) {
-      return res.status(400).json({ error: 'Invalid licenseType', code: 'INVALID_LICENSE_TYPE' });
+    // Parse and validate license type
+    const { valid, licenseTypeNum, error: licenseError } = parseLicenseType(licenseType);
+    if (!valid) {
+      return res.status(400).json({ error: licenseError, code: 'INVALID_LICENSE_TYPE' });
     }
 
     // Get listing details for this specific license type
@@ -612,7 +562,7 @@ router.post('/buy', authMiddleware, async (req, res, next) => {
         tokenId,
         priceEth,
         priceWei: listing.price,
-        licenseType: licenseTypeNames[licenseTypeNum],
+        licenseType: LICENSE_TYPE_NAMES[licenseTypeNum],
         seller: listing.seller,
         buyer: buyerAddress
       }

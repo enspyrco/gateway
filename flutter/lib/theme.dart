@@ -1,5 +1,29 @@
 import 'package:flutter/material.dart';
 
+/// Opacity constants for consistent visual hierarchy
+/// Use these instead of magic numbers like 0.15 or 0.3
+class NFTmarketOpacity {
+  // Subtle - barely visible backgrounds, borders
+  static const double subtle = 0.06;      // Border overlays
+  static const double faint = 0.08;       // Very light backgrounds
+  static const double light = 0.1;        // Light backgrounds
+  static const double muted = 0.12;       // Muted badge backgrounds
+
+  // Medium - visible but not dominant
+  static const double soft = 0.15;        // Soft backgrounds, disabled states
+  static const double medium = 0.2;       // Medium emphasis, hover states
+  static const double moderate = 0.3;     // Moderate emphasis, borders
+
+  // Strong - clearly visible
+  static const double emphasis = 0.4;     // Strong borders, active states
+  static const double strong = 0.5;       // Strong emphasis, selected states
+
+  // Near opaque - almost solid
+  static const double prominent = 0.8;    // Prominent elements
+  static const double vivid = 0.9;        // Very visible, status badges
+  static const double intense = 0.95;     // Nearly solid
+}
+
 /// NFTmarket Premium Dark Theme Colors
 ///
 /// Design inspiration: Luxury art galleries, premium crypto platforms
@@ -39,8 +63,8 @@ class NFTmarketColors {
   static const cardGradientEnd = Color(0xFF1A1A20);
 
   // Hover/focus glow
-  static Color get accentGlow => accent.withValues(alpha: 0.2);
-  static Color get primaryGlow => primary.withValues(alpha: 0.3);
+  static Color get accentGlow => accent.withValues(alpha: NFTmarketOpacity.medium);
+  static Color get primaryGlow => primary.withValues(alpha: NFTmarketOpacity.moderate);
 }
 
 class NFTmarketTheme {

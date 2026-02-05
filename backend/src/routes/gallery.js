@@ -13,8 +13,7 @@ const router = express.Router();
 
 const ipfsService = require('../services/ipfs');
 const blockchainService = require('../services/blockchain');
-
-const LICENSE_NAMES = ['display', 'commercial', 'transfer'];
+const { LICENSE_TYPE_NAMES, buildListingsArray, hasAnyListing } = require('../utils/license-utils');
 
 /**
  * GET /api/gallery
@@ -83,36 +82,8 @@ router.get('/:address', async (req, res, next) => {
 
       // Get all listings for this token (multi-license support)
       const allListings = await blockchainService.getAllListingsForToken(token.tokenId);
-
-      // Check if any license type is listed
-      const hasDisplayListing = allListings.display && allListings.display.active;
-      const hasCommercialListing = allListings.commercial && allListings.commercial.active;
-      const hasTransferListing = allListings.transfer && allListings.transfer.active;
-      const isListed = hasDisplayListing || hasCommercialListing || hasTransferListing;
-
-      // Build listings array for frontend
-      const listings = [];
-      if (hasDisplayListing) {
-        listings.push({
-          licenseType: 'display',
-          price: allListings.display.price,
-          priceEth: (Number(allListings.display.price) / 1e18).toFixed(4)
-        });
-      }
-      if (hasCommercialListing) {
-        listings.push({
-          licenseType: 'commercial',
-          price: allListings.commercial.price,
-          priceEth: (Number(allListings.commercial.price) / 1e18).toFixed(4)
-        });
-      }
-      if (hasTransferListing) {
-        listings.push({
-          licenseType: 'transfer',
-          price: allListings.transfer.price,
-          priceEth: (Number(allListings.transfer.price) / 1e18).toFixed(4)
-        });
-      }
+      const isListed = hasAnyListing(allListings);
+      const listings = buildListingsArray(allListings, false); // false = no details (seller, nonce, etc.)
 
       return {
         tokenId: token.tokenId,
@@ -121,7 +92,7 @@ router.get('/:address', async (req, res, next) => {
         ipfsUri: token.ipfsUri,
         metadataUri: token.uri, // Arweave URI for full metadata
         // License info from blockchain
-        ownerLicense: LICENSE_NAMES[token.ownerLicense] || 'unknown',
+        ownerLicense: LICENSE_TYPE_NAMES[token.ownerLicense] || 'unknown',
         creator: token.creator,
         copyrightOwner: token.copyrightOwner,
         mintedAt: token.mintedAt,

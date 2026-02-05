@@ -662,7 +662,8 @@ contract NFTmarketNFT is
         }
 
         bool anyDelisted = false;
-        for (uint8 i = 0; i <= uint8(LicenseType.Transfer); i++) {
+        uint8 maxLicenseType = uint8(LicenseType.Transfer);
+        for (uint8 i = 0; i <= maxLicenseType; i++) {
             if (listings[tokenId][i].active) {
                 listings[tokenId][i].active = false;
                 anyDelisted = true;
@@ -765,7 +766,8 @@ contract NFTmarketNFT is
      * @notice Clear all listings for a token (internal helper)
      */
     function _clearAllListings(uint256 tokenId) internal {
-        for (uint8 i = 0; i <= uint8(LicenseType.Transfer); i++) {
+        uint8 maxLicenseType = uint8(LicenseType.Transfer);
+        for (uint8 i = 0; i <= maxLicenseType; i++) {
             listings[tokenId][i].active = false;
         }
     }

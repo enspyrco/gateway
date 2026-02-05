@@ -105,9 +105,36 @@ async function checkMinterRegistered() {
   return { authorityId: Number(authorityId), isMinter };
 }
 
-// Create a minimal test PNG (1x1 red pixel)
-function createTestImage() {
-  // Minimal valid PNG: 1x1 red pixel
+// Test images directory - same as smoke-test.sh uses
+const TEST_IMAGES_DIR = path.join(process.env.HOME, 'Desktop', 'photos', 'nfts');
+
+// Get a random test image from the test images directory
+function getTestImage() {
+  // Check if test images directory exists
+  if (!fs.existsSync(TEST_IMAGES_DIR)) {
+    console.warn(`Test images directory not found: ${TEST_IMAGES_DIR}`);
+    console.warn('Falling back to minimal test PNG');
+    return { buffer: createMinimalPng(), filename: 'test.png', mimeType: 'image/png' };
+  }
+
+  // Get list of jpg files
+  const files = fs.readdirSync(TEST_IMAGES_DIR).filter(f => f.endsWith('.jpg'));
+  if (files.length === 0) {
+    console.warn('No .jpg files found in test images directory');
+    return { buffer: createMinimalPng(), filename: 'test.png', mimeType: 'image/png' };
+  }
+
+  // Pick a random file
+  const randomFile = files[Math.floor(Math.random() * files.length)];
+  const filePath = path.join(TEST_IMAGES_DIR, randomFile);
+  const buffer = fs.readFileSync(filePath);
+
+  console.log(`Using test image: ${randomFile} (${(buffer.length / 1024).toFixed(1)} KB)`);
+  return { buffer, filename: randomFile, mimeType: 'image/jpeg' };
+}
+
+// Fallback: Create a minimal test PNG (1x1 red pixel)
+function createMinimalPng() {
   const pngData = Buffer.from([
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
     0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk
@@ -183,12 +210,12 @@ describe('Mint Flow Integration Tests', () => {
       if (!RUN_INTEGRATION) return;
 
       const authToken = createAuthToken(ACCOUNTS.alice);
-      const imageData = createTestImage();
+      const { buffer, filename, mimeType } = getTestImage();
 
-      // Create form data
+      // Create form data with real test image
       const formData = new FormData();
-      formData.append('image', new Blob([imageData], { type: 'image/png' }), 'test.png');
-      formData.append('name', 'Integration Test NFT');
+      formData.append('image', new Blob([buffer], { type: mimeType }), filename);
+      formData.append('name', `Integration Test NFT - ${filename}`);
       formData.append('description', 'Created by integration test');
 
       const res = await fetch(`${BACKEND_URL}/api/mint`, {

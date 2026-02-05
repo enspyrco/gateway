@@ -169,8 +169,14 @@ else
     echo -e "$FAIL (couldn't get auth token)"
     ERRORS=$((ERRORS + 1))
   else
-    # Step 3: Pick a random test image from ~/Desktop/photos/nfts
+    # Step 3: Pick a test image
+    # Primary: real images from ~/Desktop/photos/nfts (for accurate watermarking tests)
+    # Fallback: create minimal PNG (for CI/other developers without test images)
     TEST_IMAGES_DIR="$HOME/Desktop/photos/nfts"
+    TEST_IMAGE_FILE=""
+    IMAGE_NAME=""
+    MIME_TYPE=""
+
     if [ -d "$TEST_IMAGES_DIR" ]; then
       # macOS-compatible random selection (no shuf)
       TEST_IMAGE_FILE=$(ls "$TEST_IMAGES_DIR"/*.jpg 2>/dev/null | sort -R 2>/dev/null | head -1)
@@ -178,36 +184,42 @@ else
       if [ -z "$TEST_IMAGE_FILE" ]; then
         TEST_IMAGE_FILE=$(ls "$TEST_IMAGES_DIR"/*.jpg 2>/dev/null | awk 'BEGIN{srand()} {print rand()"\t"$0}' | sort -n | cut -f2 | head -1)
       fi
+      if [ -n "$TEST_IMAGE_FILE" ] && [ -f "$TEST_IMAGE_FILE" ]; then
+        IMAGE_NAME=$(basename "$TEST_IMAGE_FILE" .jpg)
+        MIME_TYPE="image/jpeg"
+      fi
     fi
 
+    # Fallback: create minimal PNG if no test images available
     if [ -z "$TEST_IMAGE_FILE" ] || [ ! -f "$TEST_IMAGE_FILE" ]; then
-      echo -e "$FAIL (no test images in ~/Desktop/photos/nfts/)"
+      TEST_IMAGE_FILE="/tmp/smoke-test-fallback.png"
+      # Minimal 1x1 red PNG (base64 encoded)
+      echo -n "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==" | base64 -d > "$TEST_IMAGE_FILE"
+      IMAGE_NAME="fallback-test"
+      MIME_TYPE="image/png"
+    fi
+
+    # Step 4: Call mint endpoint with multipart form-data
+    MINT_RESULT=$(curl -s -X POST http://localhost:3000/api/mint \
+      -H "Authorization: Bearer ${AUTH_TOKEN}" \
+      -F "image=@${TEST_IMAGE_FILE};type=${MIME_TYPE}" \
+      -F "name=Smoke Test ${IMAGE_NAME}" \
+      -F "description=Automated smoke test" 2>&1)
+
+    # Check for success or acceptable error
+    if echo "$MINT_RESULT" | grep -q '"tokenId"'; then
+      TOKEN_ID=$(echo "$MINT_RESULT" | grep -o '"tokenId":[0-9]*' | cut -d':' -f2)
+      echo -e "$PASS (minted token #${TOKEN_ID} from ${IMAGE_NAME}.jpg)"
+    elif echo "$MINT_RESULT" | grep -q "DUPLICATE"; then
+      echo -e "$PASS (duplicate ${IMAGE_NAME}.jpg - OK)"
+    elif echo "$MINT_RESULT" | grep -q "error"; then
+      ERROR_MSG=$(echo "$MINT_RESULT" | grep -o '"error":"[^"]*"' | cut -d'"' -f4 | head -1)
+      echo -e "$FAIL ($ERROR_MSG)"
       ERRORS=$((ERRORS + 1))
     else
-      IMAGE_NAME=$(basename "$TEST_IMAGE_FILE" .jpg)
-
-      # Step 4: Call mint endpoint with multipart form-data
-      MINT_RESULT=$(curl -s -X POST http://localhost:3000/api/mint \
-        -H "Authorization: Bearer ${AUTH_TOKEN}" \
-        -F "image=@${TEST_IMAGE_FILE};type=image/jpeg" \
-        -F "name=Smoke Test ${IMAGE_NAME}" \
-        -F "description=Automated smoke test" 2>&1)
-
-      # Check for success or acceptable error
-      if echo "$MINT_RESULT" | grep -q '"tokenId"'; then
-        TOKEN_ID=$(echo "$MINT_RESULT" | grep -o '"tokenId":[0-9]*' | cut -d':' -f2)
-        echo -e "$PASS (minted token #${TOKEN_ID} from ${IMAGE_NAME}.jpg)"
-      elif echo "$MINT_RESULT" | grep -q "DUPLICATE"; then
-        echo -e "$PASS (duplicate ${IMAGE_NAME}.jpg - OK)"
-      elif echo "$MINT_RESULT" | grep -q "error"; then
-        ERROR_MSG=$(echo "$MINT_RESULT" | grep -o '"error":"[^"]*"' | cut -d'"' -f4 | head -1)
-        echo -e "$FAIL ($ERROR_MSG)"
-        ERRORS=$((ERRORS + 1))
-      else
-        echo -e "$FAIL"
-        echo "  Response: $(echo "$MINT_RESULT" | head -c 200)"
-        ERRORS=$((ERRORS + 1))
-      fi
+      echo -e "$FAIL"
+      echo "  Response: $(echo "$MINT_RESULT" | head -c 200)"
+      ERRORS=$((ERRORS + 1))
     fi
   fi
 fi
