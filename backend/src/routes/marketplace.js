@@ -27,11 +27,8 @@ const {
  * Get all active listings
  */
 router.get('/', async (req, res, next) => {
-  console.log('[DEBUG] GET /api/marketplace called');
   try {
-    console.log('[DEBUG] Calling getActiveListings...');
     const listings = await blockchainService.getActiveListings();
-    console.log('[DEBUG] Raw listings:', JSON.stringify(listings));
 
     // Enrich with data from blockchain + Arweave (metadata)
     const enrichedListings = await Promise.all(
@@ -92,20 +89,16 @@ router.get('/', async (req, res, next) => {
     );
 
     // Get contract info
-    console.log('[DEBUG] Getting EIP712 domain...');
     const domain = await blockchainService.getEIP712Domain();
-    console.log('[DEBUG] Domain:', domain);
 
-    const response = {
+    res.json({
       contract: {
         name: domain.name,
         address: domain.verifyingContract,
         chainId: domain.chainId
       },
       listings: enrichedListings
-    };
-    console.log('[DEBUG] Sending response with contract:', response.contract);
-    res.json(response);
+    });
   } catch (error) {
     next(error);
   }
