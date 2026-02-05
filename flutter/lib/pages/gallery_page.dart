@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../services/api_service.dart';
 import '../providers/wallet_provider.dart';
 import '../widgets/wallet_button.dart';
+import '../theme.dart';
 
 /// Resolve wallet address to nickname (for test accounts)
 String? _resolveNickname(String address, List<TestAccount> accounts) {
@@ -142,9 +143,11 @@ class _GalleryPageState extends State<GalleryPage> {
       context.go('/gallery/$address');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-            content: Text(
-                'Enter a wallet address (0x...) or name (Alice, Bob, etc.)')),
+        SnackBar(
+          content: const Text(
+              'Enter a wallet address (0x...) or name (Alice, Bob, etc.)'),
+          backgroundColor: NFTmarketColors.surfaceLight,
+        ),
       );
     }
   }
@@ -191,7 +194,11 @@ class _GalleryPageState extends State<GalleryPage> {
 
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(
+          color: NFTmarketColors.accent,
+        ),
+      );
     }
 
     if (_error != null) {
@@ -199,12 +206,14 @@ class _GalleryPageState extends State<GalleryPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 48, color: Colors.grey.shade400),
+            const Icon(Icons.error_outline,
+                size: 48, color: NFTmarketColors.textMuted),
             const SizedBox(height: 16),
             Text('Error loading gallery',
                 style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
-            Text(_error!, style: TextStyle(color: Colors.grey.shade600)),
+            Text(_error!,
+                style: const TextStyle(color: NFTmarketColors.textSecondary)),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _loadData,
@@ -217,6 +226,8 @@ class _GalleryPageState extends State<GalleryPage> {
 
     return RefreshIndicator(
       onRefresh: _loadData,
+      color: NFTmarketColors.accent,
+      backgroundColor: NFTmarketColors.surface,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         child: Center(
@@ -254,11 +265,28 @@ class _GalleryPageState extends State<GalleryPage> {
         Expanded(
           child: TextField(
             controller: _searchController,
+            style: const TextStyle(color: NFTmarketColors.textPrimary),
             decoration: InputDecoration(
               hintText: 'Enter name (Alice, Bob...) or address (0x...)',
-              prefixIcon: const Icon(Icons.search),
+              prefixIcon:
+                  const Icon(Icons.search, color: NFTmarketColors.textMuted),
+              filled: true,
+              fillColor: NFTmarketColors.surfaceLight,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: const BorderSide(
+                  color: NFTmarketColors.surfaceBorder,
+                  width: 1,
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide:
+                    const BorderSide(color: NFTmarketColors.accent, width: 2),
               ),
             ),
             onSubmitted: (_) => _searchGallery(),
@@ -269,6 +297,7 @@ class _GalleryPageState extends State<GalleryPage> {
           onPressed: _searchGallery,
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+            backgroundColor: NFTmarketColors.primary,
           ),
           child: const Text('View Gallery'),
         ),
@@ -287,50 +316,51 @@ class _GalleryPageState extends State<GalleryPage> {
       children: [
         Row(
           children: [
-            Text(
-              _isOwnGallery ? 'My Collection' : 'Collection',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+            // Section header with gold accent
+            Container(
+              padding: const EdgeInsets.only(bottom: 4),
+              decoration: const BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(color: NFTmarketColors.accent, width: 2),
+                ),
+              ),
+              child: Text(
+                _isOwnGallery ? 'My Collection' : 'Collection',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: NFTmarketColors.textPrimary,
+                    ),
+              ),
             ),
             if (!_isOwnGallery) ...[
-              const SizedBox(width: 8),
-              Chip(
-                label: Text(displayName, style: const TextStyle(fontSize: 12)),
-                visualDensity: VisualDensity.compact,
+              const SizedBox(width: 12),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: NFTmarketColors.surfaceLight,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: NFTmarketColors.surfaceBorder),
+                ),
+                child: Text(
+                  displayName,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: NFTmarketColors.textSecondary,
+                  ),
+                ),
               ),
             ],
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 20),
         if (_tokens.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.collections_outlined,
-                        size: 48, color: Colors.grey.shade400),
-                    const SizedBox(height: 12),
-                    Text(
-                      _isOwnGallery
-                          ? 'No artworks yet'
-                          : 'This gallery is empty',
-                      style: TextStyle(color: Colors.grey.shade600),
-                    ),
-                    if (_isOwnGallery && wallet.isConnected) ...[
-                      const SizedBox(height: 16),
-                      ElevatedButton.icon(
-                        onPressed: () => context.go('/mint'),
-                        icon: const Icon(Icons.add),
-                        label: const Text('Mint Your First NFT'),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
+          _buildEmptyState(
+            icon: Icons.collections_outlined,
+            title: _isOwnGallery ? 'No artworks yet' : 'This gallery is empty',
+            showAction: _isOwnGallery && wallet.isConnected,
+            actionLabel: 'Mint Your First NFT',
+            onAction: () => context.go('/mint'),
           )
         else
           GridView.builder(
@@ -338,7 +368,7 @@ class _GalleryPageState extends State<GalleryPage> {
             physics: const NeverScrollableScrollPhysics(),
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 280,
-              childAspectRatio: 0.85,
+              childAspectRatio: 0.8,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
             ),
@@ -360,37 +390,28 @@ class _GalleryPageState extends State<GalleryPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Browse Galleries',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-        ),
-        const SizedBox(height: 16),
-        if (_galleries.isEmpty)
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Center(
-                child: Column(
-                  children: [
-                    Icon(Icons.people_outline,
-                        size: 48, color: Colors.grey.shade400),
-                    const SizedBox(height: 12),
-                    Text(
-                      'No galleries yet',
-                      style: TextStyle(color: Colors.grey.shade600),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Be the first to mint an NFT!',
-                      style:
-                          TextStyle(color: Colors.grey.shade500, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
+        // Section header with gold accent
+        Container(
+          padding: const EdgeInsets.only(bottom: 4),
+          decoration: const BoxDecoration(
+            border: Border(
+              bottom: BorderSide(color: NFTmarketColors.accent, width: 2),
             ),
+          ),
+          child: Text(
+            'Browse Galleries',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: NFTmarketColors.textPrimary,
+                ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        if (_galleries.isEmpty)
+          _buildEmptyState(
+            icon: Icons.people_outline,
+            title: 'No galleries yet',
+            subtitle: 'Be the first to mint an NFT!',
           )
         else
           GridView.builder(
@@ -416,9 +437,61 @@ class _GalleryPageState extends State<GalleryPage> {
       ],
     );
   }
+
+  Widget _buildEmptyState({
+    required IconData icon,
+    required String title,
+    String? subtitle,
+    bool showAction = false,
+    String? actionLabel,
+    VoidCallback? onAction,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            NFTmarketColors.cardGradientStart,
+            NFTmarketColors.cardGradientEnd,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: NFTmarketColors.surfaceBorder),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, size: 48, color: NFTmarketColors.textMuted),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(color: NFTmarketColors.textSecondary),
+          ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style:
+                  const TextStyle(color: NFTmarketColors.textMuted, fontSize: 12),
+            ),
+          ],
+          if (showAction && actionLabel != null && onAction != null) ...[
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: onAction,
+              icon: const Icon(Icons.add),
+              label: Text(actionLabel),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
-class _GalleryCard extends StatelessWidget {
+class _GalleryCard extends StatefulWidget {
   final Map<String, dynamic> gallery;
   final VoidCallback onTap;
   final List<TestAccount> accounts;
@@ -427,54 +500,117 @@ class _GalleryCard extends StatelessWidget {
       {required this.gallery, required this.onTap, required this.accounts});
 
   @override
-  Widget build(BuildContext context) {
-    final address = gallery['address'] ?? '';
-    final displayName = _formatAddress(address, accounts);
-    final tokenCount = gallery['tokenCount'] ?? 0;
-    final previewName = gallery['previewTokenName'] ?? 'NFT';
+  State<_GalleryCard> createState() => _GalleryCardState();
+}
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor: Theme.of(context)
-                    .colorScheme
-                    .primary
-                    .withValues(alpha: 0.1),
-                child: Icon(Icons.account_circle,
-                    color: Theme.of(context).colorScheme.primary),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      displayName,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$tokenCount NFT${tokenCount == 1 ? '' : 's'} · $previewName',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 12,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              Icon(Icons.arrow_forward_ios,
-                  size: 16, color: Colors.grey.shade400),
+class _GalleryCardState extends State<_GalleryCard> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final address = widget.gallery['address'] ?? '';
+    final displayName = _formatAddress(address, widget.accounts);
+    final tokenCount = widget.gallery['tokenCount'] ?? 0;
+    final previewName = widget.gallery['previewTokenName'] ?? 'NFT';
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              NFTmarketColors.cardGradientStart,
+              NFTmarketColors.cardGradientEnd,
             ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _isHovered
+                ? NFTmarketColors.accentGlow
+                : NFTmarketColors.surfaceBorder,
+            width: _isHovered ? 1.5 : 1,
+          ),
+          boxShadow: _isHovered
+              ? [
+                  BoxShadow(
+                    color: NFTmarketColors.accentGlow,
+                    blurRadius: 12,
+                    spreadRadius: 0,
+                  ),
+                ]
+              : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          NFTmarketColors.accent.withValues(alpha: 0.2),
+                          NFTmarketColors.primary.withValues(alpha: 0.2),
+                        ],
+                      ),
+                      shape: BoxShape.circle,
+                      border:
+                          Border.all(color: NFTmarketColors.accent, width: 1.5),
+                    ),
+                    child: const Icon(
+                      Icons.account_circle,
+                      color: NFTmarketColors.accent,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          displayName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: NFTmarketColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$tokenCount NFT${tokenCount == 1 ? '' : 's'} · $previewName',
+                          style: const TextStyle(
+                            color: NFTmarketColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    size: 16,
+                    color: _isHovered
+                        ? NFTmarketColors.accent
+                        : NFTmarketColors.textMuted,
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -482,7 +618,7 @@ class _GalleryCard extends StatelessWidget {
   }
 }
 
-class _TokenCard extends StatelessWidget {
+class _TokenCard extends StatefulWidget {
   final Map<String, dynamic> token;
   final VoidCallback onTap;
   final List<TestAccount> accounts;
@@ -491,124 +627,22 @@ class _TokenCard extends StatelessWidget {
       {required this.token, required this.onTap, required this.accounts});
 
   @override
-  Widget build(BuildContext context) {
-    final name = token['name'] ?? 'NFT #${token['tokenId']}';
-    // Use imageUrl from blockchain IPFS URI, fallback to previewUrl for backwards compatibility
-    final imageUrl = token['imageUrl'] ?? token['previewUrl'];
-    // ownerLicense shows the current owner's license level
-    final ownerLicense =
-        token['ownerLicense'] ?? token['licenseType'] ?? 'unknown';
-    final creator = token['creator'] ?? '';
-    final creatorName = _formatAddress(creator, accounts);
-    final copyrightOwner = token['copyrightOwner'] ?? creator;
-    final copyrightOwnerName = _formatAddress(copyrightOwner, accounts);
-    final isOriginal = token['isOriginal'] ?? true;
+  State<_TokenCard> createState() => _TokenCardState();
+}
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  imageUrl != null
-                      ? Image.network(
-                          imageUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => _placeholder(),
-                        )
-                      : _placeholder(),
-                  // Show badge for original vs license
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: isOriginal ? Colors.green : Colors.blue,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        isOriginal ? 'Original' : 'License',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    name,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _getLicenseColor(ownerLicense).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      _formatLicenseType(ownerLicense),
-                      style: TextStyle(
-                        color: _getLicenseColor(ownerLicense),
-                        fontWeight: FontWeight.w500,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Creator: $creatorName',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 11,
-                    ),
-                  ),
-                  if (copyrightOwner != creator)
-                    Text(
-                      'Copyright: $copyrightOwnerName',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 11,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+class _TokenCardState extends State<_TokenCard> {
+  bool _isHovered = false;
 
   Color _getLicenseColor(String type) {
     switch (type.toLowerCase()) {
       case 'display':
-        return Colors.blue;
+        return NFTmarketColors.displayBlue;
       case 'commercial':
-        return Colors.orange;
+        return NFTmarketColors.commercialOrange;
       case 'transfer':
-        return Colors.purple;
+        return NFTmarketColors.transferPurple;
       default:
-        return Colors.grey;
+        return NFTmarketColors.textMuted;
     }
   }
 
@@ -625,10 +659,311 @@ class _TokenCard extends StatelessWidget {
     }
   }
 
+  String _formatListingLabel(String licenseType) {
+    switch (licenseType.toLowerCase()) {
+      case 'display':
+        return 'Display';
+      case 'commercial':
+        return 'Commercial';
+      case 'transfer':
+        return 'Full Transfer';
+      default:
+        return 'For Sale';
+    }
+  }
+
+  String _formatPriceShort(String? priceEth) {
+    if (priceEth == null) return '';
+    final price = double.tryParse(priceEth) ?? 0;
+    if (price >= 1) {
+      return '${price.toStringAsFixed(1)} ETH';
+    } else {
+      return '${price.toStringAsFixed(3)} ETH';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final name = widget.token['name'] ?? 'NFT #${widget.token['tokenId']}';
+    // Use imageUrl from blockchain IPFS URI, fallback to previewUrl for backwards compatibility
+    final imageUrl = widget.token['imageUrl'] ?? widget.token['previewUrl'];
+    // ownerLicense shows the current owner's license level
+    final ownerLicense =
+        widget.token['ownerLicense'] ?? widget.token['licenseType'] ?? 'unknown';
+    final creator = widget.token['creator'] ?? '';
+    final creatorName = _formatAddress(creator, widget.accounts);
+    final copyrightOwner = widget.token['copyrightOwner'] ?? creator;
+    final copyrightOwnerName = _formatAddress(copyrightOwner, widget.accounts);
+    final isOriginal = widget.token['isOriginal'] ?? true;
+    final licenseColor = _getLicenseColor(ownerLicense);
+
+    // Multi-license listing info
+    final isListed = widget.token['isListed'] == true;
+    final listings = widget.token['listings'] as List<dynamic>? ?? [];
+    // Legacy fallback for single listing
+    final listingLicenseType = widget.token['listingLicenseType'] as String?;
+    final listingColor = listings.isNotEmpty
+        ? _getLicenseColor(listings[0]['licenseType'] as String? ?? '')
+        : listingLicenseType != null
+            ? _getLicenseColor(listingLicenseType)
+            : NFTmarketColors.accent;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              NFTmarketColors.cardGradientStart,
+              NFTmarketColors.cardGradientEnd,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isListed
+                ? listingColor.withValues(alpha: 0.5)
+                : _isHovered
+                    ? NFTmarketColors.accentGlow
+                    : NFTmarketColors.surfaceBorder,
+            width: isListed || _isHovered ? 1.5 : 1,
+          ),
+          boxShadow: _isHovered
+              ? [
+                  BoxShadow(
+                    color: isListed
+                        ? listingColor.withValues(alpha: 0.2)
+                        : NFTmarketColors.accentGlow,
+                    blurRadius: 16,
+                    spreadRadius: 0,
+                  ),
+                ]
+              : null,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            borderRadius: BorderRadius.circular(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(15),
+                        ),
+                        child: imageUrl != null
+                            ? Image.network(
+                                imageUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => _placeholder(),
+                              )
+                            : _placeholder(),
+                      ),
+                      // Show "For Sale" badges if listed (top-left) - multi-license support
+                      if (isListed)
+                        Positioned(
+                          top: 8,
+                          left: 8,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // "FOR SALE" header
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: NFTmarketColors.accent.withValues(alpha: 0.95),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(
+                                      Icons.local_offer,
+                                      size: 10,
+                                      color: Colors.white,
+                                    ),
+                                    SizedBox(width: 3),
+                                    Text(
+                                      'FOR SALE',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 8,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              // Show each listing type with price
+                              if (listings.isNotEmpty)
+                                ...listings.map<Widget>((listing) {
+                                  final type = listing['licenseType'] as String? ?? '';
+                                  final priceEth = listing['priceEth'] as String?;
+                                  final color = _getLicenseColor(type);
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 2),
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: color.withValues(alpha: 0.9),
+                                        borderRadius: BorderRadius.circular(4),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: color.withValues(alpha: 0.3),
+                                            blurRadius: 4,
+                                          ),
+                                        ],
+                                      ),
+                                      child: Text(
+                                        '${_formatListingLabel(type)}: ${_formatPriceShort(priceEth)}',
+                                        style: const TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                })
+                              else if (listingLicenseType != null)
+                                // Legacy single listing fallback
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: listingColor.withValues(alpha: 0.9),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    _formatListingLabel(listingLicenseType),
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      // Show badge for original vs license (top-right)
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: (isOriginal
+                                    ? NFTmarketColors.success
+                                    : NFTmarketColors.info)
+                                .withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: isOriginal
+                                  ? NFTmarketColors.success
+                                  : NFTmarketColors.info,
+                              width: 1,
+                            ),
+                          ),
+                          child: Text(
+                            isOriginal ? 'Original' : 'License',
+                            style: TextStyle(
+                              color: isOriginal
+                                  ? NFTmarketColors.success
+                                  : NFTmarketColors.info,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: NFTmarketColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 8),
+                      // License badge with premium styling
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: licenseColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: licenseColor.withValues(alpha: 0.4),
+                            width: 1,
+                          ),
+                        ),
+                        child: Text(
+                          _formatLicenseType(ownerLicense),
+                          style: TextStyle(
+                            color: licenseColor,
+                            fontWeight: FontWeight.w500,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Creator: $creatorName',
+                        style: const TextStyle(
+                          color: NFTmarketColors.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                      if (copyrightOwner != creator)
+                        Text(
+                          'Copyright: $copyrightOwnerName',
+                          style: const TextStyle(
+                            color: NFTmarketColors.textSecondary,
+                            fontSize: 11,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _placeholder() {
     return Container(
-      color: Colors.grey.shade200,
-      child: Icon(Icons.image, size: 48, color: Colors.grey.shade400),
+      color: NFTmarketColors.surfaceLight,
+      child: const Icon(
+        Icons.image,
+        size: 48,
+        color: NFTmarketColors.textMuted,
+      ),
     );
   }
 }

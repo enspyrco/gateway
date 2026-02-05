@@ -74,12 +74,45 @@ router.get('/:address', async (req, res, next) => {
       t => t.currentOwner.toLowerCase() === address.toLowerCase()
     );
 
-    // Build response from blockchain data
-    const tokens = ownedTokens.map((token) => {
+    // Build response from blockchain data, including multi-license listing info
+    const tokens = await Promise.all(ownedTokens.map(async (token) => {
       // Use IPFS URI from blockchain for the image
       const imageUrl = token.ipfsUri
         ? ipfsService.getGatewayUrl(token.ipfsUri)
         : null;
+
+      // Get all listings for this token (multi-license support)
+      const allListings = await blockchainService.getAllListingsForToken(token.tokenId);
+
+      // Check if any license type is listed
+      const hasDisplayListing = allListings.display && allListings.display.active;
+      const hasCommercialListing = allListings.commercial && allListings.commercial.active;
+      const hasTransferListing = allListings.transfer && allListings.transfer.active;
+      const isListed = hasDisplayListing || hasCommercialListing || hasTransferListing;
+
+      // Build listings array for frontend
+      const listings = [];
+      if (hasDisplayListing) {
+        listings.push({
+          licenseType: 'display',
+          price: allListings.display.price,
+          priceEth: (Number(allListings.display.price) / 1e18).toFixed(4)
+        });
+      }
+      if (hasCommercialListing) {
+        listings.push({
+          licenseType: 'commercial',
+          price: allListings.commercial.price,
+          priceEth: (Number(allListings.commercial.price) / 1e18).toFixed(4)
+        });
+      }
+      if (hasTransferListing) {
+        listings.push({
+          licenseType: 'transfer',
+          price: allListings.transfer.price,
+          priceEth: (Number(allListings.transfer.price) / 1e18).toFixed(4)
+        });
+      }
 
       return {
         tokenId: token.tokenId,
@@ -96,8 +129,14 @@ router.get('/:address', async (req, res, next) => {
         isOriginal: token.isOriginal,
         parentToken: token.parentToken,
         originalToken: token.originalToken,
+        // Multi-license listing info
+        isListed,
+        listings, // Array of {licenseType, price, priceEth}
+        // Legacy single-listing fields (for backwards compatibility, use first listing)
+        listingLicenseType: listings.length > 0 ? listings[0].licenseType : null,
+        listingPrice: listings.length > 0 ? listings[0].price : null,
       };
-    });
+    }));
 
     res.json({
       owner: address.toLowerCase(),

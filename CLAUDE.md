@@ -124,10 +124,14 @@ flutter build web                  # Build for production
 - Transfer sales: buyer gets copyright, seller retains display rights
 - Auto-delists tokens on external transfers
 
+**Multi-License Marketplace**: A single token can have up to 3 simultaneous listings (one per license type) at different prices. This allows sellers to offer Display at 0.5 ETH, Commercial at 2 ETH, and Transfer at 10 ETH simultaneously.
+
 Key functions:
 - `list(tokenId, price, licenseType, licenseHash, expiry, signature)` - List with seller's EIP-712 signature
-- `buy(tokenId, signature)` - Buy with buyer's EIP-712 signature + payment
-- `delist(tokenId)` - Remove listing
+- `buy(tokenId, licenseType, signature)` - Buy specific license with buyer's EIP-712 signature + payment
+- `delist(tokenId, licenseType)` - Remove listing for specific license type
+- `delistAll(tokenId)` - Remove all listings for a token
+- `getAllListings(tokenId)` - Returns all 3 license prices and active status
 - `checkDisplayRights(tokenId, address)` / `checkCommercialRights` / `checkCopyrightOwnership` - Rights queries
 
 ### Marketplace API (backend/src/routes/marketplace.js)
@@ -219,18 +223,29 @@ All components have `.env.example` files with required variables.
 
 ### Quick Start (Local Development)
 
-**Option 1: All-in-one script**
+**Recommended: Service scripts** (handles cleanup, deployment, minter registration)
 ```bash
-./start-all.sh   # Starts Hardhat, deploys contract, wallet service, backend, Flutter
+./start-services.sh   # Starts Hardhat, deploys contract, wallet service, backend
+./smoke-test.sh       # Verifies all services work (11 tests including E2E mint)
+./stop-services.sh    # Cleanly stops all services
+
+# Then start Flutter manually:
+cd flutter && flutter run -d chrome
 ```
 
-**Option 2: Manual startup**
+**Alternative: All-in-one** (includes Flutter)
+```bash
+./start-all.sh   # Starts everything including Flutter
+```
+
+**Manual startup** (if you need more control)
 ```bash
 # Terminal 1: Start Hardhat node
 cd contracts && npx hardhat node
 
-# Terminal 2: Deploy contract
+# Terminal 2: Deploy contract and add minter
 cd contracts && npx hardhat run scripts/deploy.js --network localhost
+cd contracts && npx hardhat run scripts/setup-minter.js --network localhost
 
 # Terminal 3: Start wallet service
 cd wallet-service && npm run dev
@@ -239,22 +254,6 @@ cd wallet-service && npm run dev
 cd backend && npm run dev
 
 # Terminal 5: Start Flutter
-cd flutter && flutter run -d chrome
-```
-
-### Quick Start (Local Development)
-
-```bash
-# Terminal 1: Start Hardhat node
-cd contracts && npx hardhat node
-
-# Terminal 2: Deploy contract
-cd contracts && npx hardhat run scripts/deploy.js --network localhost
-
-# Terminal 3: Start backend
-cd backend && npm run dev
-
-# Terminal 4: Start Flutter
 cd flutter && flutter run -d chrome
 ```
 
@@ -306,13 +305,27 @@ GitHub Actions runs on push/PR to `main` and `develop`. Only runs checks for cha
 | Arweave | Permanent | NFT metadata JSON |
 | Blockchain | On-chain | Token ownership, marketplace listings |
 
+## Service Management Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `./start-services.sh` | Stops existing services, clears stale mock data, starts Hardhat + deploys contract + registers minter + starts wallet service + backend |
+| `./stop-services.sh` | Force-kills all services by port (3000, 3001, 8545) |
+| `./smoke-test.sh` | 11 tests: services health, contract deployment, minter registration, E2E mint test |
+
+**Important**: `start-services.sh` clears `backend/.mock-data/` on each run. This is necessary because mock data becomes stale when Hardhat restarts (blockchain state resets but persisted mock data doesn't).
+
+## Test Images
+
+For smoke tests and watermarking tests, use images from `~/Desktop/photos/nfts/`. The smoke test randomly selects an image from this directory for the E2E mint test.
+
 ## Important Notes
 
 - **Wallet Service**: Separate microservice handles all private key management and signing. Flutter never has direct access to private keys.
 - Watermark engine is external C++ (referenced but not in this repo)
 - Encrypted originals stored in Firebase Storage, keys in Cloud KMS
 - Watermarked images backed up to Firebase Storage (in case IPFS fails)
-- Contract uses OpenZeppelin v5.0 base contracts
+- Contract uses OpenZeppelin v5.0 base contracts (UUPS upgradeable proxy pattern)
 - Platform wallet receives 2.5% of marketplace sales
 - Marketplace uses bilateral EIP-712 signatures (both buyer and seller sign the same license agreement)
 - Third-party marketplaces can trade NFTs via standard ERC-721 or use the integrated marketplace (see `talk/buy-and-sell.md`)
