@@ -870,10 +870,17 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     try {
       final wallet = context.read<WalletProvider>();
 
+      // Get the license type from the listing
+      final licenseType = _listing?['licenseType'] as String?;
+      if (licenseType == null) {
+        throw Exception('No license type found for this listing');
+      }
+
       // Step 1: Call backend to prepare purchase (backend handles all logic)
       final api = ApiService(authToken: wallet.authToken);
       final prepareResult = await api.preparePurchase(
         tokenId: widget.tokenId,
+        licenseType: licenseType,
       );
 
       if (prepareResult['success'] != true) {

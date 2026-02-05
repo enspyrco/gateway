@@ -260,14 +260,17 @@ class ApiService {
 
   /// Prepare a purchase - backend handles all logic
   /// Returns typed data to sign and contract call params
+  /// licenseType must be one of: 'display', 'commercial', 'transfer'
   Future<Map<String, dynamic>> preparePurchase({
     required int tokenId,
+    required String licenseType,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/api/marketplace/buy'),
       headers: _headers,
       body: jsonEncode({
         'tokenId': tokenId,
+        'licenseType': licenseType,
       }),
     );
     return _handleResponse(response);
