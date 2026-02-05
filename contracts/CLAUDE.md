@@ -18,35 +18,123 @@ npx hardhat test test/NFTmarketNFT.test.js
 
 ## Contracts
 
-**NFTmarketNFT.sol** - ERC-721 NFT contract with integrated marketplace for AI art.
+**NFTmarketNFT.sol** - UUPS-upgradeable ERC-721 NFT contract with integrated marketplace for AI art.
 
-Key features:
+### Architecture: Multi-Authority System
+
+The contract operates as a "platform of platforms" where multiple authorities (watermarking services) can mint tokens:
+
+```
+Contract Owner
+├── registerAuthority() - Add new watermarking authorities
+├── deactivateAuthority() - Disable misbehaving authorities
+└── upgradeContract() - UUPS upgrades
+
+Authority Admin (per authority)
+├── addMinter() - Add wallets to their authority
+├── removeMinter() - Remove wallets from their authority
+└── updateAuthorityFee() - Change their fee percentage
+
+Minters (wallets)
+├── reserveTokenId() - Reserve token ID atomically
+└── mint() - Mint tokens (fees from sales go to them)
+```
+
+### Key Features
+
+- **UUPS Proxy Pattern**: Upgradeable without redeployment
+- **Multi-Authority**: Third parties can run their own watermarking services
+- **Fee to Minter**: The wallet that minted a token receives commission on sales (not a platform wallet)
 - **License Types**: Display (personal use), Commercial (monetization), Transfer (full copyright)
 - **Duplicate Prevention**: `imageHashExists` mapping prevents re-minting same image
-- **Integrated Marketplace**: `list()`, `delist()`, `buy()` functions
-- **Royalties**: 2.5% to creator on secondary sales (EIP-2981)
-- **Platform Fee**: 2.5% on marketplace sales to `platformWallet`
+- **Integrated Marketplace**: `list()`, `delist()`, `buy()` functions with EIP-712 signatures
 - **Auto-delist**: Tokens automatically delist when transferred outside marketplace
 
-Inherits from OpenZeppelin v5.0: ERC721, ERC721URIStorage, ERC721Royalty, Ownable, ReentrancyGuard
+Inherits from OpenZeppelin Upgradeable v5.0: ERC721Upgradeable, ERC721URIStorageUpgradeable, OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable
 
-**NFTmarketPayments.sol** - USDC payment handler for generation and minting fees.
-
-Key features:
-- **Fees**: $0.50 for 1 image, $1.50 for 4 images, $1.00 for minting (USDC 6 decimals)
-- **Replay Protection**: `paymentProcessed` mapping prevents double-spend
-- **Fee Withdrawal**: Owner can withdraw accumulated fees
-
-## Contract Data Structures
+### Data Structures
 
 ```solidity
+struct Authority {
+    address admin;           // Can add/remove minters for this authority
+    uint96 feeBps;           // Fee in basis points (250 = 2.5%)
+    bool isActive;           // Can be deactivated by contract owner
+    uint256 registeredAt;    // Timestamp
+}
+
 struct TokenData {
-    address creator;
-    LicenseType licenseType;
-    bytes32 imageHash;        // SHA-256 of original image
-    bytes32 licenseHash;      // SHA-256 of signed license
+    address creator;         // Who the token was minted TO
+    address copyrightOwner;  // Current copyright holder
+    LicenseType ownerLicense;
+    bytes32 imageHash;       // SHA-256 of watermarked image
     uint256 mintedAt;
-    string encryptedBlobUri;  // IPFS URI of encrypted original
+    string ipfsUri;          // Public watermarked image on IPFS
+    uint256 parentToken;     // For derivative tracking
+    uint256 originalToken;
+    bool isOriginal;
+    uint256 authorityId;     // Which authority minted this token
+    address minter;          // Wallet that minted (receives fees)
+}
+
+struct Listing {
+    uint256 price;
+    LicenseType licenseType;
+    bytes32 licenseHash;
+    uint256 expiry;
+    bool active;
+}
+```
+
+### Key Functions
+
+| Function | Access | Description |
+|----------|--------|-------------|
+| `initialize(owner, defaultAdmin, feeBps)` | Once | Replace constructor, creates Authority 0 |
+| `registerAuthority(admin, feeBps)` | onlyOwner | Add new watermarking authority |
+| `deactivateAuthority(authorityId)` | onlyOwner | Disable an authority |
+| `addMinter(minter)` | Authority admin | Add minter to admin's authority |
+| `removeMinter(minter)` | Authority admin | Remove minter from admin's authority |
+| `updateAuthorityFee(authorityId, feeBps)` | Authority admin | Update fee (admin's authority only) |
+| `reserveTokenId()` | Minter | Reserve token ID atomically (5 min expiry) |
+| `mint(...)` | Minter | Mint with reserved token ID |
+| `list(...)` | Token owner | List for sale with EIP-712 signature |
+| `buy(...)` | Anyone | Purchase with EIP-712 signature + payment |
+| `withdrawFees()` | Minter | Withdraw accumulated fees (pull pattern) |
+| `pendingFees(address)` | view | Check pending fees for an address |
+
+### Fee Distribution (Pull Pattern)
+
+When a token is sold on the marketplace:
+1. Fee calculated: `price * authority.feeBps / 10000` (max 50% cap enforced)
+2. Fee **accrued** to `pendingFees[tokenData[tokenId].minter]` (not transferred immediately)
+3. Remainder sent to seller immediately
+4. Minter calls `withdrawFees()` to collect accrued fees
+
+This pull pattern:
+- Prevents sales from being blocked if minter is a contract that rejects ETH
+- Allows platforms to pool minting across multiple wallets while tracking fees per-wallet
+- Minters can batch-withdraw accumulated fees
+
+## Deployment
+
+The contract uses UUPS proxy pattern. Deployment creates:
+1. Implementation contract (logic)
+2. ERC1967Proxy (holds state, delegates to implementation)
+
+```javascript
+// Deploy creates both contracts
+const contract = await upgrades.deployProxy(
+  NFTmarketNFT,
+  [owner, defaultAdmin, feeBps],
+  { kind: 'uups' }
+);
+
+// deployment.json contains both addresses
+{
+  "proxyAddress": "0x...",
+  "implementationAddress": "0x...",
+  "defaultAuthorityId": 0,
+  "version": "2.0.0"
 }
 ```
 
@@ -56,11 +144,15 @@ Copy `.env.example` to `.env`:
 - `PRIVATE_KEY` - Deployment wallet (without 0x prefix)
 - `MUMBAI_RPC_URL` / `POLYGON_RPC_URL` - Network endpoints
 - `POLYGONSCAN_API_KEY` - For contract verification
-- `PLATFORM_WALLET` - Fee recipient (defaults to deployer)
 
 ## Important Notes
 
-- Uses custom errors (e.g., `ImageAlreadyRegistered()`) instead of require strings
-- Deploy script uses fully qualified name: `contracts/NFTmarketNFT.sol:NFTmarketNFT`
-- Solidity 0.8.20 with viaIR optimizer enabled
-- Contract address changes each time Hardhat node restarts - update backend config accordingly
+- Uses custom errors (e.g., `ImageAlreadyRegistered()`, `NotAuthorityAdmin()`) instead of require strings
+- Solidity 0.8.22 with viaIR optimizer enabled
+- Proxy address is stable across upgrades; implementation address changes
+- Encrypted originals stored off-chain in Firestore (not on blockchain)
+- Authority 0 is created during initialization with the deployer as admin
+- Storage gaps (`uint256[50] private __gap`) reserved for future upgrades
+- `MAX_FEE_BPS = 5000` (50% max fee cap on all authorities)
+- Fees use pull pattern (`withdrawFees()`) - not transferred directly on sale
+- License tokens (from Display/Commercial sales) cannot be re-listed (no sublicensing)

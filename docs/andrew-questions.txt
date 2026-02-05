@@ -1,0 +1,4 @@
+1) With a the "new arrays" can we do detection without the original image?
+2) If the "array secret" becomes public does that mean other people can remove the watermark?
+3) With the "new arrays" can anybody detect the watermark or only the owner
+4) If we are using the original image how do we know which image to use for comparison, presumably we have a large collection of images which would be inconvenient to search through all of them.

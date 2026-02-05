@@ -6,6 +6,32 @@ import '../services/api_service.dart';
 import '../providers/wallet_provider.dart';
 import '../widgets/wallet_button.dart';
 
+/// Resolve wallet address to nickname (for test accounts)
+String? _resolveNickname(String address, List<TestAccount> accounts) {
+  final lower = address.toLowerCase();
+  for (final account in accounts) {
+    if (account.address.toLowerCase() == lower) {
+      return account.nickname;
+    }
+  }
+  if (platformWallet.address.toLowerCase() == lower) {
+    return platformWallet.nickname;
+  }
+  return null;
+}
+
+/// Format address with nickname if available
+String _formatAddress(String address, List<TestAccount> accounts) {
+  final nickname = _resolveNickname(address, accounts);
+  if (nickname != null) {
+    return nickname;
+  }
+  if (address.length > 10) {
+    return '${address.substring(0, 6)}...${address.substring(address.length - 4)}';
+  }
+  return address;
+}
+
 class GalleryPage extends StatefulWidget {
   final String? address;
 
@@ -33,6 +59,15 @@ class _GalleryPageState extends State<GalleryPage> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(GalleryPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload data when navigating to a different gallery
+    if (oldWidget.address != widget.address) {
+      _loadData();
+    }
   }
 
   @override
@@ -81,15 +116,35 @@ class _GalleryPageState extends State<GalleryPage> {
   }
 
   void _searchGallery() {
-    final address = _searchController.text.trim();
-    if (address.isNotEmpty &&
-        address.startsWith('0x') &&
-        address.length == 42) {
+    final input = _searchController.text.trim();
+    final wallet = context.read<WalletProvider>();
+    final accounts = wallet.availableAccounts;
+
+    // Check if input is a test account nickname
+    String? address;
+    for (final account in accounts) {
+      if (account.nickname.toLowerCase() == input.toLowerCase()) {
+        address = account.address;
+        break;
+      }
+    }
+    if (address == null &&
+        platformWallet.nickname.toLowerCase() == input.toLowerCase()) {
+      address = platformWallet.address;
+    }
+
+    // If not a nickname, check if it's a valid address
+    if (address == null && input.startsWith('0x') && input.length == 42) {
+      address = input;
+    }
+
+    if (address != null) {
       context.go('/gallery/$address');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Please enter a valid wallet address (0x...)')),
+            content: Text(
+                'Enter a wallet address (0x...) or name (Alice, Bob, etc.)')),
       );
     }
   }
@@ -100,20 +155,21 @@ class _GalleryPageState extends State<GalleryPage> {
         wallet.address?.toLowerCase() == widget.address?.toLowerCase();
   }
 
-  String get _pageTitle {
+  String _getPageTitle(List<TestAccount> accounts) {
     if (widget.address == null) {
       return 'Galleries';
     }
-    final shortAddress =
-        '${widget.address!.substring(0, 6)}...${widget.address!.substring(widget.address!.length - 4)}';
-    return 'Gallery: $shortAddress';
+    return 'Gallery: ${_formatAddress(widget.address!, accounts)}';
   }
 
   @override
   Widget build(BuildContext context) {
+    final wallet = context.watch<WalletProvider>();
+    final accounts = wallet.availableAccounts;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(_pageTitle),
+        title: Text(_getPageTitle(accounts)),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
@@ -199,7 +255,7 @@ class _GalleryPageState extends State<GalleryPage> {
           child: TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              hintText: 'Enter wallet address (0x...)',
+              hintText: 'Enter name (Alice, Bob...) or address (0x...)',
               prefixIcon: const Icon(Icons.search),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -222,9 +278,9 @@ class _GalleryPageState extends State<GalleryPage> {
 
   Widget _buildUserGallery() {
     final wallet = context.watch<WalletProvider>();
-    final shortAddress = _ownerAddress != null && _ownerAddress!.length > 10
-        ? '${_ownerAddress!.substring(0, 6)}...${_ownerAddress!.substring(_ownerAddress!.length - 4)}'
-        : _ownerAddress ?? '';
+    final accounts = wallet.availableAccounts;
+    final displayName =
+        _ownerAddress != null ? _formatAddress(_ownerAddress!, accounts) : '';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -240,7 +296,7 @@ class _GalleryPageState extends State<GalleryPage> {
             if (!_isOwnGallery) ...[
               const SizedBox(width: 8),
               Chip(
-                label: Text(shortAddress, style: const TextStyle(fontSize: 12)),
+                label: Text(displayName, style: const TextStyle(fontSize: 12)),
                 visualDensity: VisualDensity.compact,
               ),
             ],
@@ -292,6 +348,7 @@ class _GalleryPageState extends State<GalleryPage> {
               return _TokenCard(
                 token: token,
                 onTap: () => context.go('/token/${token['tokenId']}'),
+                accounts: accounts,
               );
             },
           ),
@@ -348,9 +405,11 @@ class _GalleryPageState extends State<GalleryPage> {
             itemCount: _galleries.length,
             itemBuilder: (context, index) {
               final gallery = _galleries[index];
+              final wallet = context.read<WalletProvider>();
               return _GalleryCard(
                 gallery: gallery,
                 onTap: () => context.go('/gallery/${gallery['address']}'),
+                accounts: wallet.availableAccounts,
               );
             },
           ),
@@ -362,15 +421,15 @@ class _GalleryPageState extends State<GalleryPage> {
 class _GalleryCard extends StatelessWidget {
   final Map<String, dynamic> gallery;
   final VoidCallback onTap;
+  final List<TestAccount> accounts;
 
-  const _GalleryCard({required this.gallery, required this.onTap});
+  const _GalleryCard(
+      {required this.gallery, required this.onTap, required this.accounts});
 
   @override
   Widget build(BuildContext context) {
     final address = gallery['address'] ?? '';
-    final shortAddress = address.length > 10
-        ? '${address.substring(0, 6)}...${address.substring(address.length - 4)}'
-        : address;
+    final displayName = _formatAddress(address, accounts);
     final tokenCount = gallery['tokenCount'] ?? 0;
     final previewName = gallery['previewTokenName'] ?? 'NFT';
 
@@ -397,7 +456,7 @@ class _GalleryCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      shortAddress,
+                      displayName,
                       style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
@@ -426,18 +485,24 @@ class _GalleryCard extends StatelessWidget {
 class _TokenCard extends StatelessWidget {
   final Map<String, dynamic> token;
   final VoidCallback onTap;
+  final List<TestAccount> accounts;
 
-  const _TokenCard({required this.token, required this.onTap});
+  const _TokenCard(
+      {required this.token, required this.onTap, required this.accounts});
 
   @override
   Widget build(BuildContext context) {
     final name = token['name'] ?? 'NFT #${token['tokenId']}';
-    final previewUrl = token['previewUrl'];
-    final licenseType = token['licenseType'] ?? 'unknown';
+    // Use imageUrl from blockchain IPFS URI, fallback to previewUrl for backwards compatibility
+    final imageUrl = token['imageUrl'] ?? token['previewUrl'];
+    // ownerLicense shows the current owner's license level
+    final ownerLicense =
+        token['ownerLicense'] ?? token['licenseType'] ?? 'unknown';
     final creator = token['creator'] ?? '';
-    final shortCreator = creator.length > 10
-        ? '${creator.substring(0, 6)}...${creator.substring(creator.length - 4)}'
-        : creator;
+    final creatorName = _formatAddress(creator, accounts);
+    final copyrightOwner = token['copyrightOwner'] ?? creator;
+    final copyrightOwnerName = _formatAddress(copyrightOwner, accounts);
+    final isOriginal = token['isOriginal'] ?? true;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -447,13 +512,39 @@ class _TokenCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: previewUrl != null
-                  ? Image.network(
-                      previewUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _placeholder(),
-                    )
-                  : _placeholder(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _placeholder(),
+                        )
+                      : _placeholder(),
+                  // Show badge for original vs license
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isOriginal ? Colors.green : Colors.blue,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        isOriginal ? 'Original' : 'License',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(12),
@@ -471,16 +562,13 @@ class _TokenCard extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.1),
+                      color: _getLicenseColor(ownerLicense).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      _formatLicenseType(licenseType),
+                      _formatLicenseType(ownerLicense),
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
+                        color: _getLicenseColor(ownerLicense),
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
                       ),
@@ -488,12 +576,20 @@ class _TokenCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Creator: $shortCreator',
+                    'Creator: $creatorName',
                     style: TextStyle(
                       color: Colors.grey.shade600,
                       fontSize: 11,
                     ),
                   ),
+                  if (copyrightOwner != creator)
+                    Text(
+                      'Copyright: $copyrightOwnerName',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 11,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -503,8 +599,21 @@ class _TokenCard extends StatelessWidget {
     );
   }
 
+  Color _getLicenseColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'display':
+        return Colors.blue;
+      case 'commercial':
+        return Colors.orange;
+      case 'transfer':
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
+  }
+
   String _formatLicenseType(String type) {
-    switch (type) {
+    switch (type.toLowerCase()) {
       case 'display':
         return 'Display License';
       case 'commercial':

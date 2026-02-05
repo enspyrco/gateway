@@ -51,16 +51,7 @@ class ApiService {
 
   // ============ Minting ============
 
-  /// Get minting prices
-  Future<Map<String, dynamic>> getMintPrices() async {
-    final response = await http.get(
-      Uri.parse('$baseUrl/api/mint/price'),
-      headers: _headers,
-    );
-    return _handleResponse(response);
-  }
-
-  /// Get license text for signing
+  /// Get license text for signing (used when listing for sale)
   Future<String> getLicenseText(LicenseType licenseType) async {
     final response = await http.get(
       Uri.parse('$baseUrl/api/mint/license/${licenseType.name}'),
@@ -76,8 +67,6 @@ class ApiService {
     required String fileName,
     required String name,
     required String description,
-    required LicenseType licenseType,
-    required String licenseSignature,
   }) async {
     final uri = Uri.parse('$baseUrl/api/mint');
     final request = http.MultipartRequest('POST', uri);
@@ -97,8 +86,6 @@ class ApiService {
     // Add fields
     request.fields['name'] = name;
     request.fields['description'] = description;
-    request.fields['licenseType'] = licenseType.name;
-    request.fields['licenseSignature'] = licenseSignature;
 
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
@@ -206,7 +193,18 @@ class ApiService {
     return List<Map<String, dynamic>>.from(data['tokens'] ?? []);
   }
 
+  /// Sync gallery with blockchain state
+  /// Call this after buy/sell transactions to update ownership in backend
+  Future<void> syncGallery() async {
+    await http.post(
+      Uri.parse('$baseUrl/api/gallery/sync'),
+    );
+  }
+
   // ============ Marketplace ============
+  //
+  // Backend handles all marketplace logic. Client just signs and submits.
+  // Flow: 1) Call prepare endpoint 2) Sign typed data 3) Submit to contract
 
   /// Get all active listings (public)
   Future<List<Map<String, dynamic>>> getListings() async {
@@ -226,38 +224,51 @@ class ApiService {
     return _handleResponse(response);
   }
 
-  /// List a token for sale
-  Future<Map<String, dynamic>> listToken({
+  /// Prepare a listing - backend handles all logic
+  /// Returns typed data to sign and contract call params
+  Future<Map<String, dynamic>> prepareListing({
     required int tokenId,
-    required String priceWei,
+    required String priceEth,
+    required String licenseType,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/api/marketplace/list'),
       headers: _headers,
       body: jsonEncode({
         'tokenId': tokenId,
-        'price': priceWei,
+        'priceEth': priceEth,
+        'licenseType': licenseType,
       }),
     );
     return _handleResponse(response);
   }
 
-  /// Remove a listing
-  Future<Map<String, dynamic>> delistToken(int tokenId) async {
+  /// Prepare a delisting - backend validates ownership
+  /// Returns contract call params
+  Future<Map<String, dynamic>> prepareDelisting({
+    required int tokenId,
+  }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/api/marketplace/delist'),
       headers: _headers,
-      body: jsonEncode({'tokenId': tokenId}),
+      body: jsonEncode({
+        'tokenId': tokenId,
+      }),
     );
     return _handleResponse(response);
   }
 
-  /// Buy a listed token
-  Future<Map<String, dynamic>> buyToken(int tokenId) async {
+  /// Prepare a purchase - backend handles all logic
+  /// Returns typed data to sign and contract call params
+  Future<Map<String, dynamic>> preparePurchase({
+    required int tokenId,
+  }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/api/marketplace/buy'),
       headers: _headers,
-      body: jsonEncode({'tokenId': tokenId}),
+      body: jsonEncode({
+        'tokenId': tokenId,
+      }),
     );
     return _handleResponse(response);
   }

@@ -15,6 +15,8 @@ const verifyRouter = require('./routes/verify');
 const marketplaceRouter = require('./routes/marketplace');
 const generateRouter = require('./routes/generate');
 const galleryRouter = require('./routes/gallery');
+const licenseRouter = require('./routes/license');
+const blockchainService = require('./services/blockchain');
 
 const app = express();
 const upload = multer({
@@ -59,6 +61,9 @@ const ipfsService = require('./services/ipfs');
 app.get('/ipfs/:hash', async (req, res) => {
   try {
     const data = await ipfsService.fetch(`ipfs://${req.params.hash}`);
+    // CORS headers for Flutter web
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.set('Access-Control-Allow-Origin', '*');
     // Guess content type from data
     if (data[0] === 0x89 && data[1] === 0x50) {
       res.type('image/png');
@@ -67,6 +72,28 @@ app.get('/ipfs/:hash', async (req, res) => {
     } else if (data[0] === 0x7b) {
       res.type('application/json');
     }
+    res.send(data);
+  } catch (e) {
+    // Return a placeholder SVG for missing mock images
+    res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.set('Access-Control-Allow-Origin', '*');
+    res.type('image/svg+xml');
+    const hash = req.params.hash.slice(-8);
+    const hue = parseInt(hash, 16) % 360;
+    res.send(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">
+      <rect width="400" height="400" fill="hsl(${hue}, 60%, 80%)"/>
+      <text x="200" y="180" text-anchor="middle" font-family="system-ui" font-size="24" fill="hsl(${hue}, 60%, 30%)">NFT Image</text>
+      <text x="200" y="220" text-anchor="middle" font-family="monospace" font-size="14" fill="hsl(${hue}, 60%, 40%)">${req.params.hash.slice(0, 16)}...</text>
+    </svg>`);
+  }
+});
+
+// Mock Arweave gateway (for development only)
+const arweaveService = require('./services/arweave');
+app.get('/arweave/:txId', async (req, res) => {
+  try {
+    const data = await arweaveService.fetchData(req.params.txId);
+    res.type('application/json');
     res.send(data);
   } catch (e) {
     res.status(404).json({ error: 'Not found' });
@@ -146,41 +173,81 @@ app.get('/api/generate/:id/image/:index', (req, res) => {
 app.use('/api/gallery', galleryRouter);
 
 // Public marketplace browsing (must be before authenticated marketplace routes)
+const licenseTypeNames = ['display', 'commercial', 'transfer'];
 app.get('/api/marketplace', async (req, res, next) => {
   try {
     const blockchainService = require('./services/blockchain');
-    const firestoreService = require('./services/firestore');
     const ipfsService = require('./services/ipfs');
 
     const listings = await blockchainService.getActiveListings();
     const enrichedListings = await Promise.all(
       listings.map(async (listing) => {
         try {
-          const tokenData = await firestoreService.getToken(listing.tokenId);
-          const previewUrl = tokenData?.previewUri
-            ? ipfsService.getGatewayUrl(tokenData.previewUri)
+          // Get token data from blockchain (source of truth)
+          const blockchainData = await blockchainService.getTokenData(listing.tokenId);
+
+          // Use IPFS URI from blockchain
+          const imageUrl = blockchainData?.ipfsUri
+            ? ipfsService.getGatewayUrl(blockchainData.ipfsUri)
             : null;
+
           return {
             tokenId: listing.tokenId,
-            name: tokenData?.name || `NFTmarket #${listing.tokenId}`,
-            previewUrl,
+            name: `NFTmarket #${listing.tokenId}`,
+            imageUrl,
+            previewUrl: imageUrl, // backwards compatibility
             price: listing.price,
             priceEth: (Number(listing.price) / 1e18).toFixed(4),
             seller: listing.seller,
-            licenseType: tokenData?.licenseType || 'unknown'
+            licenseType: licenseTypeNames[listing.licenseType] || 'unknown'
           };
         } catch (e) {
           return {
             tokenId: listing.tokenId,
             name: `NFTmarket #${listing.tokenId}`,
+            imageUrl: null,
             price: listing.price,
             priceEth: (Number(listing.price) / 1e18).toFixed(4),
-            seller: listing.seller
+            seller: listing.seller,
+            licenseType: licenseTypeNames[listing.licenseType] || 'unknown'
           };
         }
       })
     );
-    res.json({ listings: enrichedListings });
+    // Get contract info
+    const domain = await blockchainService.getEIP712Domain();
+
+    res.json({
+      contract: {
+        name: domain.name,
+        address: domain.verifyingContract,
+        chainId: domain.chainId
+      },
+      listings: enrichedListings
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Public EIP-712 domain endpoint (needed for signing)
+app.get('/api/marketplace/eip712/domain', async (req, res, next) => {
+  try {
+    const blockchainService = require('./services/blockchain');
+    const domain = await blockchainService.getEIP712Domain();
+    res.json({ domain });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Public nonce endpoint (needed for signing)
+app.get('/api/marketplace/nonce/:address', async (req, res, next) => {
+  try {
+    const blockchainService = require('./services/blockchain');
+    const { address } = req.params;
+    const nonce = await blockchainService.getNonce(address);
+    res.json({ address, nonce });
   } catch (error) {
     next(error);
   }
@@ -191,6 +258,7 @@ app.use('/api/mint', authMiddleware, mintRouter(upload));
 app.use('/api/detect', authMiddleware, detectRouter(upload));
 app.use('/api/marketplace', authMiddleware, marketplaceRouter);
 app.use('/api/generate', authMiddleware, generateRouter());
+app.use('/api/license', licenseRouter);
 
 // Error handler
 app.use((err, req, res, next) => {
@@ -205,9 +273,60 @@ const PORT = process.env.PORT || 3000;
 
 // Only start server if not in test mode
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, async () => {
     console.log(`NFTmarket API running on port ${PORT}`);
+
+    // Log blockchain token count on startup
+    try {
+      const supply = await blockchainService.totalSupply();
+      console.log(`[Startup] Blockchain has ${supply} tokens`);
+    } catch (err) {
+      console.warn('[Startup] Could not connect to blockchain:', err.message);
+    }
+
+    // Start blockchain event listener for logging
+    try {
+      blockchainService.startEventListener({
+        onMinted: async ({ tokenId, creator }) => {
+          console.log(`[Event] Token ${tokenId} minted by ${creator}`);
+        },
+        onSold: async ({ tokenId, seller, buyer, price }) => {
+          console.log(`[Event] Token ${tokenId} sold from ${seller} to ${buyer}`);
+        },
+        onListed: async ({ tokenId, seller, price }) => {
+          console.log(`[Event] Token ${tokenId} listed by ${seller}`);
+        },
+        onLicenseGranted: async ({ newTokenId, parentTokenId, licensee, licenseType }) => {
+          const licenseNames = ['Display', 'Commercial', 'Transfer'];
+          console.log(`[Event] License token ${newTokenId} (${licenseNames[licenseType]}) granted from ${parentTokenId} to ${licensee}`);
+        }
+      });
+      console.log('[Startup] Blockchain event listener started');
+    } catch (err) {
+      console.warn('[Startup] Could not start event listener:', err.message);
+    }
   });
+
+  // Configure keep-alive to avoid connection issues
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
+
+  // Graceful shutdown - properly close connections when killed
+  function shutdown(signal) {
+    console.log(`\n${signal} received, shutting down gracefully...`);
+    server.close(() => {
+      console.log('Server closed');
+      process.exit(0);
+    });
+    // Force exit after 5 seconds if connections don't close
+    setTimeout(() => {
+      console.log('Forcing exit');
+      process.exit(0);
+    }, 5000);
+  }
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 module.exports = app;

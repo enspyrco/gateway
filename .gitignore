@@ -36,3 +36,9 @@ coverage/
 firebase-debug.log
 firestore-debug.log
 emulator-data/
+
+# Mock data (generated during development)
+backend/.mock-data/
+
+# Wallet service
+wallet-service/node_modules/

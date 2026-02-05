@@ -6,6 +6,7 @@
 // Enable all mock modes
 process.env.USE_MOCK_WATERMARK = 'true';
 process.env.USE_MOCK_IPFS = 'true';
+process.env.USE_MOCK_ARWEAVE = 'true';
 process.env.USE_MOCK_FIRESTORE = 'true';
 process.env.USE_MOCK_BLOCKCHAIN = 'true';
 process.env.USE_MOCK_AI = 'true';

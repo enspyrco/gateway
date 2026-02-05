@@ -137,15 +137,44 @@ class _ListingCard extends StatelessWidget {
 
   const _ListingCard({required this.listing, required this.onTap});
 
+  Color _getLicenseColor(String? licenseType) {
+    switch (licenseType?.toLowerCase()) {
+      case 'display':
+        return Colors.blue;
+      case 'commercial':
+        return Colors.orange;
+      case 'transfer':
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
+  }
+
+  String _getLicenseLabel(String? licenseType) {
+    switch (licenseType?.toLowerCase()) {
+      case 'display':
+        return 'Display';
+      case 'commercial':
+        return 'Commercial';
+      case 'transfer':
+        return 'Full Transfer';
+      default:
+        return 'Unknown';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final name = listing['name'] ?? 'NFT #${listing['tokenId']}';
     final price = listing['priceEth'] ?? '?';
-    final previewUrl = listing['previewUrl'];
+    // Use imageUrl from blockchain IPFS URI, fallback to previewUrl for backwards compatibility
+    final imageUrl = listing['imageUrl'] ?? listing['previewUrl'];
     final seller = listing['seller'] ?? '';
     final shortSeller = seller.length > 10
         ? '${seller.substring(0, 6)}...${seller.substring(seller.length - 4)}'
         : seller;
+    final licenseType = listing['licenseType'] as String?;
+    final licenseColor = _getLicenseColor(licenseType);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -155,13 +184,39 @@ class _ListingCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: previewUrl != null
-                  ? Image.network(
-                      previewUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _placeholder(),
-                    )
-                  : _placeholder(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _placeholder(),
+                        )
+                      : _placeholder(),
+                  // License type badge in top-right corner
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: licenseColor.withOpacity(0.9),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        _getLicenseLabel(licenseType),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(12),

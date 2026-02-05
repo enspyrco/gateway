@@ -8,7 +8,6 @@ enum MintState {
   idle,
   selectingImage,
   imageSelected,
-  signingLicense,
   uploading,
   minting,
   success,
@@ -24,7 +23,6 @@ class MintProvider extends ChangeNotifier {
   String? _fileName;
   String _name = '';
   String _description = '';
-  LicenseType _licenseType = LicenseType.display;
 
   // Result
   MintResult? _result;
@@ -40,7 +38,6 @@ class MintProvider extends ChangeNotifier {
   String? get fileName => _fileName;
   String get name => _name;
   String get description => _description;
-  LicenseType get licenseType => _licenseType;
   MintResult? get result => _result;
   String? get error => _error;
   String get statusMessage => _statusMessage;
@@ -84,33 +81,19 @@ class MintProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setLicenseType(LicenseType value) {
-    _licenseType = value;
-    notifyListeners();
-  }
-
   Future<void> mint() async {
     if (!canMint) return;
 
     try {
-      // Step 1: Get license text and sign
-      _state = MintState.signingLicense;
-      _statusMessage = 'Preparing license agreement...';
-      _progress = 0.1;
-      notifyListeners();
-
-      final licenseText = await _api.getLicenseText(_licenseType);
-      final licenseSignature = await _wallet!.signMessage(licenseText);
-
-      // Step 2: Upload and mint
+      // Step 1: Upload image
       _state = MintState.uploading;
       _statusMessage = 'Uploading image...';
-      _progress = 0.3;
+      _progress = 0.2;
       notifyListeners();
 
       await Future.delayed(const Duration(milliseconds: 500));
       _statusMessage = 'Applying watermark...';
-      _progress = 0.5;
+      _progress = 0.4;
       notifyListeners();
 
       await Future.delayed(const Duration(milliseconds: 500));
@@ -124,8 +107,6 @@ class MintProvider extends ChangeNotifier {
         fileName: _fileName!,
         name: _name,
         description: _description,
-        licenseType: _licenseType,
-        licenseSignature: licenseSignature,
       );
 
       if (_result!.success) {
@@ -152,7 +133,6 @@ class MintProvider extends ChangeNotifier {
     _fileName = null;
     _name = '';
     _description = '';
-    _licenseType = LicenseType.display;
     _result = null;
     _error = null;
     _statusMessage = '';
