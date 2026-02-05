@@ -245,14 +245,17 @@ class ApiService {
 
   /// Prepare a delisting - backend validates ownership
   /// Returns contract call params
+  /// licenseType must be one of: 'display', 'commercial', 'transfer'
   Future<Map<String, dynamic>> prepareDelisting({
     required int tokenId,
+    required String licenseType,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/api/marketplace/delist'),
       headers: _headers,
       body: jsonEncode({
         'tokenId': tokenId,
+        'licenseType': licenseType,
       }),
     );
     return _handleResponse(response);

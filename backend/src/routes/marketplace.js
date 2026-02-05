@@ -422,8 +422,8 @@ router.post('/delist', authMiddleware, async (req, res, next) => {
     if (all) {
       // Delist all license types
       const allListings = await blockchainService.getAllListingsForToken(tokenId);
-      const hasAnyListing = allListings.display.active || allListings.commercial.active || allListings.transfer.active;
-      if (!hasAnyListing) {
+      const hasActiveListing = allListings.display.active || allListings.commercial.active || allListings.transfer.active;
+      if (!hasActiveListing) {
         return res.status(400).json({ error: 'Token has no active listings', code: 'NOT_LISTED' });
       }
 

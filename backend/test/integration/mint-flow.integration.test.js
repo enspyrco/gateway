@@ -134,7 +134,10 @@ function getTestImage() {
 }
 
 // Fallback: Create a minimal test PNG (1x1 red pixel)
+// WARNING: Using fallback PNG means watermarking tests are degraded
 function createMinimalPng() {
+  console.warn('⚠️  WARNING: Using 1x1 fallback PNG - watermarking tests will be degraded');
+  console.warn('   For accurate tests, populate ~/Desktop/photos/nfts/ with real images');
   const pngData = Buffer.from([
     0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, // PNG signature
     0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, // IHDR chunk

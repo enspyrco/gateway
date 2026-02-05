@@ -815,9 +815,18 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     try {
       final wallet = context.read<WalletProvider>();
 
+      // Get the license type from the listing
+      final licenseType = _listing?['licenseType'] as String?;
+      if (licenseType == null) {
+        throw Exception('No license type found for this listing');
+      }
+
       // Step 1: Call backend to validate and prepare delisting
       final api = ApiService(authToken: wallet.authToken);
-      final prepareResult = await api.prepareDelisting(tokenId: widget.tokenId);
+      final prepareResult = await api.prepareDelisting(
+        tokenId: widget.tokenId,
+        licenseType: licenseType,
+      );
 
       debugPrint('Delist prepare result: $prepareResult');
 
@@ -830,6 +839,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       // Build transaction data for delist() call
       final txData = _encodeDelistCall(
         tokenId: contractCall['params']['tokenId'] as int,
+        licenseType: contractCall['params']['licenseType'] as int,
       );
 
       final txResult = await wallet.sendTransaction(
@@ -901,6 +911,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       // Build transaction data for buy() call
       final txData = _encodeBuyCall(
         tokenId: contractCall['params']['tokenId'] as int,
+        licenseType: contractCall['params']['licenseType'] as int,
         signature: signature,
       );
 
@@ -979,29 +990,37 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     return '$selector$tokenIdHex$priceHex$licenseTypeHex$licenseHashHex$expiryHex$signatureOffset$signatureLengthHex$signatureDataHex';
   }
 
-  /// Encode delist(uint256) call
-  String _encodeDelistCall({required int tokenId}) {
-    // Function selector: delist(uint256)
-    // keccak256("delist(uint256)")[0:4] = 0x964bc33f
-    const selector = '0x964bc33f';
+  /// Encode delist(uint256,uint8) call
+  String _encodeDelistCall({
+    required int tokenId,
+    required int licenseType,
+  }) {
+    // Function selector: delist(uint256,uint8)
+    // keccak256("delist(uint256,uint8)")[0:4] = 0xec31de07
+    const selector = '0xec31de07';
     final tokenIdHex = tokenId.toRadixString(16).padLeft(64, '0');
-    return '$selector$tokenIdHex';
+    final licenseTypeHex = licenseType.toRadixString(16).padLeft(64, '0');
+    return '$selector$tokenIdHex$licenseTypeHex';
   }
 
-  /// Encode buy(uint256,bytes) call
+  /// Encode buy(uint256,uint8,bytes) call
   String _encodeBuyCall({
     required int tokenId,
+    required int licenseType,
     required Uint8List signature,
   }) {
-    // Function selector: buy(uint256,bytes)
-    // keccak256("buy(uint256,bytes)")[0:4] = 0x82189551
-    const selector = '0x82189551';
+    // Function selector: buy(uint256,uint8,bytes)
+    // keccak256("buy(uint256,uint8,bytes)")[0:4] = 0x472c0b9f
+    const selector = '0x472c0b9f';
 
     // Token ID
     final tokenIdHex = tokenId.toRadixString(16).padLeft(64, '0');
 
-    // Offset for dynamic bytes parameter (2 * 32 = 64 = 0x40)
-    final signatureOffset = '40'.padLeft(64, '0');
+    // License type (uint8, padded to 32 bytes)
+    final licenseTypeHex = licenseType.toRadixString(16).padLeft(64, '0');
+
+    // Offset for dynamic bytes parameter (3 * 32 = 96 = 0x60)
+    final signatureOffset = '60'.padLeft(64, '0');
 
     // Signature length
     final signatureLengthHex =
@@ -1013,7 +1032,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     final paddedLength = ((signature.length + 31) ~/ 32) * 64;
     final signatureDataHex = signatureHex.padRight(paddedLength, '0');
 
-    return '$selector$tokenIdHex$signatureOffset$signatureLengthHex$signatureDataHex';
+    return '$selector$tokenIdHex$licenseTypeHex$signatureOffset$signatureLengthHex$signatureDataHex';
   }
 
   String _shortAddress(String address) {
