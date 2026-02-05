@@ -1100,7 +1100,8 @@ async function getAllListingsForToken(tokenId) {
   const nftmarket = getContract();
   const result = await nftmarket.getAllListings(tokenId);
 
-  return {
+  // Fetch full listing details for active listings (seller, nonce, expiry, licenseHash)
+  const fullResult = {
     display: {
       price: result.displayPrice.toString(),
       active: result.displayActive,
@@ -1117,6 +1118,31 @@ async function getAllListingsForToken(tokenId) {
       licenseType: LicenseType.Transfer
     }
   };
+
+  // Enrich with full details for active listings
+  if (result.displayActive) {
+    const listing = await nftmarket.getListing(tokenId, LicenseType.Display);
+    fullResult.display.seller = listing.seller;
+    fullResult.display.nonce = Number(listing.nonce);
+    fullResult.display.expiry = Number(listing.expiry);
+    fullResult.display.licenseHash = listing.licenseHash;
+  }
+  if (result.commercialActive) {
+    const listing = await nftmarket.getListing(tokenId, LicenseType.Commercial);
+    fullResult.commercial.seller = listing.seller;
+    fullResult.commercial.nonce = Number(listing.nonce);
+    fullResult.commercial.expiry = Number(listing.expiry);
+    fullResult.commercial.licenseHash = listing.licenseHash;
+  }
+  if (result.transferActive) {
+    const listing = await nftmarket.getListing(tokenId, LicenseType.Transfer);
+    fullResult.transfer.seller = listing.seller;
+    fullResult.transfer.nonce = Number(listing.nonce);
+    fullResult.transfer.expiry = Number(listing.expiry);
+    fullResult.transfer.licenseHash = listing.licenseHash;
+  }
+
+  return fullResult;
 }
 
 /**

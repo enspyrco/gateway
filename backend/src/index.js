@@ -125,25 +125,44 @@ app.get('/api/mint/license/:type', (req, res) => {
 });
 
 // Public listing info (no auth needed for viewing)
+// Multi-license: returns all active listings for a token
 app.get('/api/marketplace/:tokenId', async (req, res, next) => {
   try {
     const blockchainService = require('./services/blockchain');
+    const { hasAnyListing, buildListingsArray, LICENSE_TYPE_NAMES } = require('./utils/license-utils');
     const tokenId = Number(req.params.tokenId);
-    const listing = await blockchainService.getListing(tokenId);
 
-    if (!listing.active) {
-      return res.json({ listed: false });
+    // Get all listings for this token (multi-license support)
+    const allListings = await blockchainService.getAllListingsForToken(tokenId);
+
+    if (!hasAnyListing(allListings)) {
+      return res.json({ listed: false, tokenId });
     }
+
+    // Build listings array with full details
+    const listings = buildListingsArray(allListings, true);
+
+    // Get token data for additional info
+    const tokenData = await blockchainService.getTokenData(tokenId);
 
     res.json({
       listed: true,
       tokenId,
-      seller: listing.seller,
-      price: listing.price,
-      priceEth: (Number(listing.price) / 1e18).toFixed(4)
+      // Multi-license listings array
+      listings,
+      // Token metadata
+      creator: tokenData?.creator,
+      copyrightOwner: tokenData?.copyrightOwner,
+      ownerLicense: LICENSE_TYPE_NAMES[tokenData?.ownerLicense] || 'unknown',
+      // Legacy single-listing fields (for backwards compatibility with Flutter)
+      seller: listings[0]?.seller,
+      price: listings[0]?.price,
+      priceEth: listings[0]?.priceEth,
+      licenseType: listings[0]?.licenseType
     });
   } catch (e) {
-    res.json({ listed: false });
+    console.error(`[Marketplace] Error fetching token ${req.params.tokenId}:`, e.message);
+    res.json({ listed: false, tokenId: Number(req.params.tokenId) });
   }
 });
 
