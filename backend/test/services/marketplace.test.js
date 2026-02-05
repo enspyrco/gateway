@@ -7,18 +7,25 @@ const blockchainService = require('../../src/services/blockchain');
 describe('Marketplace (Mock Mode)', () => {
   const userA = '0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC';
   const userB = '0x90F79bf6EB2c4f870365E785982E1f101E93b906';
+  const mockLicenseHash = '0x' + 'a'.repeat(64);
+  let mintCounter = 0;
 
   beforeEach(() => {
     blockchainService.resetMock();
+    mintCounter = 0;
   });
 
   async function mintToken(owner) {
+    mintCounter++;
+    const reservation = await blockchainService.reserveTokenId();
     return blockchainService.mint(
+      reservation.tokenId,
       owner,
       'ipfs://metadata',
-      0,
-      '0x' + Math.random().toString(16).slice(2).padEnd(64, '0'),
-      '0x' + 'b'.repeat(64),
+      0, // licenseType: Display
+      '0x' + mintCounter.toString(16).padStart(64, '0'),
+      '0x' + 'b'.repeat(64), // licenseHash
+      'ipfs://watermarked',
       'ipfs://encrypted'
     );
   }
@@ -27,7 +34,7 @@ describe('Marketplace (Mock Mode)', () => {
     it('should list a token for sale', async () => {
       const { tokenId } = await mintToken(userA);
 
-      const result = await blockchainService.listToken(tokenId, '1000000000000000000', userA);
+      const result = await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
 
       expect(result.tokenId).toBe(tokenId);
       expect(result.price).toBe('1000000000000000000');
@@ -37,23 +44,23 @@ describe('Marketplace (Mock Mode)', () => {
       const { tokenId } = await mintToken(userA);
 
       await expect(
-        blockchainService.listToken(tokenId, '1000000000000000000', userB)
+        blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userB)
       ).rejects.toThrow('Not token owner');
     });
 
     it('should reject listing non-existent token', async () => {
       await expect(
-        blockchainService.listToken(999, '1000000000000000000', userA)
+        blockchainService.listToken(999, '1000000000000000000', 'display', mockLicenseHash, userA)
       ).rejects.toThrow('Token does not exist');
     });
 
     it('should reject double listing', async () => {
       const { tokenId } = await mintToken(userA);
 
-      await blockchainService.listToken(tokenId, '1000000000000000000', userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
 
       await expect(
-        blockchainService.listToken(tokenId, '2000000000000000000', userA)
+        blockchainService.listToken(tokenId, '2000000000000000000', 'display', mockLicenseHash, userA)
       ).rejects.toThrow('Already listed');
     });
   });
@@ -63,7 +70,7 @@ describe('Marketplace (Mock Mode)', () => {
       const { tokenId } = await mintToken(userA);
       const price = '1000000000000000000';
 
-      await blockchainService.listToken(tokenId, price, userA);
+      await blockchainService.listToken(tokenId, price, 'display', mockLicenseHash, userA);
 
       const listing = await blockchainService.getListing(tokenId);
 
@@ -84,7 +91,7 @@ describe('Marketplace (Mock Mode)', () => {
   describe('delistToken', () => {
     it('should remove a listing', async () => {
       const { tokenId } = await mintToken(userA);
-      await blockchainService.listToken(tokenId, '1000000000000000000', userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
 
       await blockchainService.delistToken(tokenId, userA);
 
@@ -94,7 +101,7 @@ describe('Marketplace (Mock Mode)', () => {
 
     it('should reject delist by non-seller', async () => {
       const { tokenId } = await mintToken(userA);
-      await blockchainService.listToken(tokenId, '1000000000000000000', userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
 
       await expect(
         blockchainService.delistToken(tokenId, userB)
@@ -111,11 +118,12 @@ describe('Marketplace (Mock Mode)', () => {
   });
 
   describe('buyToken', () => {
-    it('should transfer ownership on purchase', async () => {
+    it('should transfer ownership on purchase (Transfer license)', async () => {
       const { tokenId } = await mintToken(userA);
       const price = '1000000000000000000';
 
-      await blockchainService.listToken(tokenId, price, userA);
+      // Use 'transfer' license type - this actually transfers the token
+      await blockchainService.listToken(tokenId, price, 'transfer', mockLicenseHash, userA);
 
       const result = await blockchainService.buyToken(tokenId, userB);
 
@@ -123,7 +131,7 @@ describe('Marketplace (Mock Mode)', () => {
       expect(result.buyer).toBe(userB);
       expect(result.price).toBe(price);
 
-      // Verify ownership changed
+      // Verify ownership changed (only happens with Transfer license)
       const isOwner = await blockchainService.isOwner(tokenId, userB);
       expect(isOwner).toBe(true);
 
@@ -131,9 +139,32 @@ describe('Marketplace (Mock Mode)', () => {
       expect(wasOwner).toBe(false);
     });
 
+    it('should mint license token on Display purchase (original stays with seller)', async () => {
+      const { tokenId } = await mintToken(userA);
+      const price = '1000000000000000000';
+
+      // Use 'display' license - this mints a new license token for buyer
+      await blockchainService.listToken(tokenId, price, 'display', mockLicenseHash, userA);
+
+      const result = await blockchainService.buyToken(tokenId, userB);
+
+      expect(result.seller).toBe(userA);
+      expect(result.buyer).toBe(userB);
+      expect(result.isLicenseGrant).toBe(true);
+      expect(result.parentTokenId).toBe(tokenId);
+
+      // Original token stays with seller
+      const originalStaysWithSeller = await blockchainService.isOwner(tokenId, userA);
+      expect(originalStaysWithSeller).toBe(true);
+
+      // Buyer owns the NEW license token
+      const buyerOwnsLicense = await blockchainService.isOwner(result.tokenId, userB);
+      expect(buyerOwnsLicense).toBe(true);
+    });
+
     it('should remove listing after purchase', async () => {
       const { tokenId } = await mintToken(userA);
-      await blockchainService.listToken(tokenId, '1000000000000000000', userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
 
       await blockchainService.buyToken(tokenId, userB);
 
@@ -143,7 +174,7 @@ describe('Marketplace (Mock Mode)', () => {
 
     it('should reject buying own token', async () => {
       const { tokenId } = await mintToken(userA);
-      await blockchainService.listToken(tokenId, '1000000000000000000', userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
 
       await expect(
         blockchainService.buyToken(tokenId, userA)
@@ -170,8 +201,8 @@ describe('Marketplace (Mock Mode)', () => {
       const { tokenId: token2 } = await mintToken(userA);
       const { tokenId: token3 } = await mintToken(userB);
 
-      await blockchainService.listToken(token1, '1000000000000000000', userA);
-      await blockchainService.listToken(token2, '2000000000000000000', userA);
+      await blockchainService.listToken(token1, '1000000000000000000', 'display', mockLicenseHash, userA);
+      await blockchainService.listToken(token2, '2000000000000000000', 'commercial', mockLicenseHash, userA);
       // token3 not listed
 
       const listings = await blockchainService.getActiveListings();
@@ -184,7 +215,7 @@ describe('Marketplace (Mock Mode)', () => {
     it('should not include delisted tokens', async () => {
       const { tokenId } = await mintToken(userA);
 
-      await blockchainService.listToken(tokenId, '1000000000000000000', userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
       await blockchainService.delistToken(tokenId, userA);
 
       const listings = await blockchainService.getActiveListings();
@@ -194,7 +225,7 @@ describe('Marketplace (Mock Mode)', () => {
     it('should not include sold tokens', async () => {
       const { tokenId } = await mintToken(userA);
 
-      await blockchainService.listToken(tokenId, '1000000000000000000', userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
       await blockchainService.buyToken(tokenId, userB);
 
       const listings = await blockchainService.getActiveListings();
@@ -203,21 +234,21 @@ describe('Marketplace (Mock Mode)', () => {
   });
 
   describe('full marketplace flow', () => {
-    it('should support mint -> list -> buy -> relist cycle', async () => {
+    it('should support mint -> list -> buy -> relist cycle (Transfer license)', async () => {
       // User A mints
       const { tokenId } = await mintToken(userA);
       expect(await blockchainService.isOwner(tokenId, userA)).toBe(true);
 
-      // User A lists for 1 ETH
-      await blockchainService.listToken(tokenId, '1000000000000000000', userA);
+      // User A lists for 1 ETH with Transfer license (so token actually transfers)
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'transfer', mockLicenseHash, userA);
 
       // User B buys
       await blockchainService.buyToken(tokenId, userB);
       expect(await blockchainService.isOwner(tokenId, userB)).toBe(true);
       expect(await blockchainService.isOwner(tokenId, userA)).toBe(false);
 
-      // User B relists for 2 ETH
-      await blockchainService.listToken(tokenId, '2000000000000000000', userB);
+      // User B relists for 2 ETH (with display rights, since that's what they bought)
+      await blockchainService.listToken(tokenId, '2000000000000000000', 'display', mockLicenseHash, userB);
 
       const listing = await blockchainService.getListing(tokenId);
       expect(listing.seller).toBe(userB);

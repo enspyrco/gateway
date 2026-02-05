@@ -1,6 +1,10 @@
 /**
  * Detection API routes
  * POST /api/detect - Detect watermark in captured image
+ *
+ * Storage architecture:
+ * - Encrypted original is in Firebase Storage (path from Firestore)
+ * - Token data comes from blockchain
  */
 
 const express = require('express');
@@ -12,7 +16,7 @@ const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 
 const encryptionService = require('../services/encryption');
-const ipfsService = require('../services/ipfs');
+const storageService = require('../services/storage');
 const blockchainService = require('../services/blockchain');
 const firestoreService = require('../services/firestore');
 
@@ -65,22 +69,22 @@ function createRouter(upload) {
         console.log(`[${detectId}] Requester is not token owner`);
       }
 
-      // Step 2: Get token data
-      const token = await firestoreService.getToken(tokenId);
-      if (!token) {
+      // Step 2: Get encrypted original reference from Firestore
+      const encryptedRef = await firestoreService.getEncryptedRef(tokenId);
+      if (!encryptedRef) {
         return res.status(404).json({
-          error: 'Token not found',
-          code: 'TOKEN_NOT_FOUND'
+          error: 'Encrypted original not found',
+          code: 'ORIGINAL_NOT_FOUND'
         });
       }
 
-      // Step 3: Fetch encrypted original from IPFS
-      console.log(`[${detectId}] Fetching encrypted original from IPFS...`);
-      const encryptedBuffer = await ipfsService.fetch(token.encryptedBlobUri);
+      // Step 3: Fetch encrypted original from Firebase Storage
+      console.log(`[${detectId}] Fetching encrypted original from Firebase Storage...`);
+      const encryptedBuffer = await storageService.downloadEncrypted(encryptedRef.storagePath);
 
       // Step 4: Decrypt original
       console.log(`[${detectId}] Decrypting original...`);
-      const originalBuffer = await encryptionService.decrypt(encryptedBuffer);
+      const originalBuffer = await encryptionService.decrypt(encryptedBuffer, encryptedRef.keyId);
 
       // Step 5: Run detection
       console.log(`[${detectId}] Running detection...`);
@@ -88,16 +92,6 @@ function createRouter(upload) {
 
       // Step 6: Get current owner from chain
       const tokenData = await blockchainService.getTokenData(tokenId);
-
-      // Step 7: Log detection
-      const capturedHash = crypto.createHash('sha256').update(capturedBuffer).digest('hex');
-      await firestoreService.logDetection({
-        tokenId,
-        requester: req.wallet,
-        capturedImageHash: capturedHash,
-        result: result.detected,
-        confidence: result.confidence
-      });
 
       console.log(`[${detectId}] Detection complete: ${result.detected ? 'FOUND' : 'NOT FOUND'}`);
 
@@ -107,7 +101,7 @@ function createRouter(upload) {
         message: result.message,
         owner: tokenData.currentOwner,
         creator: tokenData.creator,
-        licenseType: ['display', 'commercial', 'transfer'][tokenData.licenseType],
+        licenseType: ['display', 'commercial', 'transfer'][tokenData.ownerLicense],
         statistics: result.statistics
       });
 

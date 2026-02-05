@@ -10,15 +10,15 @@ const { v4: uuidv4 } = require('uuid');
 const watermarkService = require('../services/watermark');
 const encryptionService = require('../services/encryption');
 const ipfsService = require('../services/ipfs');
+const arweaveService = require('../services/arweave');
+const storageService = require('../services/storage');
 const blockchainService = require('../services/blockchain');
 const firestoreService = require('../services/firestore');
-const duplicateService = require('../services/duplicate');
 
-const LICENSE_TYPES = {
-  display: 0,
-  commercial: 1,
-  transfer: 2
-};
+// Note: Token ID reservation is now handled by the smart contract
+// The old mutex approach was flawed - it only protected this single backend instance
+// The contract's reserveTokenId() guarantees the token ID atomically on-chain
+
 
 function createRouter(upload) {
   const router = express.Router();
@@ -30,15 +30,15 @@ function createRouter(upload) {
    * - image: File (required)
    * - name: string (required)
    * - description: string (optional)
-   * - licenseType: "display" | "commercial" | "transfer" (required)
-   * - licenseSignature: string (required) - wallet signature of license agreement
+   * - licenseType: 'display' | 'commercial' | 'transfer' (optional)
    *
    * Returns:
    * - tokenId: number
    * - transactionHash: string
-   * - encryptedBlobUri: string
-   * - previewUri: string
-   * - metadataUri: string
+   * - storagePath: string (Firebase Storage path for encrypted original)
+   * - ipfsUri: string (IPFS URI for watermarked image)
+   * - metadataUri: string (Arweave URI for metadata)
+   * - imageHash: string (SHA-256 of watermarked image)
    */
   router.post('/', upload.single('image'), async (req, res, next) => {
     const mintId = uuidv4();
@@ -57,117 +57,128 @@ function createRouter(upload) {
         });
       }
 
-      if (!name || !licenseType || !licenseSignature) {
+      if (!name) {
         return res.status(400).json({
-          error: 'Missing required fields: name, licenseType, licenseSignature',
+          error: 'Missing required field: name',
           code: 'MISSING_FIELDS'
         });
       }
 
-      if (!LICENSE_TYPES.hasOwnProperty(licenseType)) {
+      // Validate license type
+      const validLicenseTypes = ['display', 'commercial', 'transfer'];
+      if (licenseType && !validLicenseTypes.includes(licenseType)) {
         return res.status(400).json({
-          error: 'Invalid licenseType. Must be: display, commercial, or transfer',
+          error: 'Invalid license type. Must be: display, commercial, or transfer',
           code: 'INVALID_LICENSE_TYPE'
         });
       }
 
-      // Step 1: Check for duplicates
-      console.log(`[${mintId}] Checking for duplicates...`);
-      const imageHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
+      // All mint variables declared here
+      let reservedTokenId, tokenId, transactionHash, watermarkId, imageHash;
+      let keyId, storagePath, ipfsUri, metadataUri, licenseHash;
 
-      const isDuplicate = await duplicateService.checkDuplicate(imageBuffer, imageHash);
-      if (isDuplicate) {
-        return res.status(409).json({
-          error: 'This image or a very similar one has already been minted',
-          code: 'DUPLICATE_IMAGE'
-        });
-      }
+      // Step 1: Reserve token ID on-chain (guarantees this ID is ours)
+      // This is atomic - no one else can get this ID
+      console.log(`[${mintId}] Reserving token ID on-chain...`);
+      const reservation = await blockchainService.reserveTokenId();
+      reservedTokenId = reservation.tokenId;
+      console.log(`[${mintId}] Reserved token ID: ${reservedTokenId} (expires: ${new Date(reservation.expiry * 1000).toISOString()})`);
 
-      // Step 2: Apply watermark
+      // Step 2: Apply watermark with wallet + reserved tokenId
       console.log(`[${mintId}] Applying watermark...`);
-      const watermarkId = `NFTM${mintId.slice(0, 8).toUpperCase()}`;
+      watermarkId = `${req.wallet}:${reservedTokenId}`;
       const watermarkedBuffer = await watermarkService.applyWatermark(
         imageBuffer,
-        watermarkId
+        req.wallet,
+        reservedTokenId
       );
 
-      // Step 3: Generate preview (visible thumbnail)
-      console.log(`[${mintId}] Generating preview...`);
-      const previewBuffer = await watermarkService.generatePreview(watermarkedBuffer);
+      // Step 3: Calculate image hash of watermarked image (for integrity verification)
+      imageHash = crypto.createHash('sha256').update(watermarkedBuffer).digest('hex');
 
-      // Step 4: Encrypt the watermarked original
-      console.log(`[${mintId}] Encrypting original...`);
-      const { encryptedBuffer, keyId } = await encryptionService.encrypt(
-        watermarkedBuffer,
+      // Step 4: Encrypt ORIGINAL image (not watermarked) for authorized access
+      console.log(`[${mintId}] Encrypting original image...`);
+      const encryptResult = await encryptionService.encrypt(
+        imageBuffer,  // Original image, not watermarked
         mintId
       );
+      const encryptedBuffer = encryptResult.encryptedBuffer;
+      keyId = encryptResult.keyId;
 
-      // Step 5: Upload to IPFS
-      console.log(`[${mintId}] Uploading to IPFS...`);
-      const [encryptedBlobUri, previewUri] = await Promise.all([
-        ipfsService.upload(encryptedBuffer, `${mintId}-encrypted`),
-        ipfsService.upload(previewBuffer, `${mintId}-preview.jpg`)
+      // Upload in parallel:
+      // - IPFS: Full watermarked image (public)
+      // - Firebase Storage: Encrypted original (private, for authorized decryption)
+      console.log(`[${mintId}] Uploading to IPFS and Firebase Storage...`);
+      [storagePath, ipfsUri] = await Promise.all([
+        storageService.uploadEncrypted(encryptedBuffer, mintId),
+        ipfsService.upload(watermarkedBuffer, `${mintId}-watermarked.png`)
       ]);
+      console.log(`[${mintId}] Watermarked image uploaded to IPFS: ${ipfsUri}`);
+      console.log(`[${mintId}] Encrypted original uploaded to Firebase Storage: ${storagePath}`);
 
-      // Step 6: Create and upload metadata
+      // Step 6: Generate license hash
+      licenseHash = null;
+      if (licenseType) {
+        const licenseText = generateLicenseTemplate(licenseType);
+        const licenseData = `${licenseText}|${licenseSignature || ''}|${req.wallet}|${mintId}`;
+        licenseHash = crypto.createHash('sha256').update(licenseData).digest('hex');
+        console.log(`[${mintId}] Generated license hash for ${licenseType} license`);
+      }
+
+      // Step 6: Create and upload metadata to Arweave (permanent storage)
+      // Note: encrypted_original is NOT in metadata - it's private in Firebase Storage
       console.log(`[${mintId}] Creating metadata...`);
-      const licenseText = generateLicenseText(licenseType, req.wallet, name);
-      const licenseHash = crypto.createHash('sha256').update(licenseText).digest('hex');
-
       const metadata = {
         name,
         description: description || '',
-        image: previewUri,
-        encrypted_original: encryptedBlobUri,
+        image: ipfsUri,  // Full watermarked image on IPFS
         attributes: [
-          { trait_type: 'License', value: licenseType },
           { trait_type: 'Watermark ID', value: watermarkId },
-          { trait_type: 'Creator', value: req.wallet }
+          { trait_type: 'Creator', value: req.wallet },
+          ...(licenseType ? [{ trait_type: 'License Type', value: licenseType }] : [])
         ],
         properties: {
-          license_type: licenseType,
-          license_hash: licenseHash,
           image_hash: imageHash,
           watermark_id: watermarkId,
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          ...(licenseHash ? { license_hash: licenseHash, license_type: licenseType } : {})
         }
       };
 
-      const metadataUri = await ipfsService.uploadJson(metadata, `${mintId}-metadata.json`);
+      console.log(`[${mintId}] Uploading metadata to Arweave...`);
+      const { txId: metadataTxId } = await arweaveService.uploadJson(metadata, {
+        'Token-ID': String(reservedTokenId),
+        'Creator': req.wallet,
+        'Content-Type': 'application/json'
+      });
+      metadataUri = `ar://${metadataTxId}`;
 
-      // Step 7: Mint NFT on-chain
-      console.log(`[${mintId}] Minting NFT...`);
-      const { tokenId, transactionHash } = await blockchainService.mint(
+      // Step 8: Mint NFT on-chain with reserved token ID
+      // The reservation guarantees this ID is ours - no verification needed
+      // Note: storagePath is NOT sent to blockchain (V2) - stored in Firestore only
+      console.log(`[${mintId}] Minting NFT with reserved token ID ${reservedTokenId}...`);
+      const licenseTypeMap = { display: 0, commercial: 1, transfer: 2 };
+      const licenseTypeNum = licenseType ? licenseTypeMap[licenseType] : 0;
+      const mintResult = await blockchainService.mint(
+        reservedTokenId,
         req.wallet,
         metadataUri,
-        LICENSE_TYPES[licenseType],
+        licenseTypeNum,
         `0x${imageHash}`,
-        `0x${licenseHash}`,
-        encryptedBlobUri
+        licenseHash ? `0x${licenseHash}` : '0x' + '0'.repeat(64),
+        ipfsUri
       );
+      tokenId = mintResult.tokenId;
+      transactionHash = mintResult.transactionHash;
 
-      // Step 8: Store in Firestore
-      console.log(`[${mintId}] Storing in Firestore...`);
-      await firestoreService.createToken({
-        tokenId,
-        mintId,
-        wallet: req.wallet,
-        name,
-        description,
-        licenseType,
-        imageHash,
-        licenseHash,
-        watermarkId,
-        keyId,
-        encryptedBlobUri,
-        previewUri,
-        metadataUri,
-        transactionHash,
-        createdAt: new Date()
+      // Step 8: Store encrypted original reference in Firestore
+      // (Only the storage path and key - all other data is on blockchain/Arweave)
+      console.log(`[${mintId}] Storing encrypted ref in Firestore...`);
+      await firestoreService.storeEncryptedRef(tokenId, {
+        storagePath,  // Firebase Storage path for encrypted original
+        keyId,        // KMS key reference for decryption
+        imageHash,    // For verification
       });
-
-      // Register hash for duplicate detection
-      await duplicateService.registerHash(imageHash, tokenId);
 
       console.log(`[${mintId}] Mint complete! Token ID: ${tokenId}`);
 
@@ -176,11 +187,11 @@ function createRouter(upload) {
         tokenId,
         transactionHash,
         watermarkId,
-        encryptedBlobUri,
-        previewUri,
+        storagePath,  // Firebase Storage path (access controlled by service)
+        ipfsUri,      // IPFS URI for watermarked image (public)
         metadataUri,
         imageHash,
-        licenseHash
+        ...(licenseHash ? { licenseHash } : {})
       });
 
     } catch (error) {
@@ -190,25 +201,14 @@ function createRouter(upload) {
   });
 
   /**
-   * GET /api/mint/price
-   * Returns current minting prices
-   */
-  router.get('/price', (req, res) => {
-    res.json({
-      display: { usd: 1.00, description: 'Personal display rights' },
-      commercial: { usd: 5.00, description: 'Commercial usage rights' },
-      transfer: { usd: 10.00, description: 'Full copyright transfer' }
-    });
-  });
-
-  /**
    * GET /api/mint/license/:type
-   * Returns license agreement text for signing
+   * Returns license agreement text for signing (used when listing for sale)
    */
   router.get('/license/:type', (req, res) => {
     const { type } = req.params;
+    const validTypes = ['display', 'commercial', 'transfer'];
 
-    if (!LICENSE_TYPES.hasOwnProperty(type)) {
+    if (!validTypes.includes(type)) {
       return res.status(400).json({
         error: 'Invalid license type',
         code: 'INVALID_LICENSE_TYPE'
@@ -220,86 +220,6 @@ function createRouter(upload) {
   });
 
   return router;
-}
-
-/**
- * Generate license text for a specific mint
- */
-function generateLicenseText(type, creatorWallet, artworkName) {
-  const date = new Date().toISOString();
-
-  const templates = {
-    display: `
-NFTMARKET LICENSE AGREEMENT - DISPLAY
-
-Artwork: ${artworkName}
-Creator: ${creatorWallet}
-Date: ${date}
-
-This license grants the NFT holder personal, non-commercial display rights only.
-
-The holder MAY:
-- Display the artwork for personal enjoyment
-- Resell or transfer the NFT
-
-The holder MAY NOT:
-- Use the artwork commercially
-- Create derivative works
-- Sublicense the artwork
-
-Copyright remains with the creator.
-    `.trim(),
-
-    commercial: `
-NFTMARKET LICENSE AGREEMENT - COMMERCIAL
-
-Artwork: ${artworkName}
-Creator: ${creatorWallet}
-Date: ${date}
-
-This license grants the NFT holder commercial usage rights.
-
-The holder MAY:
-- Display the artwork publicly or privately
-- Use the artwork in commercial projects
-- Create and sell merchandise featuring the artwork
-- Create derivative works
-- Resell or transfer the NFT (license transfers with it)
-
-The holder MAY NOT:
-- Claim original authorship
-- Sublicense independently of the NFT
-- Use in illegal or hateful contexts
-
-Copyright remains with the creator. Commercial rights transfer with the NFT.
-    `.trim(),
-
-    transfer: `
-NFTMARKET LICENSE AGREEMENT - COPYRIGHT TRANSFER
-
-Artwork: ${artworkName}
-Creator: ${creatorWallet}
-Date: ${date}
-
-This agreement transfers full copyright ownership to the NFT holder.
-
-Upon purchase, the holder receives:
-- Full copyright ownership
-- All reproduction rights
-- All derivative work rights
-- All commercial rights
-- Right to sublicense
-- Right to register copyright in their name
-
-The creator retains:
-- Moral rights (where applicable by law)
-- Right to be credited as original author
-
-This is a complete and irrevocable transfer of copyright.
-    `.trim()
-  };
-
-  return templates[type];
 }
 
 /**

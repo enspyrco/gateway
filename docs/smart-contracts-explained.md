@@ -70,14 +70,16 @@ Two NFTs can have the same market price. "Non-fungible" just means they're track
 
 Storing images on-chain is extremely expensive. So NFTs store:
 
-- **On-chain:** Just the URI (`ipfs://Qm...`)
-- **On IPFS:** The actual image and metadata
+- **On-chain:** Just the URI (e.g., `ar://...` or `ipfs://...`)
+- **Off-chain:** The actual image and metadata
 
-The image lives on IPFS, the ownership record lives on the blockchain.
+NFTmarket uses:
 
-### Pinning Services
+- **Arweave** for metadata and licenses (permanent, pay once)
+- **IPFS** for preview images (content-addressed, requires pinning)
+- **Firebase Storage** for encrypted originals (private, key-controlled)
 
-Files only exist on IPFS if someone hosts them. Services like **Pinata** guarantee your files stay available for a monthly fee.
+The ownership record lives on the blockchain. The data lives off-chain but is verifiable.
 
 ---
 
@@ -128,9 +130,8 @@ In a legal dispute, you can show:
 
 | Feature | Details |
 |---------|---------|
-| Standard | ERC-721 + ERC-2981 (royalties) |
+| Standard | ERC-721 |
 | Blockchain | Polygon |
-| Royalties | 2.5% to creator on secondary sales |
 | Platform Fee | 2.5% on marketplace sales |
 
 ### Marketplace Functions

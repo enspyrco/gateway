@@ -7,7 +7,6 @@ ERC-721 NFT contract with integrated marketplace for NFTmarket.
 - **License Types**: Display, Commercial, Full Transfer
 - **Duplicate Prevention**: Image hash uniqueness check
 - **Integrated Marketplace**: List, delist, buy
-- **Royalties**: 2.5% to creator on secondary sales (EIP-2981)
 - **Platform Fee**: 2.5% on all sales
 
 ## Setup

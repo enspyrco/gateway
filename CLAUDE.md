@@ -8,22 +8,30 @@ NFTmarket is an AI art marketplace that combines invisible watermarking, NFT min
 
 ## Architecture
 
-Three independent components that communicate via API and blockchain:
+Four independent components that communicate via API and blockchain:
 
 ```
-Flutter Web App  →  Node.js Backend  →  Polygon Blockchain
+Flutter Web App  →  Wallet Service  →  Polygon Blockchain
      ↓                    ↓                    ↓
-  WalletConnect      Watermark C++        ERC-721 Contract
-                     IPFS (Pinata)        (NFTmarketNFT.sol)
-                     Cloud KMS
-                     Firestore
+  (no keys)         Private Keys         ERC-721 Contract
+                    Sign & Submit        (NFTmarketNFT.sol)
+     ↓
+Node.js Backend
+     ↓
+Watermark C++
+IPFS (Pinata)
+Cloud KMS
+Firestore
 ```
 
 **Mint Flow**: Upload → Duplicate check → Watermark embed → Encrypt original → Upload to IPFS → Mint NFT → Store metadata in Firestore
 
 **Generate Flow**: Enter prompt → Select style → Generate 4 images via Stability AI → Select favorite → Mint as NFT
 
-**License Types**: Display (personal use, $1), Commercial (monetization rights, $5), Transfer (full copyright, $10)
+**License Types** (hierarchical - can't sell more rights than you have):
+- Display (personal use) - buyer gets NFT + display rights, seller keeps copyright
+- Commercial (monetization) - buyer gets NFT + commercial usage, seller keeps copyright
+- Transfer (full copyright) - buyer gets NFT + copyright, seller retains display rights only
 
 ## Project Structure
 
@@ -35,8 +43,15 @@ flutter/lib/
 ├── models/             # Data models (Token)
 ├── pages/              # Screen widgets
 ├── providers/          # State management (Provider)
-├── services/           # API communication
+├── services/           # API + wallet service communication
 └── widgets/            # Reusable components
+
+wallet-service/src/     # Wallet microservice (port 3001)
+├── index.js            # Express app entry
+├── config/             # Hardhat test accounts
+├── middleware/         # Session validation
+├── routes/             # API endpoints
+└── services/           # Signing, transactions
 
 backend/src/
 ├── index.js            # Express app setup
@@ -52,6 +67,15 @@ contracts/
 
 ## Commands
 
+### Wallet Service (Node.js/Express)
+```bash
+cd wallet-service
+npm install
+npm run dev          # Development with nodemon (port 3001)
+npm start            # Production
+./start.sh           # Start with default env vars
+```
+
 ### Backend (Node.js/Express)
 ```bash
 cd backend
@@ -60,6 +84,9 @@ npm run dev          # Development with nodemon
 npm start            # Production
 npm test             # Run all Jest tests
 npm test -- --testPathPattern=auth  # Run tests matching pattern
+
+# Integration tests (require Hardhat node + deployed contract)
+NFTMARKET_CONTRACT_ADDRESS=0x... RUN_INTEGRATION_TESTS=true npx jest test/integration/marketplace-flow.integration.test.js --runInBand
 ```
 
 ### Smart Contracts (Hardhat/Solidity)
@@ -89,19 +116,33 @@ flutter build web                  # Build for production
 ## Key Technical Details
 
 ### Smart Contract (contracts/NFTmarketNFT.sol)
-- ERC-721 with ERC-2981 royalties (2.5% to creator on secondary sales)
+- ERC-721 with integrated marketplace and EIP-712 bilateral signatures
 - 2.5% platform fee on marketplace sales
 - Duplicate prevention via `imageHashExists` mapping
-- Integrated marketplace: `list(tokenId, price)`, `delist(tokenId)`, `buy(tokenId)`
+- License hierarchy: Display (0) < Commercial (1) < Transfer (2)
+- Cannot sell more rights than you have (no rights escalation)
+- Transfer sales: buyer gets copyright, seller retains display rights
 - Auto-delists tokens on external transfers
-- `getListing(tokenId)` returns seller, price, active status
+
+Key functions:
+- `list(tokenId, price, licenseType, licenseHash, expiry, signature)` - List with seller's EIP-712 signature
+- `buy(tokenId, signature)` - Buy with buyer's EIP-712 signature + payment
+- `delist(tokenId)` - Remove listing
+- `checkDisplayRights(tokenId, address)` / `checkCommercialRights` / `checkCopyrightOwnership` - Rights queries
 
 ### Marketplace API (backend/src/routes/marketplace.js)
-- `GET /api/marketplace` - List all active listings (public)
+
+**Read operations** (public):
+- `GET /api/marketplace` - List all active listings
 - `GET /api/marketplace/:tokenId` - Get listing details
-- `POST /api/marketplace/list` - List token for sale (auth required)
-- `POST /api/marketplace/buy` - Buy listed token (auth required)
-- `POST /api/marketplace/delist` - Remove listing (auth required)
+- `GET /api/marketplace/nonce/:address` - Get nonce for EIP-712 signing
+- `GET /api/marketplace/eip712/domain` - Get EIP-712 domain
+
+**Write operations** require wallet signatures - API provides typed data to sign:
+- `POST /api/marketplace/list/typed-data` - Get EIP-712 data for listing (auth required)
+- `POST /api/marketplace/buy/typed-data` - Get EIP-712 data for buying (auth required)
+
+Client flow: Get typed data from API → Sign with wallet → Call contract directly
 
 ### AI Generation API (backend/src/routes/generate.js)
 - `GET /api/generate/styles` - Get available style presets (public)
@@ -114,7 +155,6 @@ flutter build web                  # Build for production
 - `encryption.js`: AES-256 encryption, supports Google Cloud KMS or dev key
 - `ipfs.js`: Pinata uploads for encrypted blobs and metadata
 - `blockchain.js`: Ethers.js contract interactions, marketplace functions, mock mode support
-- `duplicate.js`: SHA-256 hash + perceptual hash checking
 - `ai-generation.js`: Stability AI integration for image generation, 10 style presets
 
 ### Watermark Service (backend/src/services/watermark.js)
@@ -136,10 +176,14 @@ flutter build web                  # Build for production
 All services support mock mode for testing without external dependencies:
 - `USE_MOCK_WATERMARK=true` - Skip C++ binary, return PNG as-is
 - `USE_MOCK_IPFS=true` - In-memory storage with fake hashes
-- `USE_MOCK_FIRESTORE=true` - In-memory Maps
+- `USE_MOCK_ARWEAVE=true` - In-memory storage for metadata
+- `USE_MOCK_FIRESTORE=true` - In-memory Maps (document database)
+- `USE_MOCK_STORAGE=true` - In-memory blob storage (Firebase Storage)
 - `USE_MOCK_BLOCKCHAIN=true` - In-memory token/listing storage
 - `USE_MOCK_AI=true` - Return placeholder images instead of calling Stability AI
 - `USE_KMS=false` - Use `DEV_ENCRYPTION_KEY` instead of Cloud KMS
+
+See `backend/mock.md` for detailed mock service documentation.
 
 ### Authentication
 Uses Sign-In with Ethereum (SIWE). Client creates message, signs with wallet, sends as Bearer token (base64-encoded JSON with `message` and `signature` fields).
@@ -149,16 +193,54 @@ Uses Sign-In with Ethereum (SIWE). Client creates message, signs with wallet, se
 - `MintProvider`: Multi-step mint flow state
 - Uses `go_router` for navigation with wallet connection guards
 
-### Test Account Switching (Dev Mode)
-In debug mode, the Flutter app shows a test account picker instead of real wallet connection. Four Hardhat accounts are available for testing marketplace flows (buy/sell between users).
+### Test Accounts (Dev Mode)
+In debug mode, the Flutter app shows a test account picker instead of real wallet connection. Five named test accounts for marketplace testing:
+
+| Nickname | Hardhat Account | Address |
+|----------|-----------------|---------|
+| Alice | #2 | `0x3C44...93BC` |
+| Bob | #3 | `0x90F7...3906` |
+| Sam | #4 | `0x15d3...6A65` |
+| Joe | #5 | `0x9965...A4dc` |
+| Mary | #6 | `0x976E...0aa9` |
+| Platform | #1 | `0x7099...F5Ee` (fee collection) |
+
+Fee simulation in Flutter tracks: subscription (0.01 ETH/month), mint (0.001 ETH), AI generation (0.0005 ETH).
 
 ## Environment Configuration
+
+Wallet Service requires: `RPC_URL` (default: localhost:8545), `CHAIN_ID` (default: 31337), `PORT` (default: 3001).
 
 Backend requires: `POLYGON_RPC_URL`, `NFTMARKET_CONTRACT_ADDRESS`, `MINTER_PRIVATE_KEY`, `PINATA_JWT`, `STABILITY_API_KEY`, Firebase credentials, and optionally `WATERMARK_API_URL`/`WATERMARK_API_KEY` or KMS config.
 
 Contracts require: `PRIVATE_KEY`, RPC URLs for target networks, `POLYGONSCAN_API_KEY` for verification.
 
-Both components have `.env.example` files with all required variables.
+All components have `.env.example` files with required variables.
+
+### Quick Start (Local Development)
+
+**Option 1: All-in-one script**
+```bash
+./start-all.sh   # Starts Hardhat, deploys contract, wallet service, backend, Flutter
+```
+
+**Option 2: Manual startup**
+```bash
+# Terminal 1: Start Hardhat node
+cd contracts && npx hardhat node
+
+# Terminal 2: Deploy contract
+cd contracts && npx hardhat run scripts/deploy.js --network localhost
+
+# Terminal 3: Start wallet service
+cd wallet-service && npm run dev
+
+# Terminal 4: Start backend
+cd backend && npm run dev
+
+# Terminal 5: Start Flutter
+cd flutter && flutter run -d chrome
+```
 
 ### Quick Start (Local Development)
 
@@ -192,7 +274,10 @@ cd contracts && npx hardhat node
 # Terminal 2: Deploy contract
 npx hardhat run scripts/deploy.js --network localhost
 
-# Terminal 3: Start backend
+# Terminal 3: Start wallet service
+cd wallet-service && npm run dev
+
+# Terminal 4: Start backend
 cd backend && ./start-local-blockchain.sh
 ```
 
@@ -211,9 +296,23 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 GitHub Actions runs on push/PR to `main` and `develop`. Only runs checks for changed components (flutter, backend, or contracts). Non-code changes (docs, config) can merge without CI.
 
+## Storage Architecture
+
+| Storage | Type | What it Stores |
+|---------|------|----------------|
+| Firestore | Document DB | Token metadata, user data, AI generations |
+| Firebase Storage | Blob storage | Encrypted originals, watermarked backups |
+| IPFS (Pinata) | Decentralized | Preview images (public) |
+| Arweave | Permanent | NFT metadata JSON |
+| Blockchain | On-chain | Token ownership, marketplace listings |
+
 ## Important Notes
 
+- **Wallet Service**: Separate microservice handles all private key management and signing. Flutter never has direct access to private keys.
 - Watermark engine is external C++ (referenced but not in this repo)
-- Encrypted originals stored on IPFS, keys in Cloud KMS
+- Encrypted originals stored in Firebase Storage, keys in Cloud KMS
+- Watermarked images backed up to Firebase Storage (in case IPFS fails)
 - Contract uses OpenZeppelin v5.0 base contracts
 - Platform wallet receives 2.5% of marketplace sales
+- Marketplace uses bilateral EIP-712 signatures (both buyer and seller sign the same license agreement)
+- Third-party marketplaces can trade NFTs via standard ERC-721 or use the integrated marketplace (see `talk/buy-and-sell.md`)

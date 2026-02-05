@@ -10,8 +10,8 @@ const zlib = require('zlib');
 
 const app = require('../../src/index');
 const blockchainService = require('../../src/services/blockchain');
-const duplicateService = require('../../src/services/duplicate');
 const firestoreService = require('../../src/services/firestore');
+const storageService = require('../../src/services/storage');
 
 // Helper to create a mock auth token (SIWE format, dev mode)
 function createMockAuthToken(walletAddress) {
@@ -124,8 +124,8 @@ describe('Mint Route', () => {
   beforeEach(() => {
     // Reset all mock services between tests
     blockchainService.resetMock();
-    duplicateService.resetMock();
     firestoreService.resetMock();
+    storageService.resetMock();
   });
 
   describe('POST /api/mint', () => {
@@ -193,8 +193,8 @@ describe('Mint Route', () => {
       expect(res.body).toHaveProperty('tokenId');
       expect(res.body).toHaveProperty('transactionHash');
       expect(res.body).toHaveProperty('watermarkId');
-      expect(res.body).toHaveProperty('encryptedBlobUri');
-      expect(res.body).toHaveProperty('previewUri');
+      expect(res.body).toHaveProperty('storagePath');
+      expect(res.body).toHaveProperty('ipfsUri');
       expect(res.body).toHaveProperty('metadataUri');
       expect(res.body).toHaveProperty('imageHash');
       expect(res.body).toHaveProperty('licenseHash');
@@ -213,7 +213,8 @@ describe('Mint Route', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
-      expect(res.body.tokenId).toBe(1);
+      expect(res.body).toHaveProperty('tokenId');
+      expect(typeof res.body.tokenId).toBe('number');
     });
 
     it('should successfully mint with transfer license', async () => {
@@ -233,33 +234,6 @@ describe('Mint Route', () => {
       }
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
-    });
-
-    it('should reject duplicate image', async () => {
-      const image = createTestImage();
-
-      // First mint should succeed
-      const res1 = await request(app)
-        .post('/api/mint')
-        .set('Authorization', `Bearer ${authToken}`)
-        .attach('image', image, 'test.png')
-        .field('name', 'Original')
-        .field('licenseType', 'display')
-        .field('licenseSignature', '0x' + 'a'.repeat(64));
-
-      expect(res1.status).toBe(201);
-
-      // Second mint with same image should fail
-      const res2 = await request(app)
-        .post('/api/mint')
-        .set('Authorization', `Bearer ${authToken}`)
-        .attach('image', image, 'test.png')
-        .field('name', 'Duplicate')
-        .field('licenseType', 'display')
-        .field('licenseSignature', '0x' + 'b'.repeat(64));
-
-      expect(res2.status).toBe(409);
-      expect(res2.body.code).toBe('DUPLICATE_IMAGE');
     });
 
     it('should mint multiple unique images', async () => {
