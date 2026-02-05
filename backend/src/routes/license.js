@@ -1,7 +1,12 @@
 /**
  * License API routes
  *
- * Handles license document generation, storage on Arweave, and verification.
+ * Handles license document generation and verification.
+ *
+ * Storage architecture:
+ * - License documents are stored on Arweave (permanent)
+ * - License hash is stored on-chain in listing
+ * - Token metadata on Arweave has license info
  */
 
 const express = require('express');
@@ -10,7 +15,6 @@ const router = express.Router();
 const licenseService = require('../services/license');
 const arweaveService = require('../services/arweave');
 const blockchainService = require('../services/blockchain');
-const firestoreService = require('../services/firestore');
 const authMiddleware = require('../middleware/auth');
 
 /**
@@ -49,14 +53,23 @@ router.post('/prepare', authMiddleware, async (req, res, next) => {
       });
     }
 
-    // Get token data
-    const tokenData = await firestoreService.getToken(tokenId);
+    // Get token data from blockchain
     const blockchainData = await blockchainService.getTokenData(tokenId);
+
+    // Get metadata from Arweave (for token name)
+    let metadata = null;
+    if (blockchainData?.uri) {
+      try {
+        metadata = await arweaveService.fetchMetadata(blockchainData.uri);
+      } catch (e) {
+        console.warn(`[License] Could not fetch Arweave metadata for token ${tokenId}`);
+      }
+    }
 
     // Create license document and upload to Arweave
     const result = await licenseService.createLicense({
       tokenId,
-      tokenName: tokenData?.name || `NFTmarket #${tokenId}`,
+      tokenName: metadata?.name || `NFTmarket #${tokenId}`,
       licenseType,
       creator: blockchainData.creator,
       seller: sellerAddress,
@@ -64,18 +77,6 @@ router.post('/prepare', authMiddleware, async (req, res, next) => {
       imageHash: blockchainData.imageHash,
       salePrice: price,
       timestamp: Date.now()
-    });
-
-    // Store license info in Firestore for later retrieval
-    await firestoreService.storeLicenseInfo(tokenId, {
-      arweaveTxId: result.arweaveTxId,
-      licenseHash: result.licenseHash,
-      licenseType,
-      licenseTypeName: result.licenseTypeName,
-      seller: sellerAddress,
-      price,
-      preparedAt: new Date().toISOString(),
-      status: 'prepared'
     });
 
     res.json({
@@ -94,55 +95,45 @@ router.post('/prepare', authMiddleware, async (req, res, next) => {
 
 /**
  * POST /api/license/finalize
- * Finalize a license document after sale (update with buyer info)
+ * Finalize a license document after sale (create final version with buyer info)
  * Called after a successful purchase
  *
- * Body: { tokenId, buyer, transactionHash }
+ * Body: { tokenId, buyer, transactionHash, licenseType }
  */
 router.post('/finalize', async (req, res, next) => {
   try {
-    const { tokenId, buyer, transactionHash } = req.body;
+    const { tokenId, buyer, transactionHash, licenseType } = req.body;
 
-    if (tokenId === undefined || !buyer) {
+    if (tokenId === undefined || !buyer || licenseType === undefined) {
       return res.status(400).json({
-        error: 'Missing required fields: tokenId, buyer'
+        error: 'Missing required fields: tokenId, buyer, licenseType'
       });
     }
 
-    // Get the prepared license info
-    const licenseInfo = await firestoreService.getLicenseInfo(tokenId);
-    if (!licenseInfo || licenseInfo.status !== 'prepared') {
-      return res.status(404).json({
-        error: 'No prepared license found for this token'
-      });
-    }
-
-    // Get token data for the final license
-    const tokenData = await firestoreService.getToken(tokenId);
+    // Get token data from blockchain
     const blockchainData = await blockchainService.getTokenData(tokenId);
+
+    // Get metadata from Arweave (for token name)
+    let metadata = null;
+    if (blockchainData?.uri) {
+      try {
+        metadata = await arweaveService.fetchMetadata(blockchainData.uri);
+      } catch (e) {
+        console.warn(`[License] Could not fetch Arweave metadata for token ${tokenId}`);
+      }
+    }
 
     // Create the final license document with actual buyer
     const result = await licenseService.createLicense({
       tokenId,
-      tokenName: tokenData?.name || `NFTmarket #${tokenId}`,
-      licenseType: licenseInfo.licenseType,
+      tokenName: metadata?.name || `NFTmarket #${tokenId}`,
+      licenseType,
       creator: blockchainData.creator,
-      seller: licenseInfo.seller,
+      seller: blockchainData.copyrightOwner, // Previous copyright owner
       buyer,
       imageHash: blockchainData.imageHash,
-      salePrice: licenseInfo.price,
-      timestamp: Date.now()
-    });
-
-    // Update license info in Firestore
-    await firestoreService.storeLicenseInfo(tokenId, {
-      ...licenseInfo,
-      finalArweaveTxId: result.arweaveTxId,
-      finalLicenseHash: result.licenseHash,
-      buyer,
       transactionHash,
-      finalizedAt: new Date().toISOString(),
-      status: 'finalized'
+      timestamp: Date.now()
     });
 
     res.json({
@@ -159,33 +150,40 @@ router.post('/finalize', async (req, res, next) => {
 
 /**
  * GET /api/license/:tokenId
- * Get license information for a token
+ * Get license information for a token from blockchain + Arweave
  */
 router.get('/:tokenId', async (req, res, next) => {
   try {
     const { tokenId } = req.params;
 
-    const licenseInfo = await firestoreService.getLicenseInfo(tokenId);
-    if (!licenseInfo) {
+    // Get token data from blockchain (has license type)
+    const blockchainData = await blockchainService.getTokenData(tokenId);
+    if (!blockchainData) {
       return res.status(404).json({
-        error: 'No license found for this token'
+        error: 'Token not found'
       });
     }
 
-    // Get the Arweave URL
-    const txId = licenseInfo.finalArweaveTxId || licenseInfo.arweaveTxId;
-    const arweaveUrl = arweaveService.getGatewayUrl(txId);
+    // Get listing if active (has license hash)
+    const listing = await blockchainService.getListing(tokenId);
+
+    // License type names
+    const licenseTypeNames = ['Display', 'Commercial', 'Transfer'];
 
     res.json({
       tokenId: Number(tokenId),
-      licenseType: licenseInfo.licenseType,
-      licenseTypeName: licenseInfo.licenseTypeName,
-      licenseHash: licenseInfo.finalLicenseHash || licenseInfo.licenseHash,
-      arweaveTxId: txId,
-      arweaveUrl,
-      seller: licenseInfo.seller,
-      buyer: licenseInfo.buyer,
-      status: licenseInfo.status
+      ownerLicense: blockchainData.ownerLicense,
+      ownerLicenseName: licenseTypeNames[blockchainData.ownerLicense] || 'Unknown',
+      creator: blockchainData.creator,
+      copyrightOwner: blockchainData.copyrightOwner,
+      listing: listing.active ? {
+        licenseType: listing.licenseType,
+        licenseTypeName: licenseTypeNames[listing.licenseType] || 'Unknown',
+        licenseHash: listing.licenseHash,
+        price: listing.price,
+        priceEth: (Number(listing.price) / 1e18).toFixed(4),
+        seller: listing.seller
+      } : null
     });
   } catch (error) {
     next(error);
@@ -199,34 +197,35 @@ router.get('/:tokenId', async (req, res, next) => {
 router.get('/:tokenId/verify', async (req, res, next) => {
   try {
     const { tokenId } = req.params;
+    const { arweaveTxId } = req.query;
 
-    // Get license info from Firestore
-    const licenseInfo = await firestoreService.getLicenseInfo(tokenId);
-    if (!licenseInfo) {
-      return res.status(404).json({
-        error: 'No license found for this token'
+    if (!arweaveTxId) {
+      return res.status(400).json({
+        error: 'arweaveTxId query parameter required'
       });
     }
 
-    // Get on-chain license hash from the listing (if active)
+    // Get on-chain license hash from listing
     const listing = await blockchainService.getListing(tokenId);
-    const onChainHash = listing.active ? listing.licenseHash : licenseInfo.licenseHash;
+    if (!listing.active) {
+      return res.status(404).json({
+        error: 'Token is not currently listed'
+      });
+    }
 
     // Verify the Arweave document matches the hash
-    const txId = licenseInfo.finalArweaveTxId || licenseInfo.arweaveTxId;
-    const verification = await licenseService.verifyLicense(txId, onChainHash);
+    const verification = await licenseService.verifyLicense(arweaveTxId, listing.licenseHash);
 
     // Check Arweave confirmation status
-    const arweaveStatus = await arweaveService.getStatus(txId);
+    const arweaveStatus = await arweaveService.getStatus(arweaveTxId);
 
     res.json({
       valid: verification.valid,
       tokenId: Number(tokenId),
-      arweaveTxId: txId,
+      arweaveTxId,
       arweaveConfirmed: arweaveStatus.confirmed,
       arweaveBlockHeight: arweaveStatus.blockHeight,
-      onChainHash,
-      licenseType: licenseInfo.licenseTypeName,
+      onChainHash: listing.licenseHash,
       error: verification.error || null
     });
   } catch (error) {
@@ -236,21 +235,19 @@ router.get('/:tokenId/verify', async (req, res, next) => {
 
 /**
  * GET /api/license/:tokenId/document
- * Fetch the actual license document from Arweave
+ * Fetch a license document from Arweave
  */
 router.get('/:tokenId/document', async (req, res, next) => {
   try {
-    const { tokenId } = req.params;
+    const { arweaveTxId } = req.query;
 
-    const licenseInfo = await firestoreService.getLicenseInfo(tokenId);
-    if (!licenseInfo) {
-      return res.status(404).json({
-        error: 'No license found for this token'
+    if (!arweaveTxId) {
+      return res.status(400).json({
+        error: 'arweaveTxId query parameter required'
       });
     }
 
-    const txId = licenseInfo.finalArweaveTxId || licenseInfo.arweaveTxId;
-    const data = await arweaveService.fetchData(txId);
+    const data = await arweaveService.fetchData(arweaveTxId);
     const license = JSON.parse(data.toString());
 
     res.json(license);

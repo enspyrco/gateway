@@ -15,38 +15,9 @@ const storageService = require('../services/storage');
 const blockchainService = require('../services/blockchain');
 const firestoreService = require('../services/firestore');
 
-/**
- * Simple mutex for serializing mint operations
- * Ensures token ID prediction is accurate by preventing concurrent mints
- */
-class MintMutex {
-  constructor() {
-    this.locked = false;
-    this.queue = [];
-  }
-
-  async acquire() {
-    return new Promise((resolve) => {
-      if (!this.locked) {
-        this.locked = true;
-        resolve();
-      } else {
-        this.queue.push(resolve);
-      }
-    });
-  }
-
-  release() {
-    if (this.queue.length > 0) {
-      const next = this.queue.shift();
-      next();
-    } else {
-      this.locked = false;
-    }
-  }
-}
-
-const mintMutex = new MintMutex();
+// Note: Token ID reservation is now handled by the smart contract
+// The old mutex approach was flawed - it only protected this single backend instance
+// The contract's reserveTokenId() guarantees the token ID atomically on-chain
 
 
 function createRouter(upload) {
@@ -59,13 +30,15 @@ function createRouter(upload) {
    * - image: File (required)
    * - name: string (required)
    * - description: string (optional)
+   * - licenseType: 'display' | 'commercial' | 'transfer' (optional)
    *
    * Returns:
    * - tokenId: number
    * - transactionHash: string
-   * - encryptedBlobUri: string
-   * - previewUri: string
-   * - metadataUri: string
+   * - storagePath: string (Firebase Storage path for encrypted original)
+   * - ipfsUri: string (IPFS URI for watermarked image)
+   * - metadataUri: string (Arweave URI for metadata)
+   * - imageHash: string (SHA-256 of watermarked image)
    */
   router.post('/', upload.single('image'), async (req, res, next) => {
     const mintId = uuidv4();
@@ -100,58 +73,48 @@ function createRouter(upload) {
         });
       }
 
-      // Acquire mutex to prevent race conditions in token ID prediction
-      // This ensures only one mint can predict + mint at a time
-      console.log(`[${mintId}] Waiting for mint lock...`);
-      await mintMutex.acquire();
-      console.log(`[${mintId}] Acquired mint lock`);
+      // All mint variables declared here
+      let reservedTokenId, tokenId, transactionHash, watermarkId, imageHash;
+      let keyId, storagePath, ipfsUri, metadataUri, licenseHash;
 
-      // All mint variables declared here so they're accessible after try/finally
-      let expectedTokenId, tokenId, transactionHash, watermarkId, imageHash;
-      let keyId, storagePath, previewUri, watermarkedStoragePath, metadataUri, licenseHash;
+      // Step 1: Reserve token ID on-chain (guarantees this ID is ours)
+      // This is atomic - no one else can get this ID
+      console.log(`[${mintId}] Reserving token ID on-chain...`);
+      const reservation = await blockchainService.reserveTokenId();
+      reservedTokenId = reservation.tokenId;
+      console.log(`[${mintId}] Reserved token ID: ${reservedTokenId} (expires: ${new Date(reservation.expiry * 1000).toISOString()})`);
 
-      try {
-        // Step 1: Predict token ID (need ID before minting for watermark)
-        // Token IDs are sequential, so next ID = currentSupply
-        const currentSupply = await blockchainService.totalSupply();
-        expectedTokenId = currentSupply;
-        console.log(`[${mintId}] Predicted token ID: ${expectedTokenId}`);
-
-      // Step 2: Apply watermark with wallet + predicted tokenId
+      // Step 2: Apply watermark with wallet + reserved tokenId
       console.log(`[${mintId}] Applying watermark...`);
-      watermarkId = `${req.wallet}:${expectedTokenId}`;
+      watermarkId = `${req.wallet}:${reservedTokenId}`;
       const watermarkedBuffer = await watermarkService.applyWatermark(
         imageBuffer,
         req.wallet,
-        expectedTokenId
+        reservedTokenId
       );
 
       // Step 3: Calculate image hash of watermarked image (for integrity verification)
       imageHash = crypto.createHash('sha256').update(watermarkedBuffer).digest('hex');
 
-      // Step 4: Generate preview from watermarked image
-      console.log(`[${mintId}] Generating preview...`);
-      const previewBuffer = await watermarkService.generatePreview(watermarkedBuffer);
-
-      // Step 5: Encrypt original and upload
-      console.log(`[${mintId}] Encrypting original...`);
+      // Step 4: Encrypt ORIGINAL image (not watermarked) for authorized access
+      console.log(`[${mintId}] Encrypting original image...`);
       const encryptResult = await encryptionService.encrypt(
-        watermarkedBuffer,
+        imageBuffer,  // Original image, not watermarked
         mintId
       );
       const encryptedBuffer = encryptResult.encryptedBuffer;
       keyId = encryptResult.keyId;
 
-      // Preview goes to IPFS (public)
-      // Encrypted original goes to Firebase Storage (for watermark detection)
-      // Watermarked image goes to Firebase Storage (backup in case IPFS fails)
+      // Upload in parallel:
+      // - IPFS: Full watermarked image (public)
+      // - Firebase Storage: Encrypted original (private, for authorized decryption)
       console.log(`[${mintId}] Uploading to IPFS and Firebase Storage...`);
-      [storagePath, previewUri, watermarkedStoragePath] = await Promise.all([
+      [storagePath, ipfsUri] = await Promise.all([
         storageService.uploadEncrypted(encryptedBuffer, mintId),
-        ipfsService.upload(previewBuffer, `${mintId}-preview.jpg`),
-        storageService.uploadWatermarked(watermarkedBuffer, mintId)
+        ipfsService.upload(watermarkedBuffer, `${mintId}-watermarked.png`)
       ]);
-      console.log(`[${mintId}] Watermarked image backed up to Firebase Storage: ${watermarkedStoragePath}`);
+      console.log(`[${mintId}] Watermarked image uploaded to IPFS: ${ipfsUri}`);
+      console.log(`[${mintId}] Encrypted original uploaded to Firebase Storage: ${storagePath}`);
 
       // Step 6: Generate license hash
       licenseHash = null;
@@ -162,13 +125,13 @@ function createRouter(upload) {
         console.log(`[${mintId}] Generated license hash for ${licenseType} license`);
       }
 
-      // Step 7: Create and upload metadata to Arweave (permanent storage)
+      // Step 6: Create and upload metadata to Arweave (permanent storage)
       // Note: encrypted_original is NOT in metadata - it's private in Firebase Storage
       console.log(`[${mintId}] Creating metadata...`);
       const metadata = {
         name,
         description: description || '',
-        image: previewUri,
+        image: ipfsUri,  // Full watermarked image on IPFS
         attributes: [
           { trait_type: 'Watermark ID', value: watermarkId },
           { trait_type: 'Creator', value: req.wallet },
@@ -184,60 +147,37 @@ function createRouter(upload) {
 
       console.log(`[${mintId}] Uploading metadata to Arweave...`);
       const { txId: metadataTxId } = await arweaveService.uploadJson(metadata, {
-        'Token-ID': String(expectedTokenId),
+        'Token-ID': String(reservedTokenId),
         'Creator': req.wallet,
         'Content-Type': 'application/json'
       });
       metadataUri = `ar://${metadataTxId}`;
 
-      // Step 8: Mint NFT on-chain
-      // Note: storagePath is stored on-chain as reference to encrypted original
-      // Actual access is controlled by our service + key server
-      console.log(`[${mintId}] Minting NFT...`);
+      // Step 8: Mint NFT on-chain with reserved token ID
+      // The reservation guarantees this ID is ours - no verification needed
+      // Note: storagePath is NOT sent to blockchain (V2) - stored in Firestore only
+      console.log(`[${mintId}] Minting NFT with reserved token ID ${reservedTokenId}...`);
       const licenseTypeMap = { display: 0, commercial: 1, transfer: 2 };
       const licenseTypeNum = licenseType ? licenseTypeMap[licenseType] : 0;
       const mintResult = await blockchainService.mint(
+        reservedTokenId,
         req.wallet,
         metadataUri,
         licenseTypeNum,
         `0x${imageHash}`,
         licenseHash ? `0x${licenseHash}` : '0x' + '0'.repeat(64),
-        storagePath
+        ipfsUri
       );
       tokenId = mintResult.tokenId;
       transactionHash = mintResult.transactionHash;
 
-      // Verify we got the expected token ID
-      if (tokenId !== expectedTokenId) {
-        // This should never happen with the mutex in place
-        console.error(`[${mintId}] Token ID mismatch! Expected ${expectedTokenId}, got ${tokenId}. This indicates a bug.`);
-      }
-
-      } finally {
-        // Always release the mutex
-        mintMutex.release();
-        console.log(`[${mintId}] Released mint lock`);
-      }
-
-      // Step 9: Store in Firestore
-      console.log(`[${mintId}] Storing in Firestore...`);
-      await firestoreService.createToken({
-        tokenId,
-        mintId,
-        wallet: req.wallet,
-        name,
-        description,
-        imageHash,
-        watermarkId,
-        keyId,
+      // Step 8: Store encrypted original reference in Firestore
+      // (Only the storage path and key - all other data is on blockchain/Arweave)
+      console.log(`[${mintId}] Storing encrypted ref in Firestore...`);
+      await firestoreService.storeEncryptedRef(tokenId, {
         storagePath,  // Firebase Storage path for encrypted original
-        watermarkedStoragePath,  // Firebase Storage backup of watermarked image
-        previewUri,
-        metadataUri,
-        transactionHash,
-        licenseType: licenseType || null,
-        licenseHash: licenseHash || null,
-        createdAt: new Date()
+        keyId,        // KMS key reference for decryption
+        imageHash,    // For verification
       });
 
       console.log(`[${mintId}] Mint complete! Token ID: ${tokenId}`);
@@ -248,7 +188,7 @@ function createRouter(upload) {
         transactionHash,
         watermarkId,
         storagePath,  // Firebase Storage path (access controlled by service)
-        previewUri,
+        ipfsUri,      // IPFS URI for watermarked image (public)
         metadataUri,
         imageHash,
         ...(licenseHash ? { licenseHash } : {})

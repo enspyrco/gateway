@@ -44,7 +44,7 @@ final router = GoRouter(
       path: '/gallery/:address',
       builder: (context, state) {
         final address = state.pathParameters['address'];
-        return GalleryPage(address: address);
+        return GalleryPage(key: ValueKey(address), address: address);
       },
     ),
     GoRoute(

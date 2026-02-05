@@ -223,11 +223,24 @@ async function verifyHash(txId, expectedHash) {
   return actualHash.toLowerCase() === expectedHash.toLowerCase();
 }
 
+/**
+ * Fetch JSON metadata from Arweave
+ * @param {string} uri - Arweave URI (ar://txId or just txId)
+ * @returns {Promise<Object>} - Parsed JSON metadata
+ */
+async function fetchMetadata(uri) {
+  // Extract txId from URI (handles ar://txId format)
+  const txId = uri.startsWith('ar://') ? uri.slice(5) : uri;
+  const data = await fetchData(txId);
+  return JSON.parse(data.toString('utf8'));
+}
+
 module.exports = {
   upload,
   uploadJson,
   getGatewayUrl,
   fetchData,
+  fetchMetadata,
   getStatus,
   getBalance,
   estimateCost,

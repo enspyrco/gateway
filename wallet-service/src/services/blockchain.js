@@ -35,8 +35,8 @@ function getWallet(privateKey) {
 async function sendTransaction(privateKey, to, data, value = '0') {
   const wallet = getWallet(privateKey);
 
-  // Get the latest nonce explicitly to avoid stale cache issues
-  const nonce = await getProvider().getTransactionCount(wallet.address, 'latest');
+  // Get nonce from blockchain - use 'pending' to include mempool transactions
+  const nonce = await getProvider().getTransactionCount(wallet.address, 'pending');
 
   const tx = {
     to,

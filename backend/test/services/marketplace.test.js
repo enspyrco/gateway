@@ -17,12 +17,15 @@ describe('Marketplace (Mock Mode)', () => {
 
   async function mintToken(owner) {
     mintCounter++;
+    const reservation = await blockchainService.reserveTokenId();
     return blockchainService.mint(
+      reservation.tokenId,
       owner,
       'ipfs://metadata',
       0, // licenseType: Display
       '0x' + mintCounter.toString(16).padStart(64, '0'),
       '0x' + 'b'.repeat(64), // licenseHash
+      'ipfs://watermarked',
       'ipfs://encrypted'
     );
   }

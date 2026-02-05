@@ -48,8 +48,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Start server
-app.listen(PORT, () => {
+// Start server with proper keep-alive settings
+const server = app.listen(PORT, () => {
   console.log(`\nWallet Service running on port ${PORT}`);
   console.log(`  - Health: http://localhost:${PORT}/health`);
   console.log(`  - Accounts: http://localhost:${PORT}/api/accounts`);
@@ -59,3 +59,24 @@ app.listen(PORT, () => {
   console.log(`\nRPC URL: ${process.env.RPC_URL || 'http://localhost:8545'}`);
   console.log(`Chain ID: ${process.env.CHAIN_ID || '31337'}`);
 });
+
+// Configure keep-alive to avoid connection issues
+server.keepAliveTimeout = 65000;
+server.headersTimeout = 66000;
+
+// Graceful shutdown - properly close connections when killed
+function shutdown(signal) {
+  console.log(`\n${signal} received, shutting down gracefully...`);
+  server.close(() => {
+    console.log('Server closed');
+    process.exit(0);
+  });
+  // Force exit after 5 seconds if connections don't close
+  setTimeout(() => {
+    console.log('Forcing exit');
+    process.exit(0);
+  }, 5000);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

@@ -10,9 +10,12 @@ const PINATA_JWT = process.env.PINATA_JWT;
 const PINATA_GATEWAY = process.env.PINATA_GATEWAY || "gateway.pinata.cloud";
 const USE_MOCK_IPFS = process.env.USE_MOCK_IPFS === "true";
 
-// Persistent store for mock mode
+// Persistent store for mock mode and upload cache
 const persistence = require('./mock-persistence');
 const mockStore = USE_MOCK_IPFS ? persistence.loadMap('ipfs') : new Map();
+
+// Cache for Pinata uploads - avoid re-uploading same content
+const uploadCache = persistence.loadMap('ipfs-cache');
 
 // Auto-save on changes
 function saveMockStore() {
@@ -43,12 +46,22 @@ function getPinata() {
  * @returns {Promise<string>} - IPFS URI (ipfs://...)
  */
 async function upload(data, filename) {
+  // Compute content hash for caching
+  const contentHash = crypto.createHash("sha256").update(data).digest("hex");
+
   if (USE_MOCK_IPFS) {
-    const hash = "Qm" + crypto.createHash("sha256").update(data).digest("hex").slice(0, 44);
+    const hash = "Qm" + contentHash.slice(0, 44);
     mockStore.set(hash, data);
     saveMockStore();
     console.log(`[MOCK IPFS] Stored ${filename} as ${hash}`);
     return `ipfs://${hash}`;
+  }
+
+  // Check cache first - same content = same CID
+  const cached = uploadCache.get(contentHash);
+  if (cached) {
+    console.log(`[IPFS] Cache hit for ${filename}`);
+    return cached;
   }
 
   const client = getPinata();
@@ -58,9 +71,15 @@ async function upload(data, filename) {
     type: getMimeType(filename),
   });
 
-  const result = await client.upload.file(file);
+  const result = await client.upload.public.file(file);
+  const uri = `ipfs://${result.cid}`;
 
-  return `ipfs://${result.IpfsHash}`;
+  // Cache the result
+  uploadCache.set(contentHash, uri);
+  persistence.saveMap('ipfs-cache', uploadCache);
+  console.log(`[IPFS] Uploaded ${filename} -> ${result.cid}`);
+
+  return uri;
 }
 
 /**
@@ -81,13 +100,9 @@ async function uploadJson(json, filename) {
 
   const client = getPinata();
 
-  const result = await client.upload.json(json, {
-    metadata: {
-      name: filename,
-    },
-  });
+  const result = await client.upload.public.json(json);
 
-  return `ipfs://${result.IpfsHash}`;
+  return `ipfs://${result.cid}`;
 }
 
 /**
@@ -101,12 +116,9 @@ function getGatewayUrl(ipfsUri) {
   }
   const hash = ipfsUri.replace("ipfs://", "");
 
-  // In mock mode, serve from local backend
-  if (USE_MOCK_IPFS) {
-    return `http://localhost:3000/ipfs/${hash}`;
-  }
-
-  return `https://${PINATA_GATEWAY}/ipfs/${hash}`;
+  // Always serve through local backend proxy to avoid CORS issues
+  // The /ipfs/:hash route fetches from Pinata (or mock) and serves to client
+  return `http://localhost:3000/ipfs/${hash}`;
 }
 
 /**
@@ -126,8 +138,8 @@ async function fetch(ipfsUri) {
   }
 
   const client = getPinata();
-  const response = await client.gateways.get(hash);
-  return Buffer.from(await response.arrayBuffer());
+  const response = await client.gateways.public.get(hash);
+  return Buffer.from(await response.data.arrayBuffer());
 }
 
 /**

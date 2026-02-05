@@ -1,13 +1,18 @@
 /**
  * Verify API routes (public, no auth required)
  * GET /api/verify/:tokenId - Get public verification info
+ *
+ * Storage architecture:
+ * - Token data from blockchain
+ * - Metadata (name, description) from Arweave
+ * - Image from IPFS
  */
 
 const express = require('express');
 const router = express.Router();
 
 const blockchainService = require('../services/blockchain');
-const firestoreService = require('../services/firestore');
+const arweaveService = require('../services/arweave');
 const ipfsService = require('../services/ipfs');
 
 /**
@@ -36,54 +41,44 @@ router.get('/:tokenId', async (req, res, next) => {
       });
     }
 
-    // Get off-chain metadata
-    const firestoreData = await firestoreService.getToken(tokenId);
+    // Get metadata from Arweave (name, description)
+    let metadata = null;
+    if (tokenData.uri) {
+      try {
+        metadata = await arweaveService.fetchMetadata(tokenData.uri);
+      } catch (e) {
+        console.warn(`[Verify] Could not fetch Arweave metadata for token ${tokenId}`);
+      }
+    }
 
-    // Get preview URL
-    const previewUrl = firestoreData?.previewUri
-      ? ipfsService.getGatewayUrl(firestoreData.previewUri)
-      : null;
+    // Get image URL from blockchain ipfsUri
+    const imageUrl = tokenData.ipfsUri ? ipfsService.getGatewayUrl(tokenData.ipfsUri) : null;
+
+    // Watermark ID format is "creatorAddress:tokenId"
+    const watermarkId = `${tokenData.creator}:${tokenId}`;
 
     res.json({
       tokenId: Number(tokenId),
-      name: firestoreData?.name || `NFTmarket #${tokenId}`,
-      description: firestoreData?.description || '',
-      previewUrl,
+      name: metadata?.name || `NFTmarket #${tokenId}`,
+      description: metadata?.description || '',
+      imageUrl,
+      previewUrl: imageUrl, // backwards compatibility
       creator: tokenData.creator,
       currentOwner: tokenData.currentOwner,
-      mintedAt: tokenData.mintedAt.toISOString(),
-      watermarkId: firestoreData?.watermarkId || null,
-      transactionHash: firestoreData?.transactionHash || null,
+      copyrightOwner: tokenData.copyrightOwner,
+      mintedAt: tokenData.mintedAt instanceof Date
+        ? tokenData.mintedAt.toISOString()
+        : tokenData.mintedAt,
+      watermarkId,
       verified: true,
       contractAddress: process.env.NFTMARKET_CONTRACT_ADDRESS,
       chain: 'Polygon',
-      explorerUrl: `https://polygonscan.com/token/${process.env.NFTMARKET_CONTRACT_ADDRESS}?a=${tokenId}`
-    });
-
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * GET /api/verify/:tokenId/history
- * Get detection history for a token
- */
-router.get('/:tokenId/history', async (req, res, next) => {
-  try {
-    const { tokenId } = req.params;
-    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
-
-    const history = await firestoreService.getDetectionHistory(tokenId, limit);
-
-    res.json({
-      tokenId: Number(tokenId),
-      detections: history.map(d => ({
-        id: d.id,
-        detected: d.result,
-        confidence: d.confidence,
-        timestamp: d.timestamp?.toDate?.()?.toISOString() || null
-      }))
+      explorerUrl: `https://polygonscan.com/token/${process.env.NFTMARKET_CONTRACT_ADDRESS}?a=${tokenId}`,
+      // Provenance info
+      isOriginal: tokenData.isOriginal,
+      parentToken: tokenData.parentToken,
+      originalToken: tokenData.originalToken,
+      ownerLicense: ['display', 'commercial', 'transfer'][tokenData.ownerLicense] || 'unknown'
     });
 
   } catch (error) {

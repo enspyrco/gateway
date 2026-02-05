@@ -30,11 +30,11 @@ class HomePage extends StatelessWidget {
                   const SizedBox(height: 48),
                   _buildHero(context),
                   const SizedBox(height: 64),
-                  _buildFeatures(context),
+                  _buildActionCards(context),
+                  const SizedBox(height: 64),
+                  _buildTechFeatures(context),
                   const SizedBox(height: 64),
                   _buildHowItWorks(context),
-                  const SizedBox(height: 64),
-                  _buildCTA(context),
                   const SizedBox(height: 48),
                 ],
               ),
@@ -92,35 +92,83 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildFeatures(BuildContext context) {
-    return Wrap(
-      spacing: 24,
-      runSpacing: 24,
-      alignment: WrapAlignment.center,
+  Widget _buildActionCards(BuildContext context) {
+    return Column(
       children: [
-        _FeatureCard(
-          icon: Icons.auto_awesome,
-          title: 'AI Art Generation',
-          description:
-              'Create stunning artwork with AI, then mint it as an NFT.',
-          actionLabel: 'Generate Art',
-          onAction: () => context.go('/generate'),
+        Text(
+          'Get Started',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
         ),
-        _FeatureCard(
-          icon: Icons.fingerprint,
-          title: 'Invisible Watermark',
-          description:
-              'Survives print, scan, and screenshot. Your proof of origin.',
+        const SizedBox(height: 24),
+        Wrap(
+          spacing: 24,
+          runSpacing: 24,
+          alignment: WrapAlignment.center,
+          children: [
+            _FeatureCard(
+              icon: Icons.auto_awesome,
+              title: 'Generate AI Art',
+              description:
+                  'Create stunning artwork with AI, then mint it as an NFT.',
+              actionLabel: 'Generate',
+              onAction: () => context.go('/generate'),
+            ),
+            _FeatureCard(
+              icon: Icons.storefront,
+              title: 'Marketplace',
+              description:
+                  'Buy and sell AI artwork with clear licensing terms.',
+              actionLabel: 'Browse',
+              onAction: () => context.go('/marketplace'),
+            ),
+            _FeatureCard(
+              icon: Icons.collections,
+              title: 'Gallery',
+              description:
+                  'Explore collections from artists around the world.',
+              actionLabel: 'View',
+              onAction: () => context.go('/gallery'),
+            ),
+          ],
         ),
-        _FeatureCard(
-          icon: Icons.gavel,
-          title: 'Clear Licensing',
-          description: 'Choose display, commercial, or full transfer rights.',
+      ],
+    );
+  }
+
+  Widget _buildTechFeatures(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          'How We Protect Your Art',
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
         ),
-        _FeatureCard(
-          icon: Icons.verified,
-          title: 'NFT Provenance',
-          description: 'On-chain record of ownership and transfer history.',
+        const SizedBox(height: 24),
+        Wrap(
+          spacing: 24,
+          runSpacing: 24,
+          alignment: WrapAlignment.center,
+          children: [
+            _FeatureCard(
+              icon: Icons.fingerprint,
+              title: 'Invisible Watermark',
+              description:
+                  'Survives print, scan, and screenshot. Your proof of origin.',
+            ),
+            _FeatureCard(
+              icon: Icons.gavel,
+              title: 'Clear Licensing',
+              description: 'Choose display, commercial, or full transfer rights.',
+            ),
+            _FeatureCard(
+              icon: Icons.verified,
+              title: 'NFT Provenance',
+              description: 'On-chain record of ownership and transfer history.',
+            ),
+          ],
         ),
       ],
     );
@@ -163,51 +211,6 @@ class HomePage extends StatelessWidget {
     );
   }
 
-  Widget _buildCTA(BuildContext context) {
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          children: [
-            Text(
-              'Ready to protect your art?',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              alignment: WrapAlignment.center,
-              children: [
-                ElevatedButton.icon(
-                  onPressed: () => context.go('/generate'),
-                  icon: const Icon(Icons.auto_awesome),
-                  label: const Text('Generate AI Art'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).colorScheme.primary,
-                    foregroundColor: Theme.of(context).colorScheme.onPrimary,
-                  ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: () => context.go('/marketplace'),
-                  icon: const Icon(Icons.storefront),
-                  label: const Text('Browse Marketplace'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-                OutlinedButton(
-                  onPressed: () => context.go('/gallery'),
-                  child: const Text('View Gallery'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _FeatureCard extends StatelessWidget {

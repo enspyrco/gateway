@@ -62,6 +62,15 @@ class _GalleryPageState extends State<GalleryPage> {
   }
 
   @override
+  void didUpdateWidget(GalleryPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Reload data when navigating to a different gallery
+    if (oldWidget.address != widget.address) {
+      _loadData();
+    }
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final wallet = context.read<WalletProvider>();
@@ -479,10 +488,15 @@ class _TokenCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final name = token['name'] ?? 'NFT #${token['tokenId']}';
-    final previewUrl = token['previewUrl'];
-    final licenseType = token['licenseType'] ?? 'unknown';
+    // Use imageUrl from blockchain IPFS URI, fallback to previewUrl for backwards compatibility
+    final imageUrl = token['imageUrl'] ?? token['previewUrl'];
+    // ownerLicense shows the current owner's license level
+    final ownerLicense = token['ownerLicense'] ?? token['licenseType'] ?? 'unknown';
     final creator = token['creator'] ?? '';
     final creatorName = _formatAddress(creator, accounts);
+    final copyrightOwner = token['copyrightOwner'] ?? creator;
+    final copyrightOwnerName = _formatAddress(copyrightOwner, accounts);
+    final isOriginal = token['isOriginal'] ?? true;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -492,13 +506,38 @@ class _TokenCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: previewUrl != null
-                  ? Image.network(
-                      previewUrl,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _placeholder(),
-                    )
-                  : _placeholder(),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  imageUrl != null
+                      ? Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => _placeholder(),
+                        )
+                      : _placeholder(),
+                  // Show badge for original vs license
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: isOriginal ? Colors.green : Colors.blue,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        isOriginal ? 'Original' : 'License',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
             Padding(
               padding: const EdgeInsets.all(12),
@@ -516,16 +555,13 @@ class _TokenCard extends StatelessWidget {
                     padding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .primary
-                          .withValues(alpha: 0.1),
+                      color: _getLicenseColor(ownerLicense).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      _formatLicenseType(licenseType),
+                      _formatLicenseType(ownerLicense),
                       style: TextStyle(
-                        color: Theme.of(context).colorScheme.primary,
+                        color: _getLicenseColor(ownerLicense),
                         fontWeight: FontWeight.w500,
                         fontSize: 12,
                       ),
@@ -539,6 +575,14 @@ class _TokenCard extends StatelessWidget {
                       fontSize: 11,
                     ),
                   ),
+                  if (copyrightOwner != creator)
+                    Text(
+                      'Copyright: $copyrightOwnerName',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 11,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -548,8 +592,21 @@ class _TokenCard extends StatelessWidget {
     );
   }
 
+  Color _getLicenseColor(String type) {
+    switch (type.toLowerCase()) {
+      case 'display':
+        return Colors.blue;
+      case 'commercial':
+        return Colors.orange;
+      case 'transfer':
+        return Colors.purple;
+      default:
+        return Colors.grey;
+    }
+  }
+
   String _formatLicenseType(String type) {
-    switch (type) {
+    switch (type.toLowerCase()) {
       case 'display':
         return 'Display License';
       case 'commercial':

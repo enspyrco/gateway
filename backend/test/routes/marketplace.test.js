@@ -47,12 +47,15 @@ describe('Marketplace Route', () => {
   });
 
   async function mintToken(owner) {
+    const reservation = await blockchainService.reserveTokenId();
     return blockchainService.mint(
+      reservation.tokenId,
       owner,
       'ipfs://metadata',
       0,
       '0x' + crypto.randomBytes(32).toString('hex'),
       '0x' + 'b'.repeat(64),
+      'ipfs://watermarked',
       'ipfs://encrypted'
     );
   }

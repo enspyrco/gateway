@@ -80,7 +80,7 @@ class Token {
       tokenId: json['tokenId'] as int,
       name: json['name'] as String? ?? 'Untitled',
       description: json['description'] as String? ?? '',
-      previewUrl: json['previewUrl'] as String?,
+      previewUrl: json['imageUrl'] as String? ?? json['previewUrl'] as String?,
       creator: json['creator'] as String,
       currentOwner: json['currentOwner'] as String,
       mintedAt: DateTime.parse(json['mintedAt'] as String),
@@ -139,7 +139,7 @@ class MintResult {
       transactionHash: json['transactionHash'] as String?,
       watermarkId: json['watermarkId'] as String?,
       encryptedBlobUri: json['encryptedBlobUri'] as String?,
-      previewUri: json['previewUri'] as String?,
+      previewUri: json['ipfsUri'] as String? ?? json['previewUri'] as String?,
       metadataUri: json['metadataUri'] as String?,
       error: json['error'] as String?,
     );

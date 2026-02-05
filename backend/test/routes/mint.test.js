@@ -194,7 +194,7 @@ describe('Mint Route', () => {
       expect(res.body).toHaveProperty('transactionHash');
       expect(res.body).toHaveProperty('watermarkId');
       expect(res.body).toHaveProperty('storagePath');
-      expect(res.body).toHaveProperty('previewUri');
+      expect(res.body).toHaveProperty('ipfsUri');
       expect(res.body).toHaveProperty('metadataUri');
       expect(res.body).toHaveProperty('imageHash');
       expect(res.body).toHaveProperty('licenseHash');

@@ -22,15 +22,32 @@ const LicenseType = {
   Transfer: 2
 };
 
-// Contract ABI (updated for bilateral signatures and license tracking)
+// Contract ABI (updated for V2 with authority system, no encryptedBlobUri)
 const NFTMARKET_ABI = [
-  'function mint(address to, string uri, bytes32 imageHash, string encryptedBlobUri) returns (uint256)',
+  // Authority management
+  'function registerAuthority(address admin, uint96 feeBps) returns (uint256)',
+  'function deactivateAuthority(uint256 authorityId)',
+  'function updateAuthorityFee(uint256 authorityId, uint96 newFeeBps)',
+  'function addMinter(uint256 authorityId, address minter)',
+  'function removeMinter(uint256 authorityId, address minter)',
+  'function getAuthority(uint256 authorityId) view returns (address admin, uint96 feeBps, bool isActive, uint256 registeredAt)',
+  'function getMinterAuthority(address minter) view returns (uint256 authorityId, bool isMinter)',
+  'function totalAuthorities() view returns (uint256)',
+  'event AuthorityRegistered(uint256 indexed authorityId, address indexed admin, uint96 feeBps)',
+  'event MinterAdded(uint256 indexed authorityId, address indexed minter)',
+  'event MinterRemoved(uint256 indexed authorityId, address indexed minter)',
+  // Token reservation and minting (no encryptedBlobUri)
+  'function reserveTokenId() returns (uint256)',
+  'function getReservation(uint256 tokenId) view returns (address reserver, uint256 expiry, bool isValid)',
+  'function mint(uint256 reservedTokenId, address to, string uri, bytes32 imageHash, string ipfsUri) returns (uint256)',
+  'event TokenReserved(uint256 indexed tokenId, address indexed reserver, uint256 expiry)',
   'function ownerOf(uint256 tokenId) view returns (address)',
   'function tokenURI(uint256 tokenId) view returns (string)',
-  'function getTokenData(uint256 tokenId) view returns (address creator, address currentOwner, address copyrightOwner, uint8 ownerLicense, bytes32 imageHash, uint256 mintedAt, string encryptedBlobUri, string uri)',
+  'function getTokenData(uint256 tokenId) view returns (address creator, address currentOwner, address copyrightOwner, uint8 ownerLicense, bytes32 imageHash, uint256 mintedAt, string ipfsUri, string uri, uint256 parentToken, uint256 originalToken, bool isOriginal, uint256 authorityId, address minter)',
+  'function getProvenanceChain(uint256 tokenId) view returns (uint256[])',
   'function isImageRegistered(bytes32 imageHash) view returns (bool)',
   'function totalSupply() view returns (uint256)',
-  'event Minted(uint256 indexed tokenId, address indexed creator, bytes32 imageHash)',
+  'event Minted(uint256 indexed tokenId, address indexed creator, bytes32 imageHash, uint256 indexed authorityId, address minter)',
   // License rights view functions
   'function checkDisplayRights(uint256 tokenId, address account) view returns (bool)',
   'function checkCommercialRights(uint256 tokenId, address account) view returns (bool)',
@@ -49,7 +66,8 @@ const NFTMARKET_ABI = [
   'event Sold(uint256 indexed tokenId, address indexed seller, address indexed buyer, uint256 price, uint8 licenseType, bytes32 licenseHash)',
   'event BilateralAgreement(uint256 indexed tokenId, bytes sellerSignature, bytes buyerSignature, uint256 timestamp)',
   'event CopyrightTransferred(uint256 indexed tokenId, address indexed from, address indexed to)',
-  'event DisplayRightsRetained(uint256 indexed tokenId, address indexed holder)'
+  'event DisplayRightsRetained(uint256 indexed tokenId, address indexed holder)',
+  'event LicenseGranted(uint256 indexed newTokenId, uint256 indexed parentTokenId, uint256 indexed originalTokenId, address licensor, address licensee, uint8 licenseType, bytes32 licenseHash)'
 ];
 
 // EIP-712 type definitions
@@ -135,7 +153,9 @@ function getWallet() {
     if (!MINTER_PRIVATE_KEY) {
       throw new Error('MINTER_PRIVATE_KEY environment variable required');
     }
-    wallet = new ethers.Wallet(MINTER_PRIVATE_KEY, getProvider());
+    // Use NonceManager to properly track nonces across sequential transactions
+    const baseWallet = new ethers.Wallet(MINTER_PRIVATE_KEY, getProvider());
+    wallet = new ethers.NonceManager(baseWallet);
   }
   return wallet;
 }
@@ -291,44 +311,126 @@ async function getPurchaseTypedData(tokenId) {
 }
 
 /**
- * Mint a new NFT
- * @param {string} to - Recipient wallet address
- * @param {string} uri - Token metadata URI (IPFS)
- * @param {number} licenseType - License type (0=Display, 1=Commercial, 2=Transfer)
- * @param {string} imageHash - SHA-256 hash of original image (0x prefixed)
- * @param {string} licenseHash - Hash of signed license agreement
- * @param {string} encryptedBlobUri - IPFS URI of encrypted original
+ * Reserve the next token ID for watermarking
+ * Call this BEFORE watermarking to guarantee the token ID matches
  * @returns {Promise<{tokenId: number, transactionHash: string}>}
  */
-async function mint(to, uri, licenseType, imageHash, licenseHash, encryptedBlobUri) {
+async function reserveTokenId() {
   if (USE_MOCK) {
-    return mockMint(to, uri, licenseType, imageHash, licenseHash, encryptedBlobUri);
+    return mockReserveTokenId();
+  }
+
+  const nftmarket = getContract();
+
+  console.log('Reserving token ID...');
+
+  const gasEstimate = await nftmarket.reserveTokenId.estimateGas();
+  console.log('  Gas estimate:', gasEstimate.toString());
+
+  const tx = await nftmarket.reserveTokenId({
+    gasLimit: gasEstimate * 120n / 100n
+  });
+
+  console.log('  Transaction hash:', tx.hash);
+
+  const receipt = await tx.wait();
+
+  // Parse TokenReserved event to get tokenId
+  const reservedEvent = receipt.logs
+    .map(log => {
+      try {
+        return nftmarket.interface.parseLog(log);
+      } catch {
+        return null;
+      }
+    })
+    .find(event => event?.name === 'TokenReserved');
+
+  if (!reservedEvent) {
+    throw new Error('TokenReserved event not found in transaction receipt');
+  }
+
+  const tokenId = Number(reservedEvent.args.tokenId);
+  const expiry = Number(reservedEvent.args.expiry);
+
+  console.log('  Reserved token ID:', tokenId);
+  console.log('  Expiry:', new Date(expiry * 1000).toISOString());
+
+  return {
+    tokenId,
+    expiry,
+    transactionHash: tx.hash
+  };
+}
+
+/**
+ * Mock reserve token ID for testing
+ */
+function mockReserveTokenId() {
+  const tokenId = mockTokenCounter++;
+  const expiry = Math.floor(Date.now() / 1000) + 3600; // 1 hour
+
+  // Store reservation in mock storage
+  mockTokens.set(tokenId, {
+    reserved: true,
+    reserver: 'mock-minter',
+    expiry
+  });
+  saveMockState();
+
+  console.log(`[Mock] Reserved token ID: ${tokenId}`);
+
+  return {
+    tokenId,
+    expiry,
+    transactionHash: '0x' + crypto.randomBytes(32).toString('hex')
+  };
+}
+
+/**
+ * Mint a new NFT with a reserved token ID
+ * @param {number} reservedTokenId - Token ID from reserveTokenId()
+ * @param {string} to - Recipient wallet address
+ * @param {string} uri - Token metadata URI (Arweave)
+ * @param {number} licenseType - License type (0=Display, 1=Commercial, 2=Transfer) - stored in Firestore only
+ * @param {string} imageHash - SHA-256 hash of watermarked image (0x prefixed)
+ * @param {string} licenseHash - Hash of signed license agreement - stored in Firestore only
+ * @param {string} ipfsUri - IPFS URI of watermarked image (public)
+ * @returns {Promise<{tokenId: number, transactionHash: string}>}
+ */
+async function mint(reservedTokenId, to, uri, licenseType, imageHash, licenseHash, ipfsUri) {
+  if (USE_MOCK) {
+    return mockMint(reservedTokenId, to, uri, licenseType, imageHash, licenseHash, ipfsUri);
   }
 
   const nftmarket = getContract();
 
   console.log('Minting NFT...');
+  console.log('  Reserved Token ID:', reservedTokenId);
   console.log('  To:', to);
   console.log('  URI:', uri);
   console.log('  License Type:', licenseType);
+  console.log('  IPFS URI:', ipfsUri);
 
-  // Contract signature: mint(address to, string uri, bytes32 imageHash, string encryptedBlobUri)
-  // Note: licenseType/licenseHash are set during listing, not minting
+  // Contract signature: mint(uint256 reservedTokenId, address to, string uri, bytes32 imageHash, string ipfsUri)
+  // Note: encryptedBlobUri removed in V2 - stored in Firestore only
   const gasEstimate = await nftmarket.mint.estimateGas(
+    reservedTokenId,
     to,
     uri,
     imageHash,
-    encryptedBlobUri
+    ipfsUri
   );
 
   console.log('  Gas estimate:', gasEstimate.toString());
 
   // Send transaction with 20% gas buffer
   const tx = await nftmarket.mint(
+    reservedTokenId,
     to,
     uri,
     imageHash,
-    encryptedBlobUri,
+    ipfsUri,
     {
       gasLimit: gasEstimate * 120n / 100n
     }
@@ -369,19 +471,31 @@ async function mint(to, uri, licenseType, imageHash, licenseHash, encryptedBlobU
 /**
  * Mock mint for testing
  */
-async function mockMint(to, uri, licenseType, imageHash, licenseHash, encryptedBlobUri) {
+async function mockMint(reservedTokenId, to, uri, licenseType, imageHash, licenseHash, ipfsUri) {
+  // Verify reservation exists
+  const reservation = mockTokens.get(reservedTokenId);
+  if (!reservation || !reservation.reserved) {
+    throw new Error('No valid reservation for token ID');
+  }
+  if (reservation.expiry < Math.floor(Date.now() / 1000)) {
+    mockTokens.delete(reservedTokenId);
+    saveMockState();
+    throw new Error('Reservation expired');
+  }
+
   // Check for duplicate image hash
   for (const token of mockTokens.values()) {
-    if (token.imageHash === imageHash) {
+    if (token.imageHash === imageHash && !token.reserved) {
       throw new Error('Image already registered');
     }
   }
 
-  mockTokenCounter++;
-  const tokenId = mockTokenCounter;
+  const tokenId = reservedTokenId;
   const transactionHash = '0x' + crypto.randomBytes(32).toString('hex');
   const blockNumber = 10000000 + tokenId;
 
+  // Replace reservation with actual token data
+  // Note: encryptedBlobUri removed in V2 - stored in Firestore only
   mockTokens.set(tokenId, {
     creator: to,
     currentOwner: to,
@@ -391,8 +505,13 @@ async function mockMint(to, uri, licenseType, imageHash, licenseHash, encryptedB
     licenseHash,
     imageHash,
     mintedAt: new Date(),
-    encryptedBlobUri,
-    uri
+    ipfsUri,
+    uri,
+    parentToken: 0,               // No parent - this is original
+    originalToken: tokenId,       // Points to itself
+    isOriginal: true,
+    authorityId: 0,               // Default authority
+    minter: 'mock-minter'         // Track who minted (receives fees)
   });
   saveMockState();
 
@@ -470,6 +589,7 @@ async function getTokenData(tokenId) {
   const nftmarket = getContract();
   const data = await nftmarket.getTokenData(tokenId);
 
+  // V2: encryptedBlobUri removed, authorityId and minter added
   return {
     creator: data.creator,
     currentOwner: data.currentOwner,
@@ -477,9 +597,39 @@ async function getTokenData(tokenId) {
     ownerLicense: Number(data.ownerLicense),
     imageHash: data.imageHash,
     mintedAt: new Date(Number(data.mintedAt) * 1000),
-    encryptedBlobUri: data.encryptedBlobUri,
-    uri: data.uri
+    ipfsUri: data.ipfsUri,
+    uri: data.uri,
+    parentToken: Number(data.parentToken),
+    originalToken: Number(data.originalToken),
+    isOriginal: data.isOriginal,
+    authorityId: Number(data.authorityId),
+    minter: data.minter
   };
+}
+
+/**
+ * Get provenance chain for a token
+ * Returns array of token IDs from current back to original
+ */
+async function getProvenanceChain(tokenId) {
+  if (USE_MOCK) {
+    const chain = [];
+    let current = Number(tokenId);
+    while (true) {
+      chain.push(current);
+      const token = mockTokens.get(current);
+      if (!token || token.isOriginal || token.parentToken === current) {
+        break;
+      }
+      current = token.parentToken;
+      if (chain.length > 1000) break; // Safety limit
+    }
+    return chain;
+  }
+
+  const nftmarket = getContract();
+  const chain = await nftmarket.getProvenanceChain(tokenId);
+  return chain.map(id => Number(id));
 }
 
 /**
@@ -630,6 +780,12 @@ async function listToken(tokenId, price, licenseType, licenseHash, expiryOrSelle
       throw new Error('Cannot escalate rights');
     }
 
+    // License tokens (non-original) cannot sub-license
+    // They can only be sold via Transfer (which transfers the token itself)
+    if (!token.isOriginal && actualLicenseType !== LicenseType.Transfer) {
+      throw new Error('License tokens cannot sub-license');
+    }
+
     const nonce = mockNonces.get(actualSellerAddress.toLowerCase()) || 0;
     mockNonces.set(actualSellerAddress.toLowerCase(), nonce + 1);
 
@@ -702,8 +858,11 @@ async function buyToken(tokenId, signatureOrBuyer, buyerAddress) {
     const previousOwner = token.currentOwner;
     const licenseType = listing.licenseType;
 
-    // Handle license rights transfer
+    listing.active = false;
+
+    // Handle license rights based on license type
     if (licenseType === LicenseType.Transfer) {
+      // Transfer sale: actual token transfer with copyright
       // Seller retains display rights
       if (!mockDisplayRights.has(Number(tokenId))) {
         mockDisplayRights.set(Number(tokenId), new Set());
@@ -713,30 +872,63 @@ async function buyToken(tokenId, signatureOrBuyer, buyerAddress) {
       // Buyer becomes new copyright owner with Transfer rights
       token.copyrightOwner = actualBuyerAddress;
       token.ownerLicense = LicenseType.Transfer;
+      token.currentOwner = actualBuyerAddress;
 
       console.log(`[MOCK] Copyright transferred to ${actualBuyerAddress}, ${previousOwner} retains display rights`);
+      console.log(`[MOCK] Token ${tokenId} sold from ${previousOwner} to ${actualBuyerAddress} for ${listing.price} wei`);
+
+      saveMockState();
+
+      return {
+        tokenId,
+        seller: previousOwner,
+        buyer: actualBuyerAddress,
+        price: listing.price,
+        licenseType,
+        sellerSignature: listing.sellerSignature,
+        buyerSignature: actualSignature
+      };
     } else {
-      // Buyer gets the license they paid for, copyright doesn't change
-      token.ownerLicense = licenseType;
+      // Display/Commercial sale: mint new license token for buyer
+      // Original token stays with seller who keeps copyright
+      mockTokenCounter++;
+      const newTokenId = mockTokenCounter;
+
+      mockTokens.set(newTokenId, {
+        creator: token.creator,              // Original creator preserved
+        currentOwner: actualBuyerAddress,    // Buyer owns the new license token
+        copyrightOwner: token.copyrightOwner, // Copyright stays with original owner
+        licenseType: licenseType,
+        ownerLicense: licenseType,            // License level purchased
+        licenseHash: listing.licenseHash,
+        imageHash: token.imageHash,           // Same image
+        mintedAt: new Date(),
+        ipfsUri: token.ipfsUri,               // Same IPFS image
+        uri: token.uri,
+        parentToken: Number(tokenId),         // Direct parent in license chain
+        originalToken: token.originalToken,   // Root of provenance chain
+        isOriginal: false,                    // This is a license, not original
+        authorityId: token.authorityId || 0,  // Inherit authority from parent
+        minter: token.minter || 'mock-minter' // Inherit minter from parent
+      });
+
+      console.log(`[MOCK] License token ${newTokenId} minted for ${actualBuyerAddress} (${licenseType === LicenseType.Display ? 'Display' : 'Commercial'} license)`);
+      console.log(`[MOCK] Original token ${tokenId} remains with ${previousOwner}`);
+
+      saveMockState();
+
+      return {
+        tokenId: newTokenId,  // Return the new license token ID
+        parentTokenId: tokenId,
+        seller: previousOwner,
+        buyer: actualBuyerAddress,
+        price: listing.price,
+        licenseType,
+        sellerSignature: listing.sellerSignature,
+        buyerSignature: actualSignature,
+        isLicenseGrant: true
+      };
     }
-
-    // Transfer NFT ownership
-    token.currentOwner = actualBuyerAddress;
-    listing.active = false;
-    saveMockState();
-
-    console.log(`[MOCK] Token ${tokenId} sold from ${previousOwner} to ${actualBuyerAddress} for ${listing.price} wei`);
-    console.log(`[MOCK] Bilateral agreement recorded with seller and buyer signatures`);
-
-    return {
-      tokenId,
-      seller: previousOwner,
-      buyer: actualBuyerAddress,
-      price: listing.price,
-      licenseType,
-      sellerSignature: listing.sellerSignature,
-      buyerSignature: actualSignature
-    };
   }
 
   // Real blockchain buying is done client-side
@@ -853,12 +1045,121 @@ async function getAllTokens() {
   return tokens;
 }
 
+/**
+ * Start listening for blockchain events
+ * Calls the provided callback when relevant events occur
+ * Returns a function to stop listening
+ */
+function startEventListener(callbacks = {}) {
+  if (USE_MOCK) {
+    console.log('[Blockchain] Event listener not available in mock mode');
+    return () => {};
+  }
+
+  try {
+    const nftmarket = getContract();
+
+    // Listen for Minted events (new tokens)
+    if (callbacks.onMinted) {
+      nftmarket.on('Minted', async (tokenId, creator, imageHash, event) => {
+        console.log(`[Blockchain Event] Minted: Token ${tokenId} by ${creator}`);
+        try {
+          await callbacks.onMinted({
+            tokenId: Number(tokenId),
+            creator,
+            imageHash,
+            transactionHash: event.log?.transactionHash
+          });
+        } catch (e) {
+          console.error('[Blockchain Event] Error handling Minted:', e.message);
+        }
+      });
+      console.log('[Blockchain] Listening for Minted events');
+    }
+
+    // Listen for Sold events (ownership transfers via marketplace)
+    if (callbacks.onSold) {
+      nftmarket.on('Sold', async (tokenId, seller, buyer, price, licenseType, licenseHash, event) => {
+        console.log(`[Blockchain Event] Sold: Token ${tokenId} from ${seller} to ${buyer}`);
+        try {
+          await callbacks.onSold({
+            tokenId: Number(tokenId),
+            seller,
+            buyer,
+            price: price.toString(),
+            licenseType: Number(licenseType),
+            transactionHash: event.log?.transactionHash
+          });
+        } catch (e) {
+          console.error('[Blockchain Event] Error handling Sold:', e.message);
+        }
+      });
+      console.log('[Blockchain] Listening for Sold events');
+    }
+
+    // Listen for Listed events
+    if (callbacks.onListed) {
+      nftmarket.on('Listed', async (tokenId, seller, price, licenseType, licenseHash, nonce, expiry, event) => {
+        console.log(`[Blockchain Event] Listed: Token ${tokenId} by ${seller} for ${ethers.formatEther(price)} ETH`);
+        try {
+          await callbacks.onListed({
+            tokenId: Number(tokenId),
+            seller,
+            price: price.toString(),
+            licenseType: Number(licenseType),
+            licenseHash,
+            nonce: Number(nonce),
+            expiry: Number(expiry)
+          });
+        } catch (e) {
+          console.error('[Blockchain Event] Error handling Listed:', e.message);
+        }
+      });
+      console.log('[Blockchain] Listening for Listed events');
+    }
+
+    // Listen for LicenseGranted events (new license tokens minted)
+    if (callbacks.onLicenseGranted) {
+      nftmarket.on('LicenseGranted', async (newTokenId, parentTokenId, originalTokenId, licensor, licensee, licenseType, licenseHash, event) => {
+        const licenseNames = ['Display', 'Commercial', 'Transfer'];
+        console.log(`[Blockchain Event] LicenseGranted: Token ${newTokenId} (${licenseNames[licenseType]} license from ${parentTokenId}) to ${licensee}`);
+        try {
+          await callbacks.onLicenseGranted({
+            newTokenId: Number(newTokenId),
+            parentTokenId: Number(parentTokenId),
+            originalTokenId: Number(originalTokenId),
+            licensor,
+            licensee,
+            licenseType: Number(licenseType),
+            licenseHash,
+            transactionHash: event.log?.transactionHash
+          });
+        } catch (e) {
+          console.error('[Blockchain Event] Error handling LicenseGranted:', e.message);
+        }
+      });
+      console.log('[Blockchain] Listening for LicenseGranted events');
+    }
+
+    // Return cleanup function
+    return () => {
+      nftmarket.removeAllListeners();
+      console.log('[Blockchain] Stopped event listeners');
+    };
+  } catch (e) {
+    console.warn('[Blockchain] Could not start event listener:', e.message);
+    return () => {};
+  }
+}
+
 module.exports = {
+  reserveTokenId,
   mint,
   isOwner,
   ownerOf,
   tokenURI,
   getTokenData,
+  getProvenanceChain,
   isImageRegistered,
   totalSupply,
   // License rights checks
@@ -878,6 +1179,8 @@ module.exports = {
   buyToken,
   getListing,
   getActiveListings,
+  // Event listener
+  startEventListener,
   // Test utilities
   resetMock,
   getMockTokens,

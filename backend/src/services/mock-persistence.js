@@ -6,12 +6,18 @@
 const fs = require('fs');
 const path = require('path');
 
+// Set MOCK_PERSISTENCE=false to disable disk persistence (use in-memory only)
+const PERSISTENCE_ENABLED = process.env.MOCK_PERSISTENCE !== 'false';
 const PERSISTENCE_DIR = process.env.MOCK_PERSISTENCE_DIR || path.join(__dirname, '..', '..', '.mock-data');
 
-// Ensure persistence directory exists
-if (!fs.existsSync(PERSISTENCE_DIR)) {
+// Ensure persistence directory exists (only if persistence is enabled)
+if (PERSISTENCE_ENABLED && !fs.existsSync(PERSISTENCE_DIR)) {
   fs.mkdirSync(PERSISTENCE_DIR, { recursive: true });
   console.log(`[Persistence] Created mock data directory: ${PERSISTENCE_DIR}`);
+}
+
+if (!PERSISTENCE_ENABLED) {
+  console.log(`[Persistence] Disk persistence DISABLED (MOCK_PERSISTENCE=false)`);
 }
 
 /**
@@ -19,6 +25,8 @@ if (!fs.existsSync(PERSISTENCE_DIR)) {
  * For Maps with Buffer values, converts to base64
  */
 function saveMap(name, map) {
+  if (!PERSISTENCE_ENABLED) return;
+
   const filePath = path.join(PERSISTENCE_DIR, `${name}.json`);
   const data = {};
 
@@ -40,6 +48,8 @@ function saveMap(name, map) {
  * Load a Map from disk
  */
 function loadMap(name) {
+  if (!PERSISTENCE_ENABLED) return new Map();
+
   const filePath = path.join(PERSISTENCE_DIR, `${name}.json`);
   const map = new Map();
 
@@ -73,6 +83,8 @@ function loadMap(name) {
  * Save an array to disk
  */
 function saveArray(name, array) {
+  if (!PERSISTENCE_ENABLED) return;
+
   const filePath = path.join(PERSISTENCE_DIR, `${name}.json`);
   fs.writeFileSync(filePath, JSON.stringify(array, null, 2));
   console.log(`[Persistence] Saved ${array.length} entries to ${name}.json`);
@@ -82,6 +94,8 @@ function saveArray(name, array) {
  * Load an array from disk
  */
 function loadArray(name) {
+  if (!PERSISTENCE_ENABLED) return [];
+
   const filePath = path.join(PERSISTENCE_DIR, `${name}.json`);
 
   if (!fs.existsSync(filePath)) {
@@ -103,6 +117,8 @@ function loadArray(name) {
  * Save a single value to disk
  */
 function saveValue(name, value) {
+  if (!PERSISTENCE_ENABLED) return;
+
   const filePath = path.join(PERSISTENCE_DIR, `${name}.json`);
   fs.writeFileSync(filePath, JSON.stringify({ value }, null, 2));
 }
@@ -111,6 +127,8 @@ function saveValue(name, value) {
  * Load a single value from disk
  */
 function loadValue(name, defaultValue) {
+  if (!PERSISTENCE_ENABLED) return defaultValue;
+
   const filePath = path.join(PERSISTENCE_DIR, `${name}.json`);
 
   if (!fs.existsSync(filePath)) {
@@ -129,6 +147,8 @@ function loadValue(name, defaultValue) {
  * Clear all persisted mock data
  */
 function clearAll() {
+  if (!PERSISTENCE_ENABLED || !fs.existsSync(PERSISTENCE_DIR)) return;
+
   const files = fs.readdirSync(PERSISTENCE_DIR);
   for (const file of files) {
     if (file.endsWith('.json')) {

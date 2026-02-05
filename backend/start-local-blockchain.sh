@@ -23,14 +23,14 @@ export MINTER_PRIVATE_KEY=59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f460
 # Real blockchain - no mock!
 export USE_MOCK_BLOCKCHAIN=false
 
-# Still mock these (no real IPFS/Firestore/Arweave for local dev)
-# Use REAL watermark API from .env
-export USE_MOCK_WATERMARK=false
-export USE_MOCK_IPFS=true
+# Mock some external services for local dev
+export USE_MOCK_WATERMARK=true
+export USE_MOCK_IPFS=false  # Use real Pinata IPFS
 export USE_MOCK_ARWEAVE=true
 export USE_MOCK_FIRESTORE=true
 export USE_MOCK_STORAGE=true
 export USE_KMS=false
+export MOCK_PERSISTENCE=true
 export DEV_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 echo "Starting with LOCAL HARDHAT BLOCKCHAIN"

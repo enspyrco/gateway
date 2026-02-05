@@ -11,8 +11,8 @@ const express = require('express');
 const router = express.Router();
 
 const blockchainService = require('../services/blockchain');
-const firestoreService = require('../services/firestore');
 const ipfsService = require('../services/ipfs');
+const arweaveService = require('../services/arweave');
 const authMiddleware = require('../middleware/auth');
 
 // License type names (matches contract enum)
@@ -29,31 +29,53 @@ router.get('/', async (req, res, next) => {
     const listings = await blockchainService.getActiveListings();
     console.log('[DEBUG] Raw listings:', JSON.stringify(listings));
 
-    // Enrich with metadata from Firestore, license type from blockchain
+    // Enrich with data from blockchain + Arweave (metadata)
     const enrichedListings = await Promise.all(
       listings.map(async (listing) => {
         try {
-          const tokenData = await firestoreService.getToken(listing.tokenId);
-          const previewUrl = tokenData?.previewUri
-            ? ipfsService.getGatewayUrl(tokenData.previewUri)
+          // Get token data from blockchain (source of truth)
+          const blockchainData = await blockchainService.getTokenData(listing.tokenId);
+
+          // Fetch metadata from Arweave (name, description)
+          let metadata = null;
+          if (blockchainData?.uri) {
+            try {
+              metadata = await arweaveService.fetchMetadata(blockchainData.uri);
+            } catch (e) {
+              console.warn(`[Marketplace] Could not fetch Arweave metadata for token ${listing.tokenId}`);
+            }
+          }
+
+          // Use IPFS URI from blockchain
+          const imageUrl = blockchainData?.ipfsUri
+            ? ipfsService.getGatewayUrl(blockchainData.ipfsUri)
             : null;
 
           return {
             tokenId: listing.tokenId,
-            name: tokenData?.name || `NFTmarket #${listing.tokenId}`,
-            previewUrl,
+            name: metadata?.name || `NFTmarket #${listing.tokenId}`,
+            description: metadata?.description || '',
+            imageUrl,
+            ipfsUri: blockchainData?.ipfsUri,
             price: listing.price,
             priceEth: (Number(listing.price) / 1e18).toFixed(4),
             seller: listing.seller,
+            // License type being offered in this listing (from listing, not token)
             licenseType: licenseTypeNames[listing.licenseType] || 'unknown',
+            // Current owner's max license (what they could sell)
+            ownerLicense: licenseTypeNames[blockchainData?.ownerLicense] || 'unknown',
+            creator: blockchainData?.creator,
+            copyrightOwner: blockchainData?.copyrightOwner,
             nonce: listing.nonce,
             expiry: listing.expiry
           };
         } catch (e) {
+          console.error(`[Marketplace] Error enriching listing ${listing.tokenId}:`, e.message);
           return {
             tokenId: listing.tokenId,
             name: `NFTmarket #${listing.tokenId}`,
-            previewUrl: null,
+            imageUrl: null,
+            ipfsUri: null,
             price: listing.price,
             priceEth: (Number(listing.price) / 1e18).toFixed(4),
             seller: listing.seller,
@@ -128,14 +150,41 @@ router.get('/:tokenId', async (req, res, next) => {
       return res.json({ listed: false });
     }
 
+    // Get full token data from blockchain
+    const blockchainData = await blockchainService.getTokenData(tokenId);
+
+    // Fetch metadata from Arweave (name, description)
+    let metadata = null;
+    if (blockchainData?.uri) {
+      try {
+        metadata = await arweaveService.fetchMetadata(blockchainData.uri);
+      } catch (e) {
+        console.warn(`[Marketplace] Could not fetch Arweave metadata for token ${tokenId}`);
+      }
+    }
+
+    // Image URL from blockchain IPFS URI
+    const imageUrl = blockchainData?.ipfsUri
+      ? ipfsService.getGatewayUrl(blockchainData.ipfsUri)
+      : null;
+
     res.json({
       listed: true,
       tokenId: Number(tokenId),
+      name: metadata?.name || `NFTmarket #${tokenId}`,
+      description: metadata?.description || '',
+      imageUrl,
+      ipfsUri: blockchainData?.ipfsUri,
       seller: listing.seller,
       price: listing.price,
       priceEth: (Number(listing.price) / 1e18).toFixed(4),
+      // License type being offered in this sale
       licenseType: licenseTypeNames[listing.licenseType] || 'unknown',
       licenseHash: listing.licenseHash,
+      // Token metadata from blockchain
+      creator: blockchainData?.creator,
+      copyrightOwner: blockchainData?.copyrightOwner,
+      ownerLicense: licenseTypeNames[blockchainData?.ownerLicense] || 'unknown',
       nonce: listing.nonce,
       expiry: listing.expiry
     });

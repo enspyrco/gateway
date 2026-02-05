@@ -13,23 +13,31 @@
 
 # Hardhat local node settings
 export POLYGON_RPC_URL=http://127.0.0.1:8545
-export NFTMARKET_CONTRACT_ADDRESS=0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512
+
+# Read contract address from deployment.json
+DEPLOYMENT_FILE="$(dirname "$0")/../contracts/deployment.json"
+if [ -f "$DEPLOYMENT_FILE" ]; then
+  export NFTMARKET_CONTRACT_ADDRESS=$(cat "$DEPLOYMENT_FILE" | grep '"address"' | sed 's/.*: *"\([^"]*\)".*/\1/')
+  echo "Loaded contract address from deployment.json: $NFTMARKET_CONTRACT_ADDRESS"
+else
+  export NFTMARKET_CONTRACT_ADDRESS=0x5FbDB2315678afecb367f032d93F642f64180aa3
+  echo "Warning: deployment.json not found, using default address"
+fi
 
 # Use Hardhat account #1 as the minter (account #0 is the deployer/platform)
 export MINTER_PRIVATE_KEY=59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d
 
-# Real blockchain and watermarking
+# Real blockchain, mock watermarking
 export USE_MOCK_BLOCKCHAIN=false
-export USE_MOCK_WATERMARK=false
+export USE_MOCK_WATERMARK=true
 
 # Watermark API (set these in your .env or uncomment and fill in)
 # export WATERMARK_API_URL=https://your-watermark-api.com
 # export WATERMARK_API_KEY=your-api-key
 
-# Firestore Local Emulator (run: firebase emulators:start --only firestore)
-export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
-export FIREBASE_PROJECT_ID=demo-nftmarket
-export USE_MOCK_FIRESTORE=false
+# Mock Firestore (in-memory only, no disk persistence)
+export USE_MOCK_FIRESTORE=true
+export MOCK_PERSISTENCE=false
 
 # Real IPFS (Pinata)
 export USE_MOCK_IPFS=false
