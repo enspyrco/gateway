@@ -166,8 +166,7 @@ void main() {
       expect(
           alice.address, equals('0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC'));
 
-      final bob =
-          provider.getAccountByNickname('bob'); // case insensitive
+      final bob = provider.getAccountByNickname('bob'); // case insensitive
       expect(bob, isNotNull);
       expect(bob!.nickname, equals('Bob'));
     });
