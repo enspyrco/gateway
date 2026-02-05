@@ -140,8 +140,10 @@ class WalletProvider extends ChangeNotifier {
   List<TestAccount> get availableAccounts => _availableAccounts;
 
   // Fee simulation getters
-  List<FeeTransaction> get feeTransactions => List.unmodifiable(_feeTransactions);
-  BigInt get platformBalance => _simulatedBalances[platformWallet.address] ?? BigInt.zero;
+  List<FeeTransaction> get feeTransactions =>
+      List.unmodifiable(_feeTransactions);
+  BigInt get platformBalance =>
+      _simulatedBalances[platformWallet.address] ?? BigInt.zero;
 
   bool get isConnected => _state == WalletState.connected && _address != null;
   bool get isConnecting => _state == WalletState.connecting;
@@ -194,9 +196,8 @@ class WalletProvider extends ChangeNotifier {
   Future<void> _loadAvailableAccounts() async {
     try {
       final accounts = await _walletService.getAccounts();
-      _availableAccounts = accounts
-          .map((a) => TestAccount.fromWalletAccount(a))
-          .toList();
+      _availableAccounts =
+          accounts.map((a) => TestAccount.fromWalletAccount(a)).toList();
       notifyListeners();
     } catch (e) {
       debugPrint('Failed to load accounts from wallet service: $e');
@@ -211,7 +212,9 @@ class WalletProvider extends ChangeNotifier {
       final savedToken = prefs.getString('auth_token');
       final savedSessionId = prefs.getString('wallet_session_id');
 
-      if (savedAddress != null && savedToken != null && savedSessionId != null) {
+      if (savedAddress != null &&
+          savedToken != null &&
+          savedSessionId != null) {
         _address = savedAddress;
         _authToken = savedToken;
         _walletService.setSessionId(savedSessionId);
@@ -237,7 +240,9 @@ class WalletProvider extends ChangeNotifier {
   Future<void> _saveSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (_address != null && _authToken != null && _walletService.sessionId != null) {
+      if (_address != null &&
+          _authToken != null &&
+          _walletService.sessionId != null) {
         await prefs.setString('wallet_address', _address!);
         await prefs.setString('auth_token', _authToken!);
         await prefs.setString('wallet_session_id', _walletService.sessionId!);
@@ -453,7 +458,8 @@ class WalletProvider extends ChangeNotifier {
             FeeConfig.subscriptionFee;
 
     // Set subscription expiry to 30 days from now
-    _subscriptionExpiry[_address!] = DateTime.now().add(const Duration(days: 30));
+    _subscriptionExpiry[_address!] =
+        DateTime.now().add(const Duration(days: 30));
 
     // Record transaction
     _feeTransactions.add(FeeTransaction(
@@ -534,9 +540,7 @@ class WalletProvider extends ChangeNotifier {
   /// Get fee transactions for current user
   List<FeeTransaction> get userFeeTransactions {
     if (_address == null) return [];
-    return _feeTransactions
-        .where((t) => t.fromAddress == _address)
-        .toList()
+    return _feeTransactions.where((t) => t.fromAddress == _address).toList()
       ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
   }
 

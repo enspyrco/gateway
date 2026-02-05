@@ -221,7 +221,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
             ),
             if (isListed && listingLicenseType != null) ...[
               const Divider(),
-              _buildInfoRow('License Offered', _getLicenseDisplayName(listingLicenseType)),
+              _buildInfoRow('License Offered',
+                  _getLicenseDisplayName(listingLicenseType)),
             ],
             const Divider(),
             _buildInfoRow('Minted', _formatDate(token.mintedAt)),
@@ -270,7 +271,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     final price = _listing?['priceEth'];
     final wallet = context.read<WalletProvider>();
 
-    debugPrint('Action buttons: isOwner=$isOwner, isListed=$isListed, isConnected=${wallet.isConnected}, listing=$_listing');
+    debugPrint(
+        'Action buttons: isOwner=$isOwner, isListed=$isListed, isConnected=${wallet.isConnected}, listing=$_listing');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -328,7 +330,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.verified_user, color: Colors.blue, size: 20),
+                      const Icon(Icons.verified_user,
+                          color: Colors.blue, size: 20),
                       const SizedBox(width: 8),
                       Text(
                         'Bilateral Agreement Required',
@@ -431,12 +434,14 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                     padding: const EdgeInsets.all(12),
                     child: Row(
                       children: [
-                        Icon(Icons.edit_document, color: Colors.amber.shade800, size: 20),
+                        Icon(Icons.edit_document,
+                            color: Colors.amber.shade800, size: 20),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'You will sign a binding agreement to sell under the chosen license terms.',
-                            style: TextStyle(fontSize: 12, color: Colors.amber.shade900),
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.amber.shade900),
                           ),
                         ),
                       ],
@@ -446,7 +451,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: priceController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType:
+                      const TextInputType.numberWithOptions(decimal: true),
                   decoration: InputDecoration(
                     labelText: 'Price in ETH',
                     hintText: '0.1',
@@ -475,7 +481,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: InkWell(
-                      onTap: () => setDialogState(() => selectedLicense = license),
+                      onTap: () =>
+                          setDialogState(() => selectedLicense = license),
                       borderRadius: BorderRadius.circular(8),
                       child: Container(
                         padding: const EdgeInsets.all(12),
@@ -506,7 +513,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                                 children: [
                                   Text(
                                     license.displayName,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold),
                                   ),
                                   Text(
                                     license.description,
@@ -554,7 +562,9 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     );
 
     debugPrint('Dialog result: $result');
-    if (result != null && result['price'] != null && result['price'].isNotEmpty) {
+    if (result != null &&
+        result['price'] != null &&
+        result['price'].isNotEmpty) {
       await _list(result['price'], result['license']);
     } else {
       debugPrint('List cancelled or no price entered');
@@ -580,7 +590,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
       // Step 2: Sign the typed data via wallet service
       final typedData = prepareResult['typedData'] as Map<String, dynamic>;
-      final contractCall = prepareResult['contractCall'] as Map<String, dynamic>;
+      final contractCall =
+          prepareResult['contractCall'] as Map<String, dynamic>;
 
       final signature = await wallet.signTypedData(typedData);
 
@@ -608,7 +619,9 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Listed for $priceEth ETH with ${licenseType.displayName} license!')),
+          SnackBar(
+              content: Text(
+                  'Listed for $priceEth ETH with ${licenseType.displayName} license!')),
         );
       }
 
@@ -641,7 +654,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       // Step 2: Submit transaction via wallet service
       final contractService = await ContractService.getInstance();
       final contractAddress = contractService.contractAddress;
-      final contractCall = prepareResult['contractCall'] as Map<String, dynamic>;
+      final contractCall =
+          prepareResult['contractCall'] as Map<String, dynamic>;
 
       // Build transaction data for delist() call
       final txData = _encodeDelistCall(
@@ -692,7 +706,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
       // Step 2: Sign the typed data via wallet service
       final typedData = prepareResult['typedData'] as Map<String, dynamic>;
-      final contractCall = prepareResult['contractCall'] as Map<String, dynamic>;
+      final contractCall =
+          prepareResult['contractCall'] as Map<String, dynamic>;
 
       final signature = await wallet.signTypedData(typedData);
 
@@ -720,7 +735,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Purchase successful! Bilateral agreement recorded on-chain.')),
+              content: Text(
+                  'Purchase successful! Bilateral agreement recorded on-chain.')),
         );
       }
 
@@ -763,10 +779,12 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     final signatureOffset = 'c0'.padLeft(64, '0');
 
     // Signature length
-    final signatureLengthHex = signature.length.toRadixString(16).padLeft(64, '0');
+    final signatureLengthHex =
+        signature.length.toRadixString(16).padLeft(64, '0');
 
     // Signature data (padded to 32-byte boundary)
-    final signatureHex = signature.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final signatureHex =
+        signature.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
     final paddedLength = ((signature.length + 31) ~/ 32) * 64;
     final signatureDataHex = signatureHex.padRight(paddedLength, '0');
 
@@ -798,10 +816,12 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     final signatureOffset = '40'.padLeft(64, '0');
 
     // Signature length
-    final signatureLengthHex = signature.length.toRadixString(16).padLeft(64, '0');
+    final signatureLengthHex =
+        signature.length.toRadixString(16).padLeft(64, '0');
 
     // Signature data (padded to 32-byte boundary)
-    final signatureHex = signature.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
+    final signatureHex =
+        signature.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
     final paddedLength = ((signature.length + 31) ~/ 32) * 64;
     final signatureDataHex = signatureHex.padRight(paddedLength, '0');
 

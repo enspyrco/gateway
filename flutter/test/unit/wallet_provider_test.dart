@@ -137,9 +137,11 @@ void main() {
       final alice = WalletProvider.getAccountByNickname('Alice');
       expect(alice, isNotNull);
       expect(alice!.nickname, equals('Alice'));
-      expect(alice.address, equals('0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC'));
+      expect(
+          alice.address, equals('0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC'));
 
-      final bob = WalletProvider.getAccountByNickname('bob'); // case insensitive
+      final bob =
+          WalletProvider.getAccountByNickname('bob'); // case insensitive
       expect(bob, isNotNull);
       expect(bob!.nickname, equals('Bob'));
     });
@@ -202,7 +204,8 @@ void main() {
       }
 
       // Platform starts at 0
-      expect(provider.getSimulatedBalance(platformWallet.address), equals(BigInt.zero));
+      expect(provider.getSimulatedBalance(platformWallet.address),
+          equals(BigInt.zero));
     });
 
     test('fee transactions start empty', () {

@@ -128,7 +128,8 @@ class _GalleryPageState extends State<GalleryPage> {
         break;
       }
     }
-    if (address == null && platformWallet.nickname.toLowerCase() == input.toLowerCase()) {
+    if (address == null &&
+        platformWallet.nickname.toLowerCase() == input.toLowerCase()) {
       address = platformWallet.address;
     }
 
@@ -142,7 +143,8 @@ class _GalleryPageState extends State<GalleryPage> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Enter a wallet address (0x...) or name (Alice, Bob, etc.)')),
+            content: Text(
+                'Enter a wallet address (0x...) or name (Alice, Bob, etc.)')),
       );
     }
   }
@@ -277,7 +279,8 @@ class _GalleryPageState extends State<GalleryPage> {
   Widget _buildUserGallery() {
     final wallet = context.watch<WalletProvider>();
     final accounts = wallet.availableAccounts;
-    final displayName = _ownerAddress != null ? _formatAddress(_ownerAddress!, accounts) : '';
+    final displayName =
+        _ownerAddress != null ? _formatAddress(_ownerAddress!, accounts) : '';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -420,7 +423,8 @@ class _GalleryCard extends StatelessWidget {
   final VoidCallback onTap;
   final List<TestAccount> accounts;
 
-  const _GalleryCard({required this.gallery, required this.onTap, required this.accounts});
+  const _GalleryCard(
+      {required this.gallery, required this.onTap, required this.accounts});
 
   @override
   Widget build(BuildContext context) {
@@ -483,7 +487,8 @@ class _TokenCard extends StatelessWidget {
   final VoidCallback onTap;
   final List<TestAccount> accounts;
 
-  const _TokenCard({required this.token, required this.onTap, required this.accounts});
+  const _TokenCard(
+      {required this.token, required this.onTap, required this.accounts});
 
   @override
   Widget build(BuildContext context) {
@@ -491,7 +496,8 @@ class _TokenCard extends StatelessWidget {
     // Use imageUrl from blockchain IPFS URI, fallback to previewUrl for backwards compatibility
     final imageUrl = token['imageUrl'] ?? token['previewUrl'];
     // ownerLicense shows the current owner's license level
-    final ownerLicense = token['ownerLicense'] ?? token['licenseType'] ?? 'unknown';
+    final ownerLicense =
+        token['ownerLicense'] ?? token['licenseType'] ?? 'unknown';
     final creator = token['creator'] ?? '';
     final creatorName = _formatAddress(creator, accounts);
     final copyrightOwner = token['copyrightOwner'] ?? creator;
@@ -521,7 +527,8 @@ class _TokenCard extends StatelessWidget {
                     top: 8,
                     right: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: isOriginal ? Colors.green : Colors.blue,
                         borderRadius: BorderRadius.circular(4),

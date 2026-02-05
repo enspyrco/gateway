@@ -126,8 +126,7 @@ class HomePage extends StatelessWidget {
             _FeatureCard(
               icon: Icons.collections,
               title: 'Gallery',
-              description:
-                  'Explore collections from artists around the world.',
+              description: 'Explore collections from artists around the world.',
               actionLabel: 'View',
               onAction: () => context.go('/gallery'),
             ),
@@ -161,7 +160,8 @@ class HomePage extends StatelessWidget {
             _FeatureCard(
               icon: Icons.gavel,
               title: 'Clear Licensing',
-              description: 'Choose display, commercial, or full transfer rights.',
+              description:
+                  'Choose display, commercial, or full transfer rights.',
             ),
             _FeatureCard(
               icon: Icons.verified,
@@ -210,7 +210,6 @@ class HomePage extends StatelessWidget {
       ],
     );
   }
-
 }
 
 class _FeatureCard extends StatelessWidget {

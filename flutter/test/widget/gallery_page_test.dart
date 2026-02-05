@@ -98,7 +98,8 @@ void main() {
     });
 
     group('User Gallery Display', () {
-      testWidgets('shows My Collection when viewing own gallery', (tester) async {
+      testWidgets('shows My Collection when viewing own gallery',
+          (tester) async {
         // Test UI without actually connecting wallet (avoids SharedPreferences issues)
         await tester.pumpWidget(
           buildTestWidget(
@@ -122,7 +123,8 @@ void main() {
         expect(find.text('My Collection'), findsOneWidget);
       });
 
-      testWidgets('shows Collection with address when viewing other gallery', (tester) async {
+      testWidgets('shows Collection with address when viewing other gallery',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             Scaffold(
@@ -140,7 +142,8 @@ void main() {
                       ),
                       const SizedBox(width: 8),
                       Chip(
-                        label: Text('0x1234...7890', style: TextStyle(fontSize: 12)),
+                        label: Text('0x1234...7890',
+                            style: TextStyle(fontSize: 12)),
                         visualDensity: VisualDensity.compact,
                       ),
                     ],
@@ -165,7 +168,8 @@ void main() {
                   child: Center(
                     child: Column(
                       children: [
-                        Icon(Icons.collections_outlined, size: 48, color: Colors.grey.shade400),
+                        Icon(Icons.collections_outlined,
+                            size: 48, color: Colors.grey.shade400),
                         const SizedBox(height: 12),
                         Text(
                           'No artworks yet',
@@ -208,7 +212,8 @@ void main() {
                         ),
                         const SizedBox(height: 4),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: Colors.blue.shade100,
                             borderRadius: BorderRadius.circular(4),
@@ -269,7 +274,8 @@ void main() {
                       children: [
                         CircleAvatar(
                           backgroundColor: Colors.blue.shade100,
-                          child: const Icon(Icons.account_circle, color: Colors.blue),
+                          child: const Icon(Icons.account_circle,
+                              color: Colors.blue),
                         ),
                         const SizedBox(width: 16),
                         Expanded(
@@ -283,12 +289,14 @@ void main() {
                               const SizedBox(height: 4),
                               Text(
                                 '5 NFTs · Sunset Art',
-                                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                                style: TextStyle(
+                                    color: Colors.grey.shade600, fontSize: 12),
                               ),
                             ],
                           ),
                         ),
-                        Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey.shade400),
+                        Icon(Icons.arrow_forward_ios,
+                            size: 16, color: Colors.grey.shade400),
                       ],
                     ),
                   ),
@@ -313,7 +321,8 @@ void main() {
                   child: Center(
                     child: Column(
                       children: [
-                        Icon(Icons.people_outline, size: 48, color: Colors.grey.shade400),
+                        Icon(Icons.people_outline,
+                            size: 48, color: Colors.grey.shade400),
                         const SizedBox(height: 12),
                         Text(
                           'No galleries yet',
@@ -322,7 +331,8 @@ void main() {
                         const SizedBox(height: 8),
                         Text(
                           'Be the first to mint an NFT!',
-                          style: TextStyle(color: Colors.grey.shade500, fontSize: 12),
+                          style: TextStyle(
+                              color: Colors.grey.shade500, fontSize: 12),
                         ),
                       ],
                     ),
@@ -349,7 +359,8 @@ void main() {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.error_outline, size: 48, color: Colors.grey.shade400),
+                    Icon(Icons.error_outline,
+                        size: 48, color: Colors.grey.shade400),
                     const SizedBox(height: 16),
                     const Text('Error loading gallery'),
                     const SizedBox(height: 8),

@@ -49,7 +49,11 @@ void main() {
         'prompt': 'a cat',
         'style': 'photographic',
         'images': [
-          {'id': 'img-1', 'seed': 12345, 'url': '/api/generate/gen-123/image/0'},
+          {
+            'id': 'img-1',
+            'seed': 12345,
+            'url': '/api/generate/gen-123/image/0'
+          },
         ],
       };
 

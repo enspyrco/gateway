@@ -183,7 +183,8 @@ void main() {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, size: 48, color: Colors.grey.shade400),
+                  Icon(Icons.error_outline,
+                      size: 48, color: Colors.grey.shade400),
                   const SizedBox(height: 16),
                   const Text('Error loading token'),
                   const SizedBox(height: 8),

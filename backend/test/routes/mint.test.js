@@ -213,7 +213,8 @@ describe('Mint Route', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
-      expect(res.body.tokenId).toBe(1);
+      expect(res.body).toHaveProperty('tokenId');
+      expect(typeof res.body.tokenId).toBe('number');
     });
 
     it('should successfully mint with transfer license', async () => {

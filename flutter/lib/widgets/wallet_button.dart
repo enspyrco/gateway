@@ -108,7 +108,13 @@ class _TestAccountPickerDialog extends StatelessWidget {
   }
 
   Color _getColorForAccount(TestAccount account) {
-    final colors = [Colors.blue, Colors.green, Colors.purple, Colors.orange, Colors.pink];
+    final colors = [
+      Colors.blue,
+      Colors.green,
+      Colors.purple,
+      Colors.orange,
+      Colors.pink
+    ];
     final index = wallet.availableAccounts.indexOf(account);
     return colors[index % colors.length];
   }
@@ -153,9 +159,7 @@ class _ConnectedButton extends StatelessWidget {
               const SizedBox(width: 8),
             ],
             Text(
-              testAccount != null
-                  ? testAccount.nickname
-                  : wallet.shortAddress,
+              testAccount != null ? testAccount.nickname : wallet.shortAddress,
               style: TextStyle(
                 fontWeight: FontWeight.w500,
                 color: Theme.of(context).colorScheme.primary,
@@ -212,7 +216,10 @@ class _ConnectedButton extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 testAccount?.nickname ?? '',
-                style: const TextStyle(fontSize: 14, color: Colors.black87, fontWeight: FontWeight.w500),
+                style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w500),
               ),
               const SizedBox(height: 2),
               Row(

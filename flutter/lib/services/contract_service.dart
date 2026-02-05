@@ -49,9 +49,7 @@ class ContractService {
 
   Future<void> _initialize() async {
     // Use localhost in debug mode, Polygon in production
-    _rpcUrl = kDebugMode
-        ? 'http://localhost:8545'
-        : 'https://polygon-rpc.com';
+    _rpcUrl = kDebugMode ? 'http://localhost:8545' : 'https://polygon-rpc.com';
 
     const backendUrl = kDebugMode
         ? 'http://localhost:3000'

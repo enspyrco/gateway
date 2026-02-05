@@ -23,7 +23,8 @@ void main() {
 
     test('fromString parses correctly', () {
       expect(LicenseType.fromString('display'), equals(LicenseType.display));
-      expect(LicenseType.fromString('commercial'), equals(LicenseType.commercial));
+      expect(
+          LicenseType.fromString('commercial'), equals(LicenseType.commercial));
       expect(LicenseType.fromString('transfer'), equals(LicenseType.transfer));
       expect(LicenseType.fromString('DISPLAY'), equals(LicenseType.display));
     });
@@ -51,7 +52,8 @@ void main() {
       expect(token.tokenId, equals(1));
       expect(token.name, equals('Test NFT'));
       expect(token.description, equals('A test token'));
-      expect(token.creator, equals('0x1234567890123456789012345678901234567890'));
+      expect(
+          token.creator, equals('0x1234567890123456789012345678901234567890'));
       expect(token.watermarkId, equals('0x1234:1'));
     });
 

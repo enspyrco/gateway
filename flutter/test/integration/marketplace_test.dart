@@ -83,8 +83,9 @@ void main() {
 
       // Verify selection changed (Commercial radio should be selected)
       final commercialRadio = find.byWidgetPredicate(
-        (widget) => widget is RadioListTile<LicenseType> &&
-                    widget.value == LicenseType.commercial,
+        (widget) =>
+            widget is RadioListTile<LicenseType> &&
+            widget.value == LicenseType.commercial,
       );
       expect(commercialRadio, findsOneWidget);
     });

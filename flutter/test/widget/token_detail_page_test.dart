@@ -129,7 +129,8 @@ void main() {
     });
 
     group('Listing Dialog', () {
-      testWidgets('shows list for sale button when owner and not listed', (tester) async {
+      testWidgets('shows list for sale button when owner and not listed',
+          (tester) async {
         // Test UI without actually connecting wallet (avoids SharedPreferences issues)
         await tester.pumpWidget(
           buildTestWidget(
@@ -188,7 +189,8 @@ void main() {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(license.displayName),
-                                Text(license.description, style: const TextStyle(fontSize: 12)),
+                                Text(license.description,
+                                    style: const TextStyle(fontSize: 12)),
                               ],
                             ),
                           ),
@@ -225,7 +227,8 @@ void main() {
     });
 
     group('Listed Token Actions', () {
-      testWidgets('shows listed status card when token is listed', (tester) async {
+      testWidgets('shows listed status card when token is listed',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             Scaffold(
@@ -250,7 +253,8 @@ void main() {
                     onPressed: () {},
                     icon: const Icon(Icons.remove_shopping_cart),
                     label: const Text('Remove Listing'),
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                    style:
+                        OutlinedButton.styleFrom(foregroundColor: Colors.red),
                   ),
                 ],
               ),
@@ -263,7 +267,8 @@ void main() {
         expect(find.byIcon(Icons.remove_shopping_cart), findsOneWidget);
       });
 
-      testWidgets('shows bilateral agreement notice for buyers', (tester) async {
+      testWidgets('shows bilateral agreement notice for buyers',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             Scaffold(
@@ -276,7 +281,8 @@ void main() {
                     children: [
                       Row(
                         children: [
-                          const Icon(Icons.verified_user, color: Colors.blue, size: 20),
+                          const Icon(Icons.verified_user,
+                              color: Colors.blue, size: 20),
                           const SizedBox(width: 8),
                           Text(
                             'Bilateral Agreement Required',
@@ -343,7 +349,8 @@ void main() {
         expect(find.byIcon(Icons.share), findsOneWidget);
       });
 
-      testWidgets('shows polygonscan link when transaction hash exists', (tester) async {
+      testWidgets('shows polygonscan link when transaction hash exists',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             Scaffold(

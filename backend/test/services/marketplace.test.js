@@ -118,11 +118,12 @@ describe('Marketplace (Mock Mode)', () => {
   });
 
   describe('buyToken', () => {
-    it('should transfer ownership on purchase', async () => {
+    it('should transfer ownership on purchase (Transfer license)', async () => {
       const { tokenId } = await mintToken(userA);
       const price = '1000000000000000000';
 
-      await blockchainService.listToken(tokenId, price, 'display', mockLicenseHash, userA);
+      // Use 'transfer' license type - this actually transfers the token
+      await blockchainService.listToken(tokenId, price, 'transfer', mockLicenseHash, userA);
 
       const result = await blockchainService.buyToken(tokenId, userB);
 
@@ -130,12 +131,35 @@ describe('Marketplace (Mock Mode)', () => {
       expect(result.buyer).toBe(userB);
       expect(result.price).toBe(price);
 
-      // Verify ownership changed
+      // Verify ownership changed (only happens with Transfer license)
       const isOwner = await blockchainService.isOwner(tokenId, userB);
       expect(isOwner).toBe(true);
 
       const wasOwner = await blockchainService.isOwner(tokenId, userA);
       expect(wasOwner).toBe(false);
+    });
+
+    it('should mint license token on Display purchase (original stays with seller)', async () => {
+      const { tokenId } = await mintToken(userA);
+      const price = '1000000000000000000';
+
+      // Use 'display' license - this mints a new license token for buyer
+      await blockchainService.listToken(tokenId, price, 'display', mockLicenseHash, userA);
+
+      const result = await blockchainService.buyToken(tokenId, userB);
+
+      expect(result.seller).toBe(userA);
+      expect(result.buyer).toBe(userB);
+      expect(result.isLicenseGrant).toBe(true);
+      expect(result.parentTokenId).toBe(tokenId);
+
+      // Original token stays with seller
+      const originalStaysWithSeller = await blockchainService.isOwner(tokenId, userA);
+      expect(originalStaysWithSeller).toBe(true);
+
+      // Buyer owns the NEW license token
+      const buyerOwnsLicense = await blockchainService.isOwner(result.tokenId, userB);
+      expect(buyerOwnsLicense).toBe(true);
     });
 
     it('should remove listing after purchase', async () => {
@@ -210,13 +234,13 @@ describe('Marketplace (Mock Mode)', () => {
   });
 
   describe('full marketplace flow', () => {
-    it('should support mint -> list -> buy -> relist cycle', async () => {
+    it('should support mint -> list -> buy -> relist cycle (Transfer license)', async () => {
       // User A mints
       const { tokenId } = await mintToken(userA);
       expect(await blockchainService.isOwner(tokenId, userA)).toBe(true);
 
-      // User A lists for 1 ETH
-      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
+      // User A lists for 1 ETH with Transfer license (so token actually transfers)
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'transfer', mockLicenseHash, userA);
 
       // User B buys
       await blockchainService.buyToken(tokenId, userB);

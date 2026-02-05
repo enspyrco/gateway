@@ -53,7 +53,8 @@ void main() {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.storefront, size: 64, color: Colors.grey.shade400),
+                    Icon(Icons.storefront,
+                        size: 64, color: Colors.grey.shade400),
                     const SizedBox(height: 16),
                     const Text('No NFTs for sale'),
                     const SizedBox(height: 8),
@@ -76,7 +77,8 @@ void main() {
         expect(find.text('Mint an NFT'), findsOneWidget);
       });
 
-      testWidgets('displays listing cards with price and seller', (tester) async {
+      testWidgets('displays listing cards with price and seller',
+          (tester) async {
         final mockListing = {
           'tokenId': 1,
           'name': 'Test NFT',
@@ -101,7 +103,8 @@ void main() {
                         ),
                         const SizedBox(height: 4),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
                             color: Colors.green.shade100,
                             borderRadius: BorderRadius.circular(4),
@@ -134,7 +137,8 @@ void main() {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.error_outline, size: 48, color: Colors.grey.shade400),
+                    Icon(Icons.error_outline,
+                        size: 48, color: Colors.grey.shade400),
                     const SizedBox(height: 16),
                     const Text('Error loading marketplace'),
                     const SizedBox(height: 8),
@@ -160,7 +164,8 @@ void main() {
     });
 
     group('Buy Functionality', () {
-      testWidgets('shows buy button for listed tokens when connected', (tester) async {
+      testWidgets('shows buy button for listed tokens when connected',
+          (tester) async {
         // Test UI without actually connecting wallet (avoids SharedPreferences issues)
         await tester.pumpWidget(
           buildTestWidget(
@@ -180,7 +185,8 @@ void main() {
         expect(find.byIcon(Icons.shopping_cart), findsOneWidget);
       });
 
-      testWidgets('shows connect wallet prompt when not connected', (tester) async {
+      testWidgets('shows connect wallet prompt when not connected',
+          (tester) async {
         expect(walletProvider.isConnected, isFalse);
 
         await tester.pumpWidget(
