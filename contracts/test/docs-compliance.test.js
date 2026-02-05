@@ -105,7 +105,7 @@ describe('Documentation Compliance', function () {
       await nftmarket.connect(alice).list(tokenId, price, 2, licenseHash, expiry, listingSig);
 
       // Buy the token
-      const minterBalanceBefore = await ethers.provider.getBalance(minter.address);
+      const pendingFeesBefore = await nftmarket.pendingFees(minter.address);
       const sellerBalanceBefore = await ethers.provider.getBalance(alice.address);
 
       const purchaseTypes = {
@@ -132,12 +132,12 @@ describe('Documentation Compliance', function () {
 
       await nftmarket.connect(bob).buy(tokenId, purchaseSig, { value: price });
 
-      const minterBalanceAfter = await ethers.provider.getBalance(minter.address);
+      const pendingFeesAfter = await nftmarket.pendingFees(minter.address);
       const sellerBalanceAfter = await ethers.provider.getBalance(alice.address);
 
-      // V2: Fee goes to MINTER wallet, not admin/platform
+      // V2: Fee accrues to MINTER wallet (pull pattern), not admin/platform
       const expectedFee = price * BigInt(DEFAULT_FEE_BPS) / 10000n;
-      expect(minterBalanceAfter - minterBalanceBefore).to.equal(expectedFee);
+      expect(pendingFeesAfter - pendingFeesBefore).to.equal(expectedFee);
 
       // Seller should receive 97.5%
       const expectedSellerAmount = price - expectedFee;

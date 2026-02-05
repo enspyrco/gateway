@@ -432,29 +432,29 @@ describe("NFTmarketNFT", function () {
       await listToken(artist, 0, listPrice, LicenseType.Transfer);
     });
 
-    it("Should send fee to minter wallet, not authority admin", async function () {
-      const minterBalanceBefore = await ethers.provider.getBalance(minter.address);
+    it("Should accrue fee to minter wallet, not authority admin", async function () {
+      const pendingFeesBefore = await nftmarket.pendingFees(minter.address);
       const artistBalanceBefore = await ethers.provider.getBalance(artist.address);
-      const adminBalanceBefore = await ethers.provider.getBalance(admin.address);
+      const adminPendingBefore = await nftmarket.pendingFees(admin.address);
 
       await buyToken(buyer, 0, listPrice);
 
-      const minterBalanceAfter = await ethers.provider.getBalance(minter.address);
+      const pendingFeesAfter = await nftmarket.pendingFees(minter.address);
       const artistBalanceAfter = await ethers.provider.getBalance(artist.address);
-      const adminBalanceAfter = await ethers.provider.getBalance(admin.address);
+      const adminPendingAfter = await nftmarket.pendingFees(admin.address);
 
       // 2.5% fee = 0.025 ETH
       const expectedFee = listPrice * 250n / 10000n;
       const expectedSellerProceeds = listPrice - expectedFee;
 
-      // Minter receives the fee
-      expect(minterBalanceAfter - minterBalanceBefore).to.equal(expectedFee);
+      // Minter accrues the fee (pull pattern)
+      expect(pendingFeesAfter - pendingFeesBefore).to.equal(expectedFee);
 
-      // Seller receives the rest
+      // Seller receives the rest immediately
       expect(artistBalanceAfter - artistBalanceBefore).to.equal(expectedSellerProceeds);
 
       // Admin receives nothing (they're just the admin, not the fee recipient)
-      expect(adminBalanceAfter).to.equal(adminBalanceBefore);
+      expect(adminPendingAfter).to.equal(adminPendingBefore);
     });
 
     it("Should use correct authority fee percentage", async function () {
@@ -467,15 +467,15 @@ describe("NFTmarketNFT", function () {
       await reserveAndMint(partnerMinter, artist.address, tokenUri, imageHash2, ipfsUri);
       await listToken(artist, 1, listPrice, LicenseType.Transfer);
 
-      const partnerMinterBalanceBefore = await ethers.provider.getBalance(partnerMinter.address);
+      const pendingFeesBefore = await nftmarket.pendingFees(partnerMinter.address);
 
       await buyToken(buyer, 1, listPrice);
 
-      const partnerMinterBalanceAfter = await ethers.provider.getBalance(partnerMinter.address);
+      const pendingFeesAfter = await nftmarket.pendingFees(partnerMinter.address);
 
-      // 5% fee = 0.05 ETH
+      // 5% fee = 0.05 ETH (accrued via pull pattern)
       const expectedFee = listPrice * 500n / 10000n;
-      expect(partnerMinterBalanceAfter - partnerMinterBalanceBefore).to.equal(expectedFee);
+      expect(pendingFeesAfter - pendingFeesBefore).to.equal(expectedFee);
     });
 
     it("Should route fee to original minter for license tokens too", async function () {
@@ -483,28 +483,28 @@ describe("NFTmarketNFT", function () {
       await nftmarket.connect(artist).delist(0);
       await listToken(artist, 0, listPrice, LicenseType.Display);
 
-      const minterBalanceBefore = await ethers.provider.getBalance(minter.address);
+      const pendingFeesBefore = await nftmarket.pendingFees(minter.address);
 
       // Buy creates license token 1
       await buyToken(buyer, 0, listPrice);
 
-      const minterBalanceAfter = await ethers.provider.getBalance(minter.address);
+      const pendingFeesAfter = await nftmarket.pendingFees(minter.address);
 
-      // Fee still goes to original minter
+      // Fee is accrued to original minter (pull pattern)
       const expectedFee = listPrice * 250n / 10000n;
-      expect(minterBalanceAfter - minterBalanceBefore).to.equal(expectedFee);
+      expect(pendingFeesAfter - pendingFeesBefore).to.equal(expectedFee);
 
       // Now sell the license token
       await listToken(buyer, 1, listPrice, LicenseType.Transfer);
 
-      const minterBalanceBefore2 = await ethers.provider.getBalance(minter.address);
+      const pendingFeesBefore2 = await nftmarket.pendingFees(minter.address);
 
       await buyToken(other, 1, listPrice);
 
-      const minterBalanceAfter2 = await ethers.provider.getBalance(minter.address);
+      const pendingFeesAfter2 = await nftmarket.pendingFees(minter.address);
 
-      // Fee still goes to the ORIGINAL minter (inherited from parent)
-      expect(minterBalanceAfter2 - minterBalanceBefore2).to.equal(expectedFee);
+      // Fee still accrues to the ORIGINAL minter (inherited from parent)
+      expect(pendingFeesAfter2 - pendingFeesBefore2).to.equal(expectedFee);
     });
   });
 
@@ -628,7 +628,7 @@ describe("NFTmarketNFT", function () {
 
     it("Should allow buying with valid buyer signature", async function () {
       const artistBalanceBefore = await ethers.provider.getBalance(artist.address);
-      const minterBalanceBefore = await ethers.provider.getBalance(minter.address);
+      const pendingFeesBefore = await nftmarket.pendingFees(minter.address);
 
       const tx = await buyToken(buyer, 0, listPrice);
 
@@ -646,14 +646,14 @@ describe("NFTmarketNFT", function () {
       const listing = await nftmarket.getListing(0);
       expect(listing.active).to.be.false;
 
-      // Check payments (2.5% fee to minter, seller gets rest)
+      // Check payments (2.5% fee accrued to minter, seller gets rest)
       const fee = listPrice * 250n / 10000n;
       const artistProceeds = listPrice - fee;
 
       const artistBalanceAfter = await ethers.provider.getBalance(artist.address);
-      const minterBalanceAfter = await ethers.provider.getBalance(minter.address);
+      const pendingFeesAfter = await nftmarket.pendingFees(minter.address);
 
-      expect(minterBalanceAfter - minterBalanceBefore).to.equal(fee);
+      expect(pendingFeesAfter - pendingFeesBefore).to.equal(fee);
       expect(artistBalanceAfter - artistBalanceBefore).to.equal(artistProceeds);
     });
 
@@ -1205,6 +1205,311 @@ describe("NFTmarketNFT", function () {
       await expect(
         upgrades.upgradeProxy(proxyAddress, NFTmarketNFTV2)
       ).to.be.revertedWithCustomError(nftmarket, "OwnableUnauthorizedAccount");
+    });
+  });
+
+  // ============ Edge Case Tests ============
+
+  describe("Fee Cap", function () {
+    it("Should enforce MAX_FEE_BPS (50%) on initialize", async function () {
+      const NFTmarketNFT = await ethers.getContractFactory("NFTmarketNFT");
+
+      // Try to initialize with fee > 50%
+      await expect(
+        upgrades.deployProxy(
+          NFTmarketNFT,
+          [owner.address, admin.address, 6000], // 60% - too high
+          { kind: 'uups' }
+        )
+      ).to.be.revertedWithCustomError(nftmarket, "FeeTooHigh");
+    });
+
+    it("Should enforce MAX_FEE_BPS on registerAuthority", async function () {
+      await expect(
+        nftmarket.connect(owner).registerAuthority(partnerAdmin.address, 5001) // > 50%
+      ).to.be.revertedWithCustomError(nftmarket, "FeeTooHigh");
+
+      // 50% should be allowed
+      await expect(
+        nftmarket.connect(owner).registerAuthority(partnerAdmin.address, 5000)
+      ).to.not.be.reverted;
+    });
+
+    it("Should enforce MAX_FEE_BPS on updateAuthorityFee", async function () {
+      await expect(
+        nftmarket.connect(admin).updateAuthorityFee(0, 5001) // > 50%
+      ).to.be.revertedWithCustomError(nftmarket, "FeeTooHigh");
+
+      // 50% should be allowed
+      await expect(
+        nftmarket.connect(admin).updateAuthorityFee(0, 5000)
+      ).to.not.be.reverted;
+    });
+  });
+
+  describe("Fee Withdrawal (Pull Pattern)", function () {
+    let tokenId;
+
+    beforeEach(async function () {
+      // Mint a token
+      const reserveTx = await nftmarket.connect(minter).reserveTokenId();
+      const reserveReceipt = await reserveTx.wait();
+      const reserveEvent = reserveReceipt.logs
+        .map(log => { try { return nftmarket.interface.parseLog(log); } catch { return null; } })
+        .find(e => e?.name === "TokenReserved");
+      tokenId = reserveEvent.args.tokenId;
+
+      await nftmarket.connect(minter).mint(
+        tokenId,
+        artist.address,
+        tokenUri,
+        imageHash,
+        ipfsUri
+      );
+    });
+
+    it("Should accrue fees on sale instead of direct transfer", async function () {
+      const price = ethers.parseEther("1.0");
+
+      // List token
+      await listToken(artist, tokenId, price, LicenseType.Transfer);
+
+      // Buy token - get nonce from listing, not getNonce
+      const listing = await nftmarket.getListing(tokenId);
+      const buyerSig = await signPurchaseAcceptance(
+        buyer, tokenId, price, LicenseType.Transfer, listing.licenseHash, artist.address, listing.nonce
+      );
+
+      await nftmarket.connect(buyer).buy(tokenId, buyerSig, { value: price });
+
+      // Fee should be accrued for minter, not transferred yet
+      const expectedFee = (price * BigInt(DEFAULT_FEE_BPS)) / 10000n;
+      expect(await nftmarket.pendingFees(minter.address)).to.equal(expectedFee);
+    });
+
+    it("Should allow minter to withdraw accrued fees", async function () {
+      const price = ethers.parseEther("1.0");
+
+      // List and sell token
+      await listToken(artist, tokenId, price, LicenseType.Transfer);
+      const listing = await nftmarket.getListing(tokenId);
+      const buyerSig = await signPurchaseAcceptance(
+        buyer, tokenId, price, LicenseType.Transfer, listing.licenseHash, artist.address, listing.nonce
+      );
+      await nftmarket.connect(buyer).buy(tokenId, buyerSig, { value: price });
+
+      const expectedFee = (price * BigInt(DEFAULT_FEE_BPS)) / 10000n;
+      const minterBalanceBefore = await ethers.provider.getBalance(minter.address);
+
+      // Withdraw fees
+      const withdrawTx = await nftmarket.connect(minter).withdrawFees();
+      const receipt = await withdrawTx.wait();
+      const gasUsed = receipt.gasUsed * receipt.gasPrice;
+
+      const minterBalanceAfter = await ethers.provider.getBalance(minter.address);
+
+      // Balance should increase by fee minus gas
+      expect(minterBalanceAfter).to.equal(minterBalanceBefore + expectedFee - gasUsed);
+
+      // Pending fees should be cleared
+      expect(await nftmarket.pendingFees(minter.address)).to.equal(0);
+    });
+
+    it("Should revert if no fees to withdraw", async function () {
+      await expect(
+        nftmarket.connect(other).withdrawFees()
+      ).to.be.revertedWithCustomError(nftmarket, "NoFeesToWithdraw");
+    });
+
+    it("Should emit FeeAccrued and FeeWithdrawn events", async function () {
+      const price = ethers.parseEther("1.0");
+      const expectedFee = (price * BigInt(DEFAULT_FEE_BPS)) / 10000n;
+
+      // List and sell
+      await listToken(artist, tokenId, price, LicenseType.Transfer);
+      const listing = await nftmarket.getListing(tokenId);
+      const buyerSig = await signPurchaseAcceptance(
+        buyer, tokenId, price, LicenseType.Transfer, listing.licenseHash, artist.address, listing.nonce
+      );
+
+      // Check FeeAccrued event on buy
+      await expect(
+        nftmarket.connect(buyer).buy(tokenId, buyerSig, { value: price })
+      ).to.emit(nftmarket, "FeeAccrued")
+        .withArgs(minter.address, tokenId, expectedFee);
+
+      // Check FeeWithdrawn event
+      await expect(
+        nftmarket.connect(minter).withdrawFees()
+      ).to.emit(nftmarket, "FeeWithdrawn")
+        .withArgs(minter.address, expectedFee);
+    });
+  });
+
+  describe("Deactivated Authority", function () {
+    let tokenId;
+
+    beforeEach(async function () {
+      // Mint a token under default authority
+      const reserveTx = await nftmarket.connect(minter).reserveTokenId();
+      const reserveReceipt = await reserveTx.wait();
+      const reserveEvent = reserveReceipt.logs
+        .map(log => { try { return nftmarket.interface.parseLog(log); } catch { return null; } })
+        .find(e => e?.name === "TokenReserved");
+      tokenId = reserveEvent.args.tokenId;
+
+      await nftmarket.connect(minter).mint(
+        tokenId,
+        artist.address,
+        tokenUri,
+        imageHash,
+        ipfsUri
+      );
+    });
+
+    it("Should allow existing tokens to be listed after authority deactivation", async function () {
+      // Deactivate authority
+      await nftmarket.connect(owner).deactivateAuthority(0);
+
+      // Should still be able to list existing token
+      const price = ethers.parseEther("0.5");
+      await expect(
+        listToken(artist, tokenId, price, LicenseType.Display)
+      ).to.not.be.reverted;
+    });
+
+    it("Should allow existing tokens to be sold after authority deactivation", async function () {
+      const price = ethers.parseEther("0.5");
+
+      // List token first
+      await listToken(artist, tokenId, price, LicenseType.Transfer);
+
+      // Deactivate authority
+      await nftmarket.connect(owner).deactivateAuthority(0);
+
+      // Should still be able to buy - get nonce from listing
+      const listing = await nftmarket.getListing(tokenId);
+      const buyerSig = await signPurchaseAcceptance(
+        buyer, tokenId, price, LicenseType.Transfer, listing.licenseHash, artist.address, listing.nonce
+      );
+
+      await expect(
+        nftmarket.connect(buyer).buy(tokenId, buyerSig, { value: price })
+      ).to.not.be.reverted;
+
+      expect(await nftmarket.ownerOf(tokenId)).to.equal(buyer.address);
+    });
+
+    it("Should still accrue fees to minter after authority deactivation", async function () {
+      const price = ethers.parseEther("1.0");
+
+      // List token
+      await listToken(artist, tokenId, price, LicenseType.Transfer);
+
+      // Deactivate authority
+      await nftmarket.connect(owner).deactivateAuthority(0);
+
+      // Buy token - get nonce from listing
+      const listing = await nftmarket.getListing(tokenId);
+      const buyerSig = await signPurchaseAcceptance(
+        buyer, tokenId, price, LicenseType.Transfer, listing.licenseHash, artist.address, listing.nonce
+      );
+      await nftmarket.connect(buyer).buy(tokenId, buyerSig, { value: price });
+
+      // Fees should still be accrued
+      const expectedFee = (price * BigInt(DEFAULT_FEE_BPS)) / 10000n;
+      expect(await nftmarket.pendingFees(minter.address)).to.equal(expectedFee);
+    });
+
+    it("Should prevent new minting after authority deactivation", async function () {
+      // Deactivate authority
+      await nftmarket.connect(owner).deactivateAuthority(0);
+
+      // Try to reserve new token ID
+      await expect(
+        nftmarket.connect(minter).reserveTokenId()
+      ).to.be.revertedWithCustomError(nftmarket, "AuthorityNotActive");
+    });
+  });
+
+  describe("Provenance Chain", function () {
+    it("Should track provenance for license tokens", async function () {
+      // License tokens (from Display/Commercial sales) cannot be re-listed
+      // But their provenance chain should still work correctly
+      const price = ethers.parseEther("0.1");
+
+      // Mint original token
+      const reserveTx = await nftmarket.connect(minter).reserveTokenId();
+      const reserveReceipt = await reserveTx.wait();
+      const reserveEvent = reserveReceipt.logs
+        .map(log => { try { return nftmarket.interface.parseLog(log); } catch { return null; } })
+        .find(e => e?.name === "TokenReserved");
+      const originalTokenId = reserveEvent.args.tokenId;
+
+      await nftmarket.connect(minter).mint(
+        originalTokenId,
+        artist.address,
+        tokenUri,
+        imageHash,
+        ipfsUri
+      );
+
+      // Original token has single-element chain
+      const originalChain = await nftmarket.getProvenanceChain(originalTokenId);
+      expect(originalChain.length).to.equal(1);
+      expect(originalChain[0]).to.equal(originalTokenId);
+
+      // Sell Display license - creates license token
+      await listToken(artist, originalTokenId, price, LicenseType.Display);
+      const listing = await nftmarket.getListing(originalTokenId);
+      const buyerSig = await signPurchaseAcceptance(
+        buyer, originalTokenId, price, LicenseType.Display, listing.licenseHash, artist.address, listing.nonce
+      );
+
+      const buyTx = await nftmarket.connect(buyer).buy(originalTokenId, buyerSig, { value: price });
+      const buyReceipt = await buyTx.wait();
+
+      // Find the new license token
+      const licenseEvent = buyReceipt.logs
+        .map(log => { try { return nftmarket.interface.parseLog(log); } catch { return null; } })
+        .find(e => e?.name === "LicenseGranted");
+
+      expect(licenseEvent).to.not.be.undefined;
+      const licenseTokenId = licenseEvent.args.newTokenId;
+
+      // License token chain should include parent and original
+      const licenseChain = await nftmarket.getProvenanceChain(licenseTokenId);
+      expect(licenseChain.length).to.equal(2);
+      expect(licenseChain[0]).to.equal(licenseTokenId); // Current token
+      expect(licenseChain[1]).to.equal(originalTokenId); // Parent/original
+
+      // Verify license token cannot be re-listed (sublicense not allowed)
+      await expect(
+        listToken(buyer, licenseTokenId, price, LicenseType.Display)
+      ).to.be.revertedWithCustomError(nftmarket, "LicenseTokensCannotSubLicense");
+    });
+
+    it("Should return single-element chain for original token", async function () {
+      // Mint original token
+      const reserveTx = await nftmarket.connect(minter).reserveTokenId();
+      const reserveReceipt = await reserveTx.wait();
+      const reserveEvent = reserveReceipt.logs
+        .map(log => { try { return nftmarket.interface.parseLog(log); } catch { return null; } })
+        .find(e => e?.name === "TokenReserved");
+      const tokenId = reserveEvent.args.tokenId;
+
+      const uniqueHash = ethers.keccak256(ethers.toUtf8Bytes("unique-image-for-provenance-test"));
+      await nftmarket.connect(minter).mint(
+        tokenId,
+        artist.address,
+        tokenUri,
+        uniqueHash,
+        ipfsUri
+      );
+
+      const chain = await nftmarket.getProvenanceChain(tokenId);
+      expect(chain.length).to.equal(1);
+      expect(chain[0]).to.equal(tokenId);
     });
   });
 });

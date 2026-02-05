@@ -67,7 +67,13 @@ const NFTMARKET_ABI = [
   'event BilateralAgreement(uint256 indexed tokenId, bytes sellerSignature, bytes buyerSignature, uint256 timestamp)',
   'event CopyrightTransferred(uint256 indexed tokenId, address indexed from, address indexed to)',
   'event DisplayRightsRetained(uint256 indexed tokenId, address indexed holder)',
-  'event LicenseGranted(uint256 indexed newTokenId, uint256 indexed parentTokenId, uint256 indexed originalTokenId, address licensor, address licensee, uint8 licenseType, bytes32 licenseHash)'
+  'event LicenseGranted(uint256 indexed newTokenId, uint256 indexed parentTokenId, uint256 indexed originalTokenId, address licensor, address licensee, uint8 licenseType, bytes32 licenseHash)',
+  // Fee withdrawal (pull pattern)
+  'function withdrawFees()',
+  'function pendingFees(address minter) view returns (uint256)',
+  'function MAX_FEE_BPS() view returns (uint256)',
+  'event FeeAccrued(address indexed minter, uint256 indexed tokenId, uint256 amount)',
+  'event FeeWithdrawn(address indexed minter, uint256 amount)'
 ];
 
 // EIP-712 type definitions
@@ -389,12 +395,17 @@ function mockReserveTokenId() {
 
 /**
  * Mint a new NFT with a reserved token ID
+ *
+ * Note on parameters: The contract only requires (reservedTokenId, to, uri, imageHash, ipfsUri).
+ * licenseType and licenseHash are accepted here for mock mode compatibility but are NOT sent
+ * to the blockchain - they should be stored in Firestore for marketplace operations.
+ *
  * @param {number} reservedTokenId - Token ID from reserveTokenId()
  * @param {string} to - Recipient wallet address
  * @param {string} uri - Token metadata URI (Arweave)
- * @param {number} licenseType - License type (0=Display, 1=Commercial, 2=Transfer) - stored in Firestore only
+ * @param {number} licenseType - License type (0=Display, 1=Commercial, 2=Transfer) - MOCK ONLY, store in Firestore
  * @param {string} imageHash - SHA-256 hash of watermarked image (0x prefixed)
- * @param {string} licenseHash - Hash of signed license agreement - stored in Firestore only
+ * @param {string} licenseHash - Hash of signed license agreement - MOCK ONLY, store in Firestore
  * @param {string} ipfsUri - IPFS URI of watermarked image (public)
  * @returns {Promise<{tokenId: number, transactionHash: string}>}
  */

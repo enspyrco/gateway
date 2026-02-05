@@ -99,15 +99,21 @@ struct Listing {
 | `mint(...)` | Minter | Mint with reserved token ID |
 | `list(...)` | Token owner | List for sale with EIP-712 signature |
 | `buy(...)` | Anyone | Purchase with EIP-712 signature + payment |
+| `withdrawFees()` | Minter | Withdraw accumulated fees (pull pattern) |
+| `pendingFees(address)` | view | Check pending fees for an address |
 
-### Fee Distribution
+### Fee Distribution (Pull Pattern)
 
 When a token is sold on the marketplace:
-1. Fee calculated: `price * authority.feeBps / 10000`
-2. Fee sent to `tokenData[tokenId].minter` (the wallet that originally minted)
-3. Remainder sent to seller
+1. Fee calculated: `price * authority.feeBps / 10000` (max 50% cap enforced)
+2. Fee **accrued** to `pendingFees[tokenData[tokenId].minter]` (not transferred immediately)
+3. Remainder sent to seller immediately
+4. Minter calls `withdrawFees()` to collect accrued fees
 
-This allows platforms to pool minting across multiple wallets while tracking fees per-wallet.
+This pull pattern:
+- Prevents sales from being blocked if minter is a contract that rejects ETH
+- Allows platforms to pool minting across multiple wallets while tracking fees per-wallet
+- Minters can batch-withdraw accumulated fees
 
 ## Deployment
 
@@ -147,3 +153,6 @@ Copy `.env.example` to `.env`:
 - Encrypted originals stored off-chain in Firestore (not on blockchain)
 - Authority 0 is created during initialization with the deployer as admin
 - Storage gaps (`uint256[50] private __gap`) reserved for future upgrades
+- `MAX_FEE_BPS = 5000` (50% max fee cap on all authorities)
+- Fees use pull pattern (`withdrawFees()`) - not transferred directly on sale
+- License tokens (from Display/Commercial sales) cannot be re-listed (no sublicensing)

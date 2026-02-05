@@ -94,6 +94,7 @@ contract NFTmarketNFT is
 
     uint256 private _nextTokenId;
     uint256 public constant RESERVATION_DURATION = 1 hours;
+    uint256 public constant MAX_FEE_BPS = 5000; // 50% max fee cap
 
     // Authority system
     uint256 private _nextAuthorityId;
@@ -111,6 +112,10 @@ contract NFTmarketNFT is
     // Track who has Display rights (from selling Transfer)
     // tokenId => address => hasDisplayRights
     mapping(uint256 => mapping(address => bool)) public hasDisplayLicense;
+
+    // Pending fees for minters (pull pattern to avoid blocking sales)
+    // minter address => pending fee amount
+    mapping(address => uint256) public pendingFees;
 
     // ============ Events ============
 
@@ -206,6 +211,17 @@ contract NFTmarketNFT is
         bytes32 licenseHash
     );
 
+    event FeeAccrued(
+        address indexed minter,
+        uint256 indexed tokenId,
+        uint256 amount
+    );
+
+    event FeeWithdrawn(
+        address indexed minter,
+        uint256 amount
+    );
+
     // ============ Errors ============
 
     error NoValidReservation();
@@ -229,6 +245,8 @@ contract NFTmarketNFT is
     error MinterAlreadyRegistered();
     error MinterNotFound();
     error AuthorityNotFound();
+    error FeeTooHigh();
+    error NoFeesToWithdraw();
 
     // ============ Initializer (replaces constructor) ============
 
@@ -248,6 +266,10 @@ contract NFTmarketNFT is
         address defaultAdmin,
         uint96 defaultFeeBps
     ) public initializer {
+        if (defaultFeeBps > MAX_FEE_BPS) {
+            revert FeeTooHigh();
+        }
+
         __ERC721_init("NFTmarket", "NFTM");
         __ERC721URIStorage_init();
         __Ownable_init(owner_);
@@ -277,10 +299,14 @@ contract NFTmarketNFT is
     /**
      * @notice Register a new watermarking authority (contract owner only)
      * @param admin The admin address for the new authority
-     * @param feeBps Fee in basis points (e.g., 300 = 3.0%)
+     * @param feeBps Fee in basis points (e.g., 300 = 3.0%, max 5000 = 50%)
      * @return authorityId The new authority's ID
      */
     function registerAuthority(address admin, uint96 feeBps) external onlyOwner returns (uint256) {
+        if (feeBps > MAX_FEE_BPS) {
+            revert FeeTooHigh();
+        }
+
         uint256 authorityId = _nextAuthorityId++;
 
         authorities[authorityId] = Authority({
@@ -310,9 +336,13 @@ contract NFTmarketNFT is
     /**
      * @notice Update authority fee (authority admin only)
      * @param authorityId The authority to update
-     * @param newFeeBps New fee in basis points
+     * @param newFeeBps New fee in basis points (max 5000 = 50%)
      */
     function updateAuthorityFee(uint256 authorityId, uint96 newFeeBps) external {
+        if (newFeeBps > MAX_FEE_BPS) {
+            revert FeeTooHigh();
+        }
+
         Authority storage auth = authorities[authorityId];
         if (auth.admin != msg.sender) {
             revert NotAuthorityAdmin();
@@ -755,8 +785,9 @@ contract NFTmarketNFT is
     }
 
     /**
-     * @notice Distribute payment to minter (fee) and seller (proceeds)
-     * @dev Fee goes to the wallet that minted the token, not authority admin
+     * @notice Distribute payment to minter (fee via pull) and seller (proceeds)
+     * @dev Fee is accrued for the minter to withdraw later (pull pattern)
+     *      This prevents sales from being blocked if minter contract rejects ETH
      */
     function _distributePayment(
         address seller,
@@ -769,13 +800,33 @@ contract NFTmarketNFT is
         uint256 fee = (price * auth.feeBps) / 10000;
         uint256 sellerProceeds = price - fee;
 
-        // Pay fee to the MINTER WALLET (the wallet that created this token)
-        (bool feeSuccess, ) = token.minter.call{value: fee}("");
-        if (!feeSuccess) revert TransferFailed();
+        // Accrue fee for minter to withdraw later (pull pattern)
+        // This prevents blocking sales if minter is a contract that rejects ETH
+        pendingFees[token.minter] += fee;
+        emit FeeAccrued(token.minter, tokenId, fee);
 
-        // Pay seller
+        // Pay seller immediately
         (bool sellerSuccess, ) = seller.call{value: sellerProceeds}("");
         if (!sellerSuccess) revert TransferFailed();
+    }
+
+    /**
+     * @notice Withdraw accumulated fees (for minters)
+     * @dev Pull pattern - minters call this to collect their fees
+     */
+    function withdrawFees() external nonReentrant {
+        uint256 amount = pendingFees[msg.sender];
+        if (amount == 0) {
+            revert NoFeesToWithdraw();
+        }
+
+        // Clear before transfer (checks-effects-interactions)
+        pendingFees[msg.sender] = 0;
+
+        (bool success, ) = msg.sender.call{value: amount}("");
+        if (!success) revert TransferFailed();
+
+        emit FeeWithdrawn(msg.sender, amount);
     }
 
     // ============ View Functions ============
