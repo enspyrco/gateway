@@ -19,10 +19,13 @@ const USE_MOCK_WATERMARK = process.env.USE_MOCK_WATERMARK === "true";
 /**
  * Apply invisible watermark to image
  * @param {Buffer} imageBuffer - Original image
- * @param {string} message - Message to embed (e.g., "TIND12345678")
+ * @param {string} walletAddress - Creator's wallet address
+ * @param {number|string} tokenId - Token ID to embed
  * @returns {Promise<Buffer>} - Watermarked image
  */
-async function applyWatermark(imageBuffer, message) {
+async function applyWatermark(imageBuffer, walletAddress, tokenId) {
+  // Combine wallet and token ID into watermark message
+  const message = `${walletAddress}:${tokenId}`;
   // In development mode without the C++ binary, return the image as-is
   if (USE_MOCK_WATERMARK) {
     console.log(`MOCK WATERMARK: Would embed message "${message}" into image`);

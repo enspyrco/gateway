@@ -75,8 +75,7 @@ NFTmarket/
 ### Smart Contract
 
 - ERC-721 with integrated marketplace
-- 2.5% royalty to creator on secondary sales (EIP-2981)
-- 2.5% platform fee
+- 2.5% platform fee on sales
 - Duplicate prevention via image hash
 
 ### Security

@@ -108,8 +108,6 @@ class _MintPageState extends State<MintPage> {
                       if (mint.hasImage) ...[
                         const SizedBox(height: 24),
                         _MintForm(),
-                        const SizedBox(height: 24),
-                        _LicenseSelector(),
                         const SizedBox(height: 32),
                         _MintButton(),
                       ],
@@ -251,106 +249,6 @@ class _MintForm extends StatelessWidget {
   }
 }
 
-class _LicenseSelector extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final mint = context.watch<MintProvider>();
-
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'License Type',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Choose what rights buyers will receive',
-              style: TextStyle(color: Colors.grey.shade600),
-            ),
-            const SizedBox(height: 16),
-            ...LicenseType.values.map((license) {
-              final isSelected = mint.licenseType == license;
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: InkWell(
-                  onTap: mint.isMinting
-                      ? null
-                      : () => mint.setLicenseType(license),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: isSelected
-                            ? Theme.of(context).colorScheme.primary
-                            : Colors.grey.shade300,
-                        width: isSelected ? 2 : 1,
-                      ),
-                      color: isSelected
-                          ? Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withValues(alpha: 0.05)
-                          : null,
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isSelected
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_unchecked,
-                          color: isSelected
-                              ? Theme.of(context).colorScheme.primary
-                              : Colors.grey.shade400,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                license.displayName,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.bold),
-                              ),
-                              Text(
-                                license.description,
-                                style: TextStyle(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 13,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        Text(
-                          '\$${license.price.toStringAsFixed(0)}',
-                          style: Theme.of(context)
-                              .textTheme
-                              .titleLarge
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.primary,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _MintButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -439,9 +337,9 @@ class _MintButton extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             padding: const EdgeInsets.symmetric(vertical: 20),
           ),
-          child: Text(
-            'Mint for \$${mint.licenseType.price.toStringAsFixed(0)}',
-            style: const TextStyle(fontSize: 18),
+          child: const Text(
+            'Mint NFT',
+            style: TextStyle(fontSize: 18),
           ),
         ),
         const SizedBox(height: 8),
@@ -574,7 +472,15 @@ class _InfoRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: TextStyle(color: Colors.grey.shade600)),
-        Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+        const SizedBox(width: 8),
+        Flexible(
+          child: Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w500),
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.right,
+          ),
+        ),
       ],
     );
   }

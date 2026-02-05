@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/wallet_provider.dart';
@@ -71,17 +72,17 @@ class _TestAccountPickerDialog extends StatelessWidget {
               style: TextStyle(color: Colors.grey.shade600),
             ),
             const SizedBox(height: 16),
-            ...hardhatAccounts.map((account) => Card(
+            ...wallet.availableAccounts.map((account) => Card(
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: _getColorForAccount(account),
                       child: Text(
-                        account.name.split(' ')[1].replaceAll('#', ''),
+                        account.nickname[0],
                         style: const TextStyle(
                             color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                     ),
-                    title: Text(account.name),
+                    title: Text(account.nickname),
                     subtitle: Text(
                       '${account.address.substring(0, 10)}...${account.address.substring(account.address.length - 8)}',
                       style: const TextStyle(
@@ -107,8 +108,14 @@ class _TestAccountPickerDialog extends StatelessWidget {
   }
 
   Color _getColorForAccount(TestAccount account) {
-    final colors = [Colors.blue, Colors.green, Colors.purple, Colors.orange];
-    final index = hardhatAccounts.indexOf(account);
+    final colors = [
+      Colors.blue,
+      Colors.green,
+      Colors.purple,
+      Colors.orange,
+      Colors.pink
+    ];
+    final index = wallet.availableAccounts.indexOf(account);
     return colors[index % colors.length];
   }
 }
@@ -152,9 +159,7 @@ class _ConnectedButton extends StatelessWidget {
               const SizedBox(width: 8),
             ],
             Text(
-              testAccount != null
-                  ? testAccount.name.replaceAll('Account ', '#')
-                  : wallet.shortAddress,
+              testAccount != null ? testAccount.nickname : wallet.shortAddress,
               style: TextStyle(
                 fontWeight: FontWeight.w500,
                 color: Theme.of(context).colorScheme.primary,
@@ -177,11 +182,19 @@ class _ConnectedButton extends StatelessWidget {
             context: context,
             builder: (context) => _TestAccountPickerDialog(wallet: wallet),
           );
+        } else if (value == 'copy') {
+          Clipboard.setData(ClipboardData(text: wallet.address ?? ''));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Address copied to clipboard'),
+              duration: Duration(seconds: 2),
+            ),
+          );
         }
       },
       itemBuilder: (context) => [
         PopupMenuItem(
-          enabled: false,
+          value: 'copy',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -202,16 +215,31 @@ class _ConnectedButton extends StatelessWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                testAccount?.name ?? '',
-                style: const TextStyle(fontSize: 12, color: Colors.black87),
+                testAccount?.nickname ?? '',
+                style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black87,
+                    fontWeight: FontWeight.w500),
               ),
-              Text(
-                wallet.address ?? '',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey.shade600,
-                  fontFamily: 'monospace',
-                ),
+              const SizedBox(height: 2),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      wallet.address ?? '',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade600,
+                        fontFamily: 'monospace',
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.copy, size: 14, color: Colors.grey),
+                ],
+              ),
+              const Text(
+                'Tap to copy address',
+                style: TextStyle(fontSize: 10, color: Colors.blue),
               ),
             ],
           ),

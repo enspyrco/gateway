@@ -1,24 +1,50 @@
 /**
  * Gallery API routes
  * View NFTs owned by a wallet
+ *
+ * Data sources:
+ * - Blockchain: token ownership, IPFS URI, license info, provenance
+ * - IPFS: watermarked images (via gateway)
+ * - Arweave: metadata (name, description) via tokenURI
  */
 
 const express = require('express');
 const router = express.Router();
 
-const firestoreService = require('../services/firestore');
 const ipfsService = require('../services/ipfs');
+const blockchainService = require('../services/blockchain');
 
 const LICENSE_NAMES = ['display', 'commercial', 'transfer'];
-const VALID_LICENSE_TYPES = new Set(LICENSE_NAMES);
 
 /**
  * GET /api/gallery
  * Get list of wallets that have NFTs (for discovery)
+ * Reads from blockchain - no Firestore needed
  */
 router.get('/', async (req, res, next) => {
   try {
-    const galleries = await firestoreService.getGalleryList(20);
+    // Get all tokens from blockchain
+    const allTokens = await blockchainService.getAllTokens();
+
+    // Group by owner to build gallery list
+    const ownerMap = new Map();
+    for (const token of allTokens) {
+      const owner = token.currentOwner.toLowerCase();
+      if (!ownerMap.has(owner)) {
+        ownerMap.set(owner, {
+          address: token.currentOwner,
+          tokenCount: 0,
+          previewTokenName: null
+        });
+      }
+      const gallery = ownerMap.get(owner);
+      gallery.tokenCount++;
+      if (!gallery.previewTokenName) {
+        gallery.previewTokenName = `NFTmarket #${token.tokenId}`;
+      }
+    }
+
+    const galleries = Array.from(ownerMap.values());
     res.json({ galleries });
   } catch (error) {
     next(error);
@@ -28,6 +54,7 @@ router.get('/', async (req, res, next) => {
 /**
  * GET /api/gallery/:address
  * Get all tokens owned by a wallet address (public)
+ * Reads from blockchain + IPFS - no Firestore needed
  */
 router.get('/:address', async (req, res, next) => {
   try {
@@ -41,34 +68,45 @@ router.get('/:address', async (req, res, next) => {
       });
     }
 
-    const tokens = await firestoreService.getTokensByOwner(address, 100);
+    // Get all tokens from blockchain and filter by owner
+    const allTokens = await blockchainService.getAllTokens();
+    const ownedTokens = allTokens.filter(
+      t => t.currentOwner.toLowerCase() === address.toLowerCase()
+    );
 
-    // Enrich with preview URLs
-    const enrichedTokens = tokens.map((token) => {
-      const previewUrl = token.previewUri
-        ? ipfsService.getGatewayUrl(token.previewUri)
+    // Build response from blockchain data
+    const tokens = ownedTokens.map((token) => {
+      // Use IPFS URI from blockchain for the image
+      const imageUrl = token.ipfsUri
+        ? ipfsService.getGatewayUrl(token.ipfsUri)
         : null;
 
       return {
         tokenId: token.tokenId,
-        name: token.name || `NFTmarket #${token.tokenId}`,
-        description: token.description || '',
-        previewUrl,
-        licenseType: VALID_LICENSE_TYPES.has(token.licenseType)
-          ? token.licenseType
-          : (LICENSE_NAMES[token.licenseType] || 'unknown'),
-        creator: token.wallet,
-        mintedAt: token.createdAt,
+        name: `NFTmarket #${token.tokenId}`,
+        imageUrl,
+        ipfsUri: token.ipfsUri,
+        metadataUri: token.uri, // Arweave URI for full metadata
+        // License info from blockchain
+        ownerLicense: LICENSE_NAMES[token.ownerLicense] || 'unknown',
+        creator: token.creator,
+        copyrightOwner: token.copyrightOwner,
+        mintedAt: token.mintedAt,
+        // Provenance info
+        isOriginal: token.isOriginal,
+        parentToken: token.parentToken,
+        originalToken: token.originalToken,
       };
     });
 
     res.json({
       owner: address.toLowerCase(),
-      tokens: enrichedTokens
+      tokens
     });
   } catch (error) {
     next(error);
   }
 });
 
+// Export router
 module.exports = router;
