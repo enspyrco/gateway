@@ -59,7 +59,8 @@ void main() {
 
       test('all test accounts have unique addresses', () {
         final provider = TestWalletProvider();
-        final addresses = provider.availableAccounts.map((a) => a.address).toSet();
+        final addresses =
+            provider.availableAccounts.map((a) => a.address).toSet();
 
         expect(addresses.length, equals(provider.availableAccounts.length));
       });
@@ -276,7 +277,8 @@ void main() {
         expect(find.text('0x3C44...93BC'), findsOneWidget);
       });
 
-      testWidgets('wallet button shows "Connect" when disconnected', (tester) async {
+      testWidgets('wallet button shows "Connect" when disconnected',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _WalletStatusWidget(
@@ -289,7 +291,8 @@ void main() {
         expect(find.text('Connect'), findsOneWidget);
       });
 
-      testWidgets('account picker shows address for each account', (tester) async {
+      testWidgets('account picker shows address for each account',
+          (tester) async {
         final provider = TestWalletProvider();
 
         await tester.pumpWidget(

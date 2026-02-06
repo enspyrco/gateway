@@ -22,7 +22,8 @@ void main() {
 
   group('Gallery Browse', () {
     group('Loading State', () {
-      testWidgets('shows loading indicator while fetching gallery', (tester) async {
+      testWidgets('shows loading indicator while fetching gallery',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             const Scaffold(
@@ -40,7 +41,8 @@ void main() {
     });
 
     group('Page Title', () {
-      testWidgets('shows "My Collection" when viewing own gallery', (tester) async {
+      testWidgets('shows "My Collection" when viewing own gallery',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _GalleryHeaderWidget(
@@ -54,7 +56,8 @@ void main() {
         expect(find.text('My Collection'), findsOneWidget);
       });
 
-      testWidgets('shows "Collection" with address for other user', (tester) async {
+      testWidgets('shows "Collection" with address for other user',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _GalleryHeaderWidget(
@@ -70,7 +73,8 @@ void main() {
         expect(find.text('Bob'), findsOneWidget);
       });
 
-      testWidgets('shows shortened address when nickname unavailable', (tester) async {
+      testWidgets('shows shortened address when nickname unavailable',
+          (tester) async {
         const unknownAddress = '0x1234567890123456789012345678901234567890';
 
         await tester.pumpWidget(
@@ -89,7 +93,8 @@ void main() {
     });
 
     group('Empty State', () {
-      testWidgets('shows empty state for own gallery with mint action', (tester) async {
+      testWidgets('shows empty state for own gallery with mint action',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _EmptyGalleryWidget(
@@ -105,7 +110,8 @@ void main() {
         expect(find.byIcon(Icons.collections_outlined), findsOneWidget);
       });
 
-      testWidgets('shows empty state for other gallery without mint action', (tester) async {
+      testWidgets('shows empty state for other gallery without mint action',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _EmptyGalleryWidget(
@@ -344,7 +350,8 @@ void main() {
         expect(find.text('View Gallery'), findsOneWidget);
       });
 
-      testWidgets('search by nickname shows snackbar for invalid input', (tester) async {
+      testWidgets('search by nickname shows snackbar for invalid input',
+          (tester) async {
         bool snackbarShown = false;
 
         await tester.pumpWidget(
@@ -650,19 +657,26 @@ class _TokenCardWidget extends StatelessWidget {
                 if (creatorName != null) Text('Creator: $creatorName'),
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: (isOriginal ? NFTmarketColors.success : NFTmarketColors.info)
+                    color: (isOriginal
+                            ? NFTmarketColors.success
+                            : NFTmarketColors.info)
                         .withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(
-                      color: isOriginal ? NFTmarketColors.success : NFTmarketColors.info,
+                      color: isOriginal
+                          ? NFTmarketColors.success
+                          : NFTmarketColors.info,
                     ),
                   ),
                   child: Text(
                     showOriginalBadge && isOriginal ? 'Original' : 'License',
                     style: TextStyle(
-                      color: isOriginal ? NFTmarketColors.success : NFTmarketColors.info,
+                      color: isOriginal
+                          ? NFTmarketColors.success
+                          : NFTmarketColors.info,
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),

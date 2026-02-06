@@ -82,7 +82,8 @@ void main() {
         expect(find.text('A stunning piece of digital art'), findsOneWidget);
       });
 
-      testWidgets('shows creator address with shortened format', (tester) async {
+      testWidgets('shows creator address with shortened format',
+          (tester) async {
         final token = TokenFixtures.token(
           creator: TestAddresses.alice,
           currentOwner: TestAddresses.bob, // Different owner to avoid duplicate
@@ -95,7 +96,8 @@ void main() {
         );
 
         expect(find.text('Creator'), findsOneWidget);
-        expect(find.textContaining('0x3C44'), findsOneWidget); // Alice's address
+        expect(
+            find.textContaining('0x3C44'), findsOneWidget); // Alice's address
       });
 
       testWidgets('shows owner address', (tester) async {
@@ -152,7 +154,8 @@ void main() {
     });
 
     group('Owner Actions - Not Listed', () {
-      testWidgets('shows "List for Sale" button when owner and not listed', (tester) async {
+      testWidgets('shows "List for Sale" button when owner and not listed',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _OwnerActionsWidget(isOwner: true, isListed: false),
@@ -217,7 +220,8 @@ void main() {
     });
 
     group('Non-Owner Actions - Listed', () {
-      testWidgets('shows buy button when connected and token listed', (tester) async {
+      testWidgets('shows buy button when connected and token listed',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _BuyActionWidget(
@@ -233,7 +237,8 @@ void main() {
         expect(find.byIcon(Icons.shopping_cart), findsOneWidget);
       });
 
-      testWidgets('shows "Connect Wallet to Buy" when not connected', (tester) async {
+      testWidgets('shows "Connect Wallet to Buy" when not connected',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _BuyActionWidget(
@@ -268,7 +273,8 @@ void main() {
     });
 
     group('License Status Integration', () {
-      testWidgets('shows existing license info when user has license', (tester) async {
+      testWidgets('shows existing license info when user has license',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _ExistingLicenseWidget(existingLicense: 'display'),
@@ -282,7 +288,8 @@ void main() {
         );
       });
 
-      testWidgets('shows "Upgrade to X" when upgrading license', (tester) async {
+      testWidgets('shows "Upgrade to X" when upgrading license',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _UpgradeBuyButtonWidget(
@@ -314,7 +321,8 @@ void main() {
         );
       });
 
-      testWidgets('shows already owned message for same license', (tester) async {
+      testWidgets('shows already owned message for same license',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _CannotBuyWidget(
@@ -410,7 +418,8 @@ void main() {
         expect(find.byIcon(Icons.share), findsOneWidget);
       });
 
-      testWidgets('shows Polygonscan link when transaction hash exists', (tester) async {
+      testWidgets('shows Polygonscan link when transaction hash exists',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _CommonActionsWidget(
@@ -426,7 +435,8 @@ void main() {
     });
 
     group('Loading States', () {
-      testWidgets('shows loading spinner on action button while processing', (tester) async {
+      testWidgets('shows loading spinner on action button while processing',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _LoadingActionButtonWidget(
@@ -512,7 +522,8 @@ void main() {
         expect(find.byIcon(Icons.collections), findsOneWidget);
       });
 
-      testWidgets('owner address has gallery button when not current user', (tester) async {
+      testWidgets('owner address has gallery button when not current user',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _AddressWithGalleryButton(
@@ -627,7 +638,8 @@ class _TokenInfoCardWidget extends StatelessWidget {
                   if (isOwner) ...[
                     const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: NFTmarketColors.success.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
@@ -1176,7 +1188,8 @@ class _AgreementWarningWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: Text('You will sign a binding agreement to sell under the chosen license terms.'),
+      body: Text(
+          'You will sign a binding agreement to sell under the chosen license terms.'),
     );
   }
 }

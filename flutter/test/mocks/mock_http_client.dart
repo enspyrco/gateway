@@ -126,7 +126,8 @@ class MockHttpClient {
       if (stub == null) {
         // Return 404 for unmatched requests
         return http.Response(
-          jsonEncode({'error': 'No stub found for ${request.method} ${request.url}'}),
+          jsonEncode(
+              {'error': 'No stub found for ${request.method} ${request.url}'}),
           404,
           headers: {'content-type': 'application/json'},
         );

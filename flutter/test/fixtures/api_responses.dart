@@ -37,7 +37,8 @@ class TokenFixtures {
       'currentOwner': currentOwner,
       'mintedAt': (mintedAt ?? DateTime(2024, 1, 15)).toIso8601String(),
       'watermarkId': watermarkId ?? 'WM_$tokenId',
-      'transactionHash': transactionHash ?? '0x${tokenId.toRadixString(16).padLeft(64, '0')}',
+      'transactionHash':
+          transactionHash ?? '0x${tokenId.toRadixString(16).padLeft(64, '0')}',
     };
   }
 
@@ -312,7 +313,8 @@ class MarketplaceFixtures {
 
 /// EIP-712 domain for contract address retrieval
 class ContractFixtures {
-  static const defaultContractAddress = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+  static const defaultContractAddress =
+      '0x5FbDB2315678afecb367f032d93F642f64180aa3';
 
   static Map<String, dynamic> eip712Domain() {
     return {
@@ -359,7 +361,8 @@ class TransactionFixtures {
           'tokenId': 1,
           'price': '1500000000000000000',
           'licenseType': 0,
-          'licenseHash': '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+          'licenseHash':
+              '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
           'expiry': 1735689600,
         },
       },
@@ -400,8 +403,16 @@ class GenerationFixtures {
   static Map<String, dynamic> stylesResponse() {
     return {
       'styles': [
-        {'id': 'photographic', 'name': 'Photographic', 'description': 'Photo-realistic images'},
-        {'id': 'digital-art', 'name': 'Digital Art', 'description': 'Digital artwork style'},
+        {
+          'id': 'photographic',
+          'name': 'Photographic',
+          'description': 'Photo-realistic images'
+        },
+        {
+          'id': 'digital-art',
+          'name': 'Digital Art',
+          'description': 'Digital artwork style'
+        },
         {'id': 'anime', 'name': 'Anime', 'description': 'Anime/manga style'},
       ],
     };
@@ -414,10 +425,26 @@ class GenerationFixtures {
       'prompt': 'A beautiful sunset over mountains',
       'style': 'photographic',
       'images': [
-        {'id': 'img-1', 'seed': 12345, 'url': '/api/generate/gen-12345/image/0'},
-        {'id': 'img-2', 'seed': 12346, 'url': '/api/generate/gen-12345/image/1'},
-        {'id': 'img-3', 'seed': 12347, 'url': '/api/generate/gen-12345/image/2'},
-        {'id': 'img-4', 'seed': 12348, 'url': '/api/generate/gen-12345/image/3'},
+        {
+          'id': 'img-1',
+          'seed': 12345,
+          'url': '/api/generate/gen-12345/image/0'
+        },
+        {
+          'id': 'img-2',
+          'seed': 12346,
+          'url': '/api/generate/gen-12345/image/1'
+        },
+        {
+          'id': 'img-3',
+          'seed': 12347,
+          'url': '/api/generate/gen-12345/image/2'
+        },
+        {
+          'id': 'img-4',
+          'seed': 12348,
+          'url': '/api/generate/gen-12345/image/3'
+        },
       ],
     };
   }
