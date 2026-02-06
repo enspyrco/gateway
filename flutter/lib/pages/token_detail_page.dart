@@ -24,7 +24,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
   bool _loading = true;
   String? _error;
   Map<String, dynamic>? _listing;
-  Map<String, dynamic>? _licenseStatus; // User's existing license for this image
+  Map<String, dynamic>?
+      _licenseStatus; // User's existing license for this image
   bool _actionLoading = false;
   String? _lastWalletAddress; // Track wallet changes to reload license status
 
@@ -520,7 +521,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
   /// Check if user can buy the currently listed license type
   bool _canBuyListedLicense() {
-    if (_licenseStatus == null) return true; // No status loaded yet, allow attempt
+    if (_licenseStatus == null)
+      return true; // No status loaded yet, allow attempt
     final canBuy = _licenseStatus!['canBuy'] as Map<String, dynamic>?;
     if (canBuy == null) return true;
 
