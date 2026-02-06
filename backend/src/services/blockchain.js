@@ -54,12 +54,14 @@ const NFTMARKET_ABI = [
   'function checkCopyrightOwnership(uint256 tokenId, address account) view returns (bool)',
   'function getMaxSellableLicense(uint256 tokenId) view returns (uint8)',
   'function hasDisplayLicense(uint256 tokenId, address account) view returns (bool)',
-  // Marketplace functions (updated with signatures)
+  // Marketplace functions (multi-license: can list same token at different prices per license type)
   'function list(uint256 tokenId, uint256 price, uint8 licenseType, bytes32 licenseHash, uint256 expiry, bytes signature)',
-  'function delist(uint256 tokenId)',
-  'function buy(uint256 tokenId, bytes signature) payable',
-  'function getListing(uint256 tokenId) view returns (address seller, uint256 price, uint8 licenseType, bytes32 licenseHash, uint256 nonce, uint256 expiry, bool active)',
-  'function getListingSignature(uint256 tokenId) view returns (bytes)',
+  'function delist(uint256 tokenId, uint8 licenseType)',
+  'function delistAll(uint256 tokenId)',
+  'function buy(uint256 tokenId, uint8 licenseType, bytes signature) payable',
+  'function getListing(uint256 tokenId, uint8 licenseType) view returns (address seller, uint256 price, bytes32 licenseHash, uint256 nonce, uint256 expiry, bool active)',
+  'function getAllListings(uint256 tokenId) view returns (uint256 displayPrice, bool displayActive, uint256 commercialPrice, bool commercialActive, uint256 transferPrice, bool transferActive)',
+  'function getListingSignature(uint256 tokenId, uint8 licenseType) view returns (bytes)',
   'function getNonce(address account) view returns (uint256)',
   'function getDomainSeparator() view returns (bytes32)',
   'event Listed(uint256 indexed tokenId, address indexed seller, uint256 price, uint8 licenseType, bytes32 licenseHash, uint256 nonce, uint256 expiry)',
@@ -97,10 +99,20 @@ const EIP712_TYPES = {
 };
 
 // Persistent mock listings storage
+// Multi-license: mockListings is Map<tokenId, Map<licenseType, Listing>>
 const mockListings = USE_MOCK ? persistence.loadMap('blockchain-listings') : new Map();
 const mockNonces = USE_MOCK ? persistence.loadMap('blockchain-nonces') : new Map();
 // Track display rights retained from Transfer sales (tokenId => Set of addresses)
 const mockDisplayRights = USE_MOCK ? persistence.loadMap('blockchain-displayrights') : new Map();
+
+// Helper to get or create listing map for a token
+function getTokenListings(tokenId) {
+  const id = Number(tokenId);
+  if (!mockListings.has(id)) {
+    mockListings.set(id, new Map());
+  }
+  return mockListings.get(id);
+}
 
 // Save all mock blockchain state
 function saveMockState() {
@@ -247,12 +259,15 @@ async function getListingTypedData(tokenId, price, licenseType, licenseHash, exp
 /**
  * Get typed data for purchase (buyer signature)
  * Client signs this to accept listing terms and buy
+ * @param {number} tokenId - Token to buy
+ * @param {number} licenseType - Which license type listing to buy (0=Display, 1=Commercial, 2=Transfer)
  */
-async function getPurchaseTypedData(tokenId) {
+async function getPurchaseTypedData(tokenId, licenseType) {
   if (USE_MOCK) {
-    const listing = mockListings.get(Number(tokenId));
+    const tokenListings = getTokenListings(tokenId);
+    const listing = tokenListings.get(Number(licenseType));
     if (!listing || !listing.active) {
-      throw new Error('Token not listed');
+      throw new Error('Token not listed for this license type');
     }
 
     const domain = await getEIP712Domain();
@@ -283,10 +298,10 @@ async function getPurchaseTypedData(tokenId) {
   }
 
   const nftmarket = getContract();
-  const listing = await nftmarket.getListing(tokenId);
+  const listing = await nftmarket.getListing(tokenId, licenseType);
 
   if (!listing.active) {
-    throw new Error('Token not listed');
+    throw new Error('Token not listed for this license type');
   }
 
   const domain = await getEIP712Domain();
@@ -294,7 +309,7 @@ async function getPurchaseTypedData(tokenId) {
   const value = {
     tokenId: BigInt(tokenId),
     price: listing.price,
-    licenseType: Number(listing.licenseType),
+    licenseType: Number(licenseType),
     licenseHash: listing.licenseHash,
     seller: listing.seller,
     nonce: listing.nonce
@@ -308,7 +323,7 @@ async function getPurchaseTypedData(tokenId) {
     raw: {
       tokenId: tokenId.toString(),
       price: listing.price.toString(),
-      licenseType: Number(listing.licenseType),
+      licenseType: Number(licenseType),
       licenseHash: listing.licenseHash,
       seller: listing.seller,
       nonce: listing.nonce.toString()
@@ -750,6 +765,7 @@ async function totalSupply() {
 
 /**
  * List a token for sale (mock only - real listing done client-side)
+ * Multi-license: allows listing same token at different prices for Display, Commercial, Transfer
  * @param {number} tokenId - Token to list
  * @param {string} price - Price in wei
  * @param {number} licenseType - 0=Display, 1=Commercial, 2=Transfer
@@ -783,9 +799,13 @@ async function listToken(tokenId, price, licenseType, licenseHash, expiryOrSelle
     if (token.currentOwner.toLowerCase() !== actualSellerAddress.toLowerCase()) {
       throw new Error('Not token owner');
     }
-    if (mockListings.has(Number(tokenId)) && mockListings.get(Number(tokenId)).active) {
-      throw new Error('Already listed');
+
+    // Multi-license: check if THIS license type is already listed (not any license type)
+    const tokenListings = getTokenListings(tokenId);
+    if (tokenListings.has(actualLicenseType) && tokenListings.get(actualLicenseType).active) {
+      throw new Error('Already listed for this license type');
     }
+
     // Cannot sell more rights than you have
     if (actualLicenseType > token.ownerLicense) {
       throw new Error('Cannot escalate rights');
@@ -800,7 +820,8 @@ async function listToken(tokenId, price, licenseType, licenseHash, expiryOrSelle
     const nonce = mockNonces.get(actualSellerAddress.toLowerCase()) || 0;
     mockNonces.set(actualSellerAddress.toLowerCase(), nonce + 1);
 
-    mockListings.set(Number(tokenId), {
+    // Multi-license: store listing by tokenId AND licenseType
+    tokenListings.set(actualLicenseType, {
       seller: actualSellerAddress,
       price: price,
       licenseType: actualLicenseType,
@@ -813,7 +834,7 @@ async function listToken(tokenId, price, licenseType, licenseHash, expiryOrSelle
     saveMockState();
 
     console.log(`[MOCK] Listed token ${tokenId} for ${price} wei with license type ${actualLicenseType}`);
-    return { tokenId, price, transactionHash: '0x' + crypto.randomBytes(32).toString('hex') };
+    return { tokenId, price, licenseType: actualLicenseType, transactionHash: '0x' + crypto.randomBytes(32).toString('hex') };
   }
 
   // Real blockchain listing is done client-side
@@ -821,19 +842,58 @@ async function listToken(tokenId, price, licenseType, licenseHash, expiryOrSelle
 }
 
 /**
- * Delist a token
+ * Delist a specific license type listing
+ * @param {number} tokenId - Token to delist
+ * @param {number} licenseType - Which license type to delist (0=Display, 1=Commercial, 2=Transfer)
+ * @param {string} sellerAddress - Address of the seller (for verification)
  */
-async function delistToken(tokenId, sellerAddress) {
+async function delistToken(tokenId, licenseType, sellerAddress) {
   if (USE_MOCK) {
-    const listing = mockListings.get(Number(tokenId));
-    if (!listing || !listing.active) throw new Error('Not listed');
+    const tokenListings = getTokenListings(tokenId);
+    const listing = tokenListings.get(Number(licenseType));
+    if (!listing || !listing.active) throw new Error('Not listed for this license type');
     if (listing.seller.toLowerCase() !== sellerAddress.toLowerCase()) {
       throw new Error('Not the seller');
     }
 
     listing.active = false;
     saveMockState();
-    console.log(`[MOCK] Delisted token ${tokenId}`);
+    console.log(`[MOCK] Delisted token ${tokenId} license type ${licenseType}`);
+    return { tokenId, licenseType };
+  }
+
+  // Real blockchain delisting is done client-side
+  throw new Error('Real blockchain delisting must be done from client wallet');
+}
+
+/**
+ * Delist all license types for a token
+ * @param {number} tokenId - Token to delist completely
+ * @param {string} sellerAddress - Address of the seller (for verification)
+ */
+async function delistAllToken(tokenId, sellerAddress) {
+  if (USE_MOCK) {
+    const token = mockTokens.get(Number(tokenId));
+    if (!token) throw new Error('Token does not exist');
+    if (token.currentOwner.toLowerCase() !== sellerAddress.toLowerCase()) {
+      throw new Error('Not token owner');
+    }
+
+    const tokenListings = getTokenListings(tokenId);
+    let anyDelisted = false;
+    for (const [licenseType, listing] of tokenListings) {
+      if (listing.active) {
+        listing.active = false;
+        anyDelisted = true;
+      }
+    }
+
+    if (!anyDelisted) {
+      throw new Error('No active listings');
+    }
+
+    saveMockState();
+    console.log(`[MOCK] Delisted all listings for token ${tokenId}`);
     return { tokenId };
   }
 
@@ -843,50 +903,80 @@ async function delistToken(tokenId, sellerAddress) {
 
 /**
  * Buy a listed token (mock only - real buying done client-side)
+ * Multi-license: specify which license type listing to buy
  * @param {number} tokenId - Token to buy
+ * @param {number} licenseType - Which license type listing to buy (0=Display, 1=Commercial, 2=Transfer)
  * @param {string} signature - Buyer's EIP-712 signature
  * @param {string} buyerAddress - Address of the buyer
  */
-async function buyToken(tokenId, signatureOrBuyer, buyerAddress) {
+async function buyToken(tokenId, licenseType, signatureOrBuyer, buyerAddress) {
   if (USE_MOCK) {
-    // Support old calling convention: buyToken(tokenId, buyerAddress)
+    // Support old calling convention and flexible params
     let actualBuyerAddress = buyerAddress;
     let actualSignature = signatureOrBuyer;
+    let actualLicenseType = licenseType;
 
-    if (buyerAddress === undefined && typeof signatureOrBuyer === 'string' && signatureOrBuyer.startsWith('0x')) {
-      // Old 2-param signature: signatureOrBuyer is actually buyerAddress
+    // If licenseType looks like an address, shift params (old calling convention)
+    if (typeof licenseType === 'string' && licenseType.startsWith('0x') && licenseType.length === 42) {
+      actualBuyerAddress = licenseType;
+      actualSignature = signatureOrBuyer;
+      actualLicenseType = null; // Will need to find active listing
+    } else if (buyerAddress === undefined && typeof signatureOrBuyer === 'string' && signatureOrBuyer.startsWith('0x')) {
       actualBuyerAddress = signatureOrBuyer;
       actualSignature = null;
     }
 
-    const listing = mockListings.get(Number(tokenId));
-    if (!listing || !listing.active) throw new Error('Not listed');
+    const tokenListings = getTokenListings(tokenId);
+
+    // If no license type specified, find any active listing (backwards compatibility)
+    let listing;
+    if (actualLicenseType === null || actualLicenseType === undefined) {
+      for (const [lt, l] of tokenListings) {
+        if (l.active) {
+          listing = l;
+          actualLicenseType = lt;
+          break;
+        }
+      }
+    } else {
+      listing = tokenListings.get(Number(actualLicenseType));
+    }
+
+    if (!listing || !listing.active) throw new Error('Not listed for this license type');
     if (listing.seller.toLowerCase() === actualBuyerAddress.toLowerCase()) {
       throw new Error('Cannot buy own token');
     }
 
     const token = mockTokens.get(Number(tokenId));
     const previousOwner = token.currentOwner;
-    const licenseType = listing.licenseType;
 
+    // Clear this specific listing
     listing.active = false;
 
     // Handle license rights based on license type
-    if (licenseType === LicenseType.Transfer) {
-      // Transfer sale: actual token transfer with copyright
-      // Seller retains display rights
-      if (!mockDisplayRights.has(Number(tokenId))) {
-        mockDisplayRights.set(Number(tokenId), new Set());
+    if (actualLicenseType === LicenseType.Transfer || !token.isOriginal) {
+      // Transfer sale OR license token sale: actual token transfer
+      // Clear ALL listings since ownership is changing
+      for (const [lt, l] of tokenListings) {
+        l.active = false;
       }
-      mockDisplayRights.get(Number(tokenId)).add(previousOwner.toLowerCase());
 
-      // Buyer becomes new copyright owner with Transfer rights
-      token.copyrightOwner = actualBuyerAddress;
-      token.ownerLicense = LicenseType.Transfer;
+      if (actualLicenseType === LicenseType.Transfer && token.isOriginal) {
+        // Original token Transfer sale: transfer with copyright
+        // Seller retains display rights
+        if (!mockDisplayRights.has(Number(tokenId))) {
+          mockDisplayRights.set(Number(tokenId), new Set());
+        }
+        mockDisplayRights.get(Number(tokenId)).add(previousOwner.toLowerCase());
+
+        // Buyer becomes new copyright owner with Transfer rights
+        token.copyrightOwner = actualBuyerAddress;
+        token.ownerLicense = LicenseType.Transfer;
+      }
+
       token.currentOwner = actualBuyerAddress;
 
-      console.log(`[MOCK] Copyright transferred to ${actualBuyerAddress}, ${previousOwner} retains display rights`);
-      console.log(`[MOCK] Token ${tokenId} sold from ${previousOwner} to ${actualBuyerAddress} for ${listing.price} wei`);
+      console.log(`[MOCK] Token ${tokenId} transferred from ${previousOwner} to ${actualBuyerAddress} for ${listing.price} wei`);
 
       saveMockState();
 
@@ -895,13 +985,14 @@ async function buyToken(tokenId, signatureOrBuyer, buyerAddress) {
         seller: previousOwner,
         buyer: actualBuyerAddress,
         price: listing.price,
-        licenseType,
+        licenseType: actualLicenseType,
         sellerSignature: listing.sellerSignature,
         buyerSignature: actualSignature
       };
     } else {
-      // Display/Commercial sale: mint new license token for buyer
+      // Display/Commercial sale from original: mint new license token for buyer
       // Original token stays with seller who keeps copyright
+      // OTHER listings remain active (seller can still sell other license types)
       mockTokenCounter++;
       const newTokenId = mockTokenCounter;
 
@@ -909,8 +1000,8 @@ async function buyToken(tokenId, signatureOrBuyer, buyerAddress) {
         creator: token.creator,              // Original creator preserved
         currentOwner: actualBuyerAddress,    // Buyer owns the new license token
         copyrightOwner: token.copyrightOwner, // Copyright stays with original owner
-        licenseType: licenseType,
-        ownerLicense: licenseType,            // License level purchased
+        licenseType: actualLicenseType,
+        ownerLicense: actualLicenseType,      // License level purchased
         licenseHash: listing.licenseHash,
         imageHash: token.imageHash,           // Same image
         mintedAt: new Date(),
@@ -923,8 +1014,8 @@ async function buyToken(tokenId, signatureOrBuyer, buyerAddress) {
         minter: token.minter || 'mock-minter' // Inherit minter from parent
       });
 
-      console.log(`[MOCK] License token ${newTokenId} minted for ${actualBuyerAddress} (${licenseType === LicenseType.Display ? 'Display' : 'Commercial'} license)`);
-      console.log(`[MOCK] Original token ${tokenId} remains with ${previousOwner}`);
+      console.log(`[MOCK] License token ${newTokenId} minted for ${actualBuyerAddress} (${actualLicenseType === LicenseType.Display ? 'Display' : 'Commercial'} license)`);
+      console.log(`[MOCK] Original token ${tokenId} remains with ${previousOwner}, other listings still active`);
 
       saveMockState();
 
@@ -934,7 +1025,7 @@ async function buyToken(tokenId, signatureOrBuyer, buyerAddress) {
         seller: previousOwner,
         buyer: actualBuyerAddress,
         price: listing.price,
-        licenseType,
+        licenseType: actualLicenseType,
         sellerSignature: listing.sellerSignature,
         buyerSignature: actualSignature,
         isLicenseGrant: true
@@ -947,23 +1038,26 @@ async function buyToken(tokenId, signatureOrBuyer, buyerAddress) {
 }
 
 /**
- * Get listing info
+ * Get listing info for a specific license type
+ * @param {number} tokenId - Token to query
+ * @param {number} licenseType - Which license type listing to get (0=Display, 1=Commercial, 2=Transfer)
  */
-async function getListing(tokenId) {
+async function getListing(tokenId, licenseType) {
   if (USE_MOCK) {
-    const listing = mockListings.get(Number(tokenId));
+    const tokenListings = getTokenListings(tokenId);
+    const listing = tokenListings.get(Number(licenseType));
     if (!listing) {
-      return { seller: null, price: '0', licenseType: 0, licenseHash: null, nonce: 0, expiry: 0, active: false };
+      return { seller: null, price: '0', licenseType: licenseType, licenseHash: null, nonce: 0, expiry: 0, active: false };
     }
     return listing;
   }
 
   const nftmarket = getContract();
-  const listing = await nftmarket.getListing(tokenId);
+  const listing = await nftmarket.getListing(tokenId, licenseType);
   return {
     seller: listing.seller,
     price: listing.price.toString(),
-    licenseType: Number(listing.licenseType),
+    licenseType: Number(licenseType),
     licenseHash: listing.licenseHash,
     nonce: Number(listing.nonce),
     expiry: Number(listing.expiry),
@@ -972,40 +1066,158 @@ async function getListing(tokenId) {
 }
 
 /**
- * Get all active listings
+ * Get all listings for a token (all license types)
+ * @param {number} tokenId - Token to query
+ * @returns {Object} Object with display, commercial, transfer listings
+ */
+async function getAllListingsForToken(tokenId) {
+  if (USE_MOCK) {
+    const tokenListings = getTokenListings(tokenId);
+    const result = {
+      display: { price: '0', active: false },
+      commercial: { price: '0', active: false },
+      transfer: { price: '0', active: false }
+    };
+
+    const displayListing = tokenListings.get(LicenseType.Display);
+    if (displayListing) {
+      result.display = { ...displayListing };
+    }
+
+    const commercialListing = tokenListings.get(LicenseType.Commercial);
+    if (commercialListing) {
+      result.commercial = { ...commercialListing };
+    }
+
+    const transferListing = tokenListings.get(LicenseType.Transfer);
+    if (transferListing) {
+      result.transfer = { ...transferListing };
+    }
+
+    return result;
+  }
+
+  const nftmarket = getContract();
+  const result = await nftmarket.getAllListings(tokenId);
+
+  // Fetch full listing details for active listings (seller, nonce, expiry, licenseHash)
+  const fullResult = {
+    display: {
+      price: result.displayPrice.toString(),
+      active: result.displayActive,
+      licenseType: LicenseType.Display
+    },
+    commercial: {
+      price: result.commercialPrice.toString(),
+      active: result.commercialActive,
+      licenseType: LicenseType.Commercial
+    },
+    transfer: {
+      price: result.transferPrice.toString(),
+      active: result.transferActive,
+      licenseType: LicenseType.Transfer
+    }
+  };
+
+  // Enrich with full details for active listings
+  if (result.displayActive) {
+    const listing = await nftmarket.getListing(tokenId, LicenseType.Display);
+    fullResult.display.seller = listing.seller;
+    fullResult.display.nonce = Number(listing.nonce);
+    fullResult.display.expiry = Number(listing.expiry);
+    fullResult.display.licenseHash = listing.licenseHash;
+  }
+  if (result.commercialActive) {
+    const listing = await nftmarket.getListing(tokenId, LicenseType.Commercial);
+    fullResult.commercial.seller = listing.seller;
+    fullResult.commercial.nonce = Number(listing.nonce);
+    fullResult.commercial.expiry = Number(listing.expiry);
+    fullResult.commercial.licenseHash = listing.licenseHash;
+  }
+  if (result.transferActive) {
+    const listing = await nftmarket.getListing(tokenId, LicenseType.Transfer);
+    fullResult.transfer.seller = listing.seller;
+    fullResult.transfer.nonce = Number(listing.nonce);
+    fullResult.transfer.expiry = Number(listing.expiry);
+    fullResult.transfer.licenseHash = listing.licenseHash;
+  }
+
+  return fullResult;
+}
+
+/**
+ * Get all active listings (multi-license: may have multiple listings per token)
+ * Each listing is returned as a separate entry with tokenId and licenseType
  */
 async function getActiveListings() {
   if (USE_MOCK) {
     const listings = [];
-    for (const [tokenId, listing] of mockListings) {
-      if (listing.active) {
-        const token = mockTokens.get(tokenId);
-        listings.push({
-          tokenId,
-          ...listing,
-          ...token
-        });
+    for (const [tokenId, tokenListings] of mockListings) {
+      const token = mockTokens.get(tokenId);
+      for (const [licenseType, listing] of tokenListings) {
+        if (listing.active) {
+          listings.push({
+            tokenId,
+            licenseType,
+            ...listing,
+            ...token
+          });
+        }
       }
     }
     return listings;
   }
 
-  // For real blockchain, we'd need to query events or maintain an index
-  // For now, iterate through tokens (not efficient for production)
+  // For real blockchain, iterate through tokens and check all license types
+  // NOTE: This approach uses getAllListings() to check active status (1 call per token),
+  // then getListing() only for active listings to get full details (seller, nonce, etc.).
+  // For production scale, consider using an event indexer (e.g., The Graph) instead.
   const nftmarket = getContract();
   const supply = await nftmarket.totalSupply();
   const listings = [];
 
   for (let i = 0; i < supply; i++) {
-    const listing = await nftmarket.getListing(i);
-    if (listing.active) {
+    // Check all three license types for each token
+    const allListings = await nftmarket.getAllListings(i);
+
+    if (allListings.displayActive) {
+      const displayListing = await nftmarket.getListing(i, LicenseType.Display);
       listings.push({
         tokenId: i,
-        seller: listing.seller,
-        price: listing.price.toString(),
-        licenseType: Number(listing.licenseType),
-        nonce: Number(listing.nonce),
-        expiry: Number(listing.expiry),
+        seller: displayListing.seller,
+        price: allListings.displayPrice.toString(),
+        licenseType: LicenseType.Display,
+        licenseHash: displayListing.licenseHash,
+        nonce: Number(displayListing.nonce),
+        expiry: Number(displayListing.expiry),
+        active: true
+      });
+    }
+
+    if (allListings.commercialActive) {
+      const commercialListing = await nftmarket.getListing(i, LicenseType.Commercial);
+      listings.push({
+        tokenId: i,
+        seller: commercialListing.seller,
+        price: allListings.commercialPrice.toString(),
+        licenseType: LicenseType.Commercial,
+        licenseHash: commercialListing.licenseHash,
+        nonce: Number(commercialListing.nonce),
+        expiry: Number(commercialListing.expiry),
+        active: true
+      });
+    }
+
+    if (allListings.transferActive) {
+      const transferListing = await nftmarket.getListing(i, LicenseType.Transfer);
+      listings.push({
+        tokenId: i,
+        seller: transferListing.seller,
+        price: allListings.transferPrice.toString(),
+        licenseType: LicenseType.Transfer,
+        licenseHash: transferListing.licenseHash,
+        nonce: Number(transferListing.nonce),
+        expiry: Number(transferListing.expiry),
         active: true
       });
     }
@@ -1184,11 +1396,13 @@ module.exports = {
   getNonce,
   getListingTypedData,
   getPurchaseTypedData,
-  // Marketplace
+  // Marketplace (multi-license support)
   listToken,
   delistToken,
+  delistAllToken,
   buyToken,
   getListing,
+  getAllListingsForToken,
   getActiveListings,
   // Event listener
   startEventListener,

@@ -143,7 +143,7 @@ const RUN_E2E = process.env.RUN_E2E_TESTS === 'true';
     }, 30000);
 
     it('should return inactive listing for unlisted token', async () => {
-      const listing = await blockchainService.getListing(tokenId);
+      const listing = await blockchainService.getListing(tokenId, 0);
       expect(listing.active).toBe(false);
     });
 

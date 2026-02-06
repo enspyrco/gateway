@@ -14,20 +14,49 @@ const blockchainService = require('../services/blockchain');
 const ipfsService = require('../services/ipfs');
 const arweaveService = require('../services/arweave');
 const authMiddleware = require('../middleware/auth');
+const {
+  LICENSE_TYPE_NAMES,
+  parseLicenseType,
+  getLicenseTypeName,
+  buildListingsArray,
+  hasAnyListing
+} = require('../utils/license-utils');
+const {
+  encodeList,
+  encodeBuy,
+  encodeDelist,
+  encodeDelistAll
+} = require('../utils/abi-encoder');
 
-// License type names (matches contract enum)
-const licenseTypeNames = ['display', 'commercial', 'transfer'];
+/**
+ * Validate signature format (hex string, 65 bytes = 130 hex chars + 0x prefix)
+ * @param {string} signature
+ * @returns {{ valid: boolean, error?: string }}
+ */
+function validateSignature(signature) {
+  if (!signature || typeof signature !== 'string') {
+    return { valid: false, error: 'Signature is required' };
+  }
+  if (!signature.startsWith('0x')) {
+    return { valid: false, error: 'Signature must start with 0x' };
+  }
+  // 65 bytes = 130 hex chars + "0x" = 132 total
+  if (signature.length !== 132) {
+    return { valid: false, error: 'Invalid signature length (expected 65 bytes)' };
+  }
+  if (!/^0x[0-9a-fA-F]{130}$/.test(signature)) {
+    return { valid: false, error: 'Signature contains invalid characters' };
+  }
+  return { valid: true };
+}
 
 /**
  * GET /api/marketplace
  * Get all active listings
  */
 router.get('/', async (req, res, next) => {
-  console.log('[DEBUG] GET /api/marketplace called');
   try {
-    console.log('[DEBUG] Calling getActiveListings...');
     const listings = await blockchainService.getActiveListings();
-    console.log('[DEBUG] Raw listings:', JSON.stringify(listings));
 
     // Enrich with data from blockchain + Arweave (metadata)
     const enrichedListings = await Promise.all(
@@ -61,9 +90,9 @@ router.get('/', async (req, res, next) => {
             priceEth: (Number(listing.price) / 1e18).toFixed(4),
             seller: listing.seller,
             // License type being offered in this listing (from listing, not token)
-            licenseType: licenseTypeNames[listing.licenseType] || 'unknown',
+            licenseType: LICENSE_TYPE_NAMES[listing.licenseType] || 'unknown',
             // Current owner's max license (what they could sell)
-            ownerLicense: licenseTypeNames[blockchainData?.ownerLicense] || 'unknown',
+            ownerLicense: LICENSE_TYPE_NAMES[blockchainData?.ownerLicense] || 'unknown',
             creator: blockchainData?.creator,
             copyrightOwner: blockchainData?.copyrightOwner,
             nonce: listing.nonce,
@@ -79,7 +108,7 @@ router.get('/', async (req, res, next) => {
             price: listing.price,
             priceEth: (Number(listing.price) / 1e18).toFixed(4),
             seller: listing.seller,
-            licenseType: licenseTypeNames[listing.licenseType] || 'unknown',
+            licenseType: LICENSE_TYPE_NAMES[listing.licenseType] || 'unknown',
             nonce: listing.nonce,
             expiry: listing.expiry
           };
@@ -88,20 +117,16 @@ router.get('/', async (req, res, next) => {
     );
 
     // Get contract info
-    console.log('[DEBUG] Getting EIP712 domain...');
     const domain = await blockchainService.getEIP712Domain();
-    console.log('[DEBUG] Domain:', domain);
 
-    const response = {
+    res.json({
       contract: {
         name: domain.name,
         address: domain.verifyingContract,
         chainId: domain.chainId
       },
       listings: enrichedListings
-    };
-    console.log('[DEBUG] Sending response with contract:', response.contract);
-    res.json(response);
+    });
   } catch (error) {
     next(error);
   }
@@ -138,16 +163,18 @@ router.get('/nonce/:address', async (req, res, next) => {
 
 /**
  * GET /api/marketplace/:tokenId
- * Get listing details for a specific token
+ * Get all listing details for a specific token (multi-license support)
  * NOTE: Must be AFTER specific routes like /eip712/domain and /nonce/:address
  */
 router.get('/:tokenId', async (req, res, next) => {
   try {
     const { tokenId } = req.params;
-    const listing = await blockchainService.getListing(tokenId);
 
-    if (!listing.active) {
-      return res.json({ listed: false });
+    // Get all listings for this token (multi-license support)
+    const allListings = await blockchainService.getAllListingsForToken(tokenId);
+
+    if (!hasAnyListing(allListings)) {
+      return res.json({ listed: false, tokenId: Number(tokenId) });
     }
 
     // Get full token data from blockchain
@@ -168,6 +195,9 @@ router.get('/:tokenId', async (req, res, next) => {
       ? ipfsService.getGatewayUrl(blockchainData.ipfsUri)
       : null;
 
+    // Build listings array with full details
+    const listings = buildListingsArray(allListings, true); // true = include details
+
     res.json({
       listed: true,
       tokenId: Number(tokenId),
@@ -175,18 +205,19 @@ router.get('/:tokenId', async (req, res, next) => {
       description: metadata?.description || '',
       imageUrl,
       ipfsUri: blockchainData?.ipfsUri,
-      seller: listing.seller,
-      price: listing.price,
-      priceEth: (Number(listing.price) / 1e18).toFixed(4),
-      // License type being offered in this sale
-      licenseType: licenseTypeNames[listing.licenseType] || 'unknown',
-      licenseHash: listing.licenseHash,
+      // Multi-license listings
+      listings,
       // Token metadata from blockchain
       creator: blockchainData?.creator,
       copyrightOwner: blockchainData?.copyrightOwner,
-      ownerLicense: licenseTypeNames[blockchainData?.ownerLicense] || 'unknown',
-      nonce: listing.nonce,
-      expiry: listing.expiry
+      ownerLicense: LICENSE_TYPE_NAMES[blockchainData?.ownerLicense] || 'unknown',
+      // Legacy single-listing fields (for backwards compatibility)
+      seller: listings[0]?.seller,
+      price: listings[0]?.price,
+      priceEth: listings[0]?.priceEth,
+      licenseType: listings[0]?.licenseType,
+      nonce: listings[0]?.nonce,
+      expiry: listings[0]?.expiry
     });
   } catch (error) {
     next(error);
@@ -286,15 +317,10 @@ router.post('/list', authMiddleware, async (req, res, next) => {
     if (!priceEth || isNaN(parseFloat(priceEth))) {
       return res.status(400).json({ error: 'Invalid price', code: 'INVALID_PRICE' });
     }
-    if (licenseType === undefined) {
-      return res.status(400).json({ error: 'Missing licenseType', code: 'MISSING_LICENSE_TYPE' });
-    }
-
-    // Convert license type string to number if needed
-    const licenseTypeMap = { display: 0, commercial: 1, transfer: 2 };
-    const licenseTypeNum = typeof licenseType === 'string' ? licenseTypeMap[licenseType] : licenseType;
-    if (licenseTypeNum === undefined || licenseTypeNum < 0 || licenseTypeNum > 2) {
-      return res.status(400).json({ error: 'Invalid licenseType', code: 'INVALID_LICENSE_TYPE' });
+    // Parse and validate license type
+    const { valid, licenseTypeNum, error: licenseError } = parseLicenseType(licenseType);
+    if (!valid) {
+      return res.status(400).json({ error: licenseError, code: 'INVALID_LICENSE_TYPE' });
     }
 
     // Verify ownership
@@ -303,10 +329,10 @@ router.post('/list', authMiddleware, async (req, res, next) => {
       return res.status(403).json({ error: 'You do not own this token', code: 'NOT_OWNER' });
     }
 
-    // Check not already listed
-    const existingListing = await blockchainService.getListing(tokenId);
+    // Multi-license: check if THIS license type is already listed (other types can be listed)
+    const existingListing = await blockchainService.getListing(tokenId, licenseTypeNum);
     if (existingListing.active) {
-      return res.status(400).json({ error: 'Token is already listed', code: 'ALREADY_LISTED' });
+      return res.status(400).json({ error: 'Token is already listed for this license type', code: 'ALREADY_LISTED' });
     }
 
     // Convert price to wei
@@ -382,7 +408,7 @@ router.post('/list', authMiddleware, async (req, res, next) => {
         tokenId,
         priceEth,
         priceWei,
-        licenseType: licenseTypeNames[licenseTypeNum],
+        licenseType: LICENSE_TYPE_NAMES[licenseTypeNum],
         seller: sellerAddress
       }
     });
@@ -394,13 +420,14 @@ router.post('/list', authMiddleware, async (req, res, next) => {
 /**
  * POST /api/marketplace/delist
  * Prepare a delisting - backend handles validation, returns contract call info
+ * Multi-license: specify which license type to delist, or use delistAll to remove all
  *
- * Body: { tokenId }
+ * Body: { tokenId, licenseType } or { tokenId, all: true }
  * Returns: { contractCall } - client submits this to remove listing
  */
 router.post('/delist', authMiddleware, async (req, res, next) => {
   try {
-    const { tokenId } = req.body;
+    const { tokenId, licenseType, all } = req.body;
     const sellerAddress = req.wallet;
 
     if (tokenId === undefined) {
@@ -413,28 +440,48 @@ router.post('/delist', authMiddleware, async (req, res, next) => {
       return res.status(403).json({ error: 'You do not own this token', code: 'NOT_OWNER' });
     }
 
-    // Check it's actually listed
-    const listing = await blockchainService.getListing(tokenId);
-    if (!listing.active) {
-      return res.status(400).json({ error: 'Token is not listed', code: 'NOT_LISTED' });
+    if (all) {
+      // Delist all license types
+      const allListings = await blockchainService.getAllListingsForToken(tokenId);
+      const hasActiveListing = allListings.display.active || allListings.commercial.active || allListings.transfer.active;
+      if (!hasActiveListing) {
+        return res.status(400).json({ error: 'Token has no active listings', code: 'NOT_LISTED' });
+      }
+
+      const contractCall = {
+        method: 'delistAll',
+        params: { tokenId }
+      };
+
+      res.json({
+        success: true,
+        contractCall,
+        summary: { tokenId, action: 'delistAll' }
+      });
+    } else {
+      // Delist specific license type - parse and validate
+      const { valid, licenseTypeNum, error: licenseError } = parseLicenseType(licenseType);
+      if (!valid) {
+        return res.status(400).json({ error: licenseError + ' (or set all: true)', code: 'INVALID_LICENSE_TYPE' });
+      }
+
+      // Check this specific license type is listed
+      const listing = await blockchainService.getListing(tokenId, licenseTypeNum);
+      if (!listing.active) {
+        return res.status(400).json({ error: 'Token is not listed for this license type', code: 'NOT_LISTED' });
+      }
+
+      const contractCall = {
+        method: 'delist',
+        params: { tokenId, licenseType: licenseTypeNum }
+      };
+
+      res.json({
+        success: true,
+        contractCall,
+        summary: { tokenId, licenseType: getLicenseTypeName(licenseTypeNum), action: 'delist' }
+      });
     }
-
-    // Build contract call parameters
-    const contractCall = {
-      method: 'delist',
-      params: {
-        tokenId: tokenId
-      }
-    };
-
-    res.json({
-      success: true,
-      contractCall,
-      summary: {
-        tokenId,
-        action: 'delist'
-      }
-    });
   } catch (error) {
     next(error);
   }
@@ -443,23 +490,30 @@ router.post('/delist', authMiddleware, async (req, res, next) => {
 /**
  * POST /api/marketplace/buy
  * Prepare a purchase - backend handles all logic, returns data for client to sign and submit
+ * Multi-license: specify which license type listing to buy
  *
- * Body: { tokenId }
+ * Body: { tokenId, licenseType }
  * Returns: { typedData, contractCall } - client signs typedData, then submits contractCall with payment
  */
 router.post('/buy', authMiddleware, async (req, res, next) => {
   try {
-    const { tokenId } = req.body;
+    const { tokenId, licenseType } = req.body;
     const buyerAddress = req.wallet;
 
     if (tokenId === undefined) {
       return res.status(400).json({ error: 'Missing tokenId', code: 'MISSING_TOKEN_ID' });
     }
 
-    // Get listing details
-    const listing = await blockchainService.getListing(tokenId);
+    // Parse and validate license type
+    const { valid, licenseTypeNum, error: licenseError } = parseLicenseType(licenseType);
+    if (!valid) {
+      return res.status(400).json({ error: licenseError, code: 'INVALID_LICENSE_TYPE' });
+    }
+
+    // Get listing details for this specific license type
+    const listing = await blockchainService.getListing(tokenId, licenseTypeNum);
     if (!listing.active) {
-      return res.status(404).json({ error: 'Token is not listed for sale', code: 'NOT_LISTED' });
+      return res.status(404).json({ error: 'Token is not listed for sale at this license type', code: 'NOT_LISTED' });
     }
 
     // Can't buy your own token
@@ -501,18 +555,19 @@ router.post('/buy', authMiddleware, async (req, res, next) => {
       message: {
         tokenId: tokenId.toString(),
         price: listing.price,
-        licenseType: listing.licenseType,
+        licenseType: licenseTypeNum,
         licenseHash: listing.licenseHash,
         seller: listing.seller,
         nonce: nonce.toString()
       }
     };
 
-    // Build contract call parameters
+    // Build contract call parameters (includes licenseType for multi-license support)
     const contractCall = {
       method: 'buy',
       params: {
-        tokenId: tokenId
+        tokenId: tokenId,
+        licenseType: licenseTypeNum
         // signature will be added by client after signing
       },
       value: listing.price // ETH to send with transaction
@@ -528,10 +583,131 @@ router.post('/buy', authMiddleware, async (req, res, next) => {
         tokenId,
         priceEth,
         priceWei: listing.price,
-        licenseType: licenseTypeNames[listing.licenseType],
+        licenseType: LICENSE_TYPE_NAMES[licenseTypeNum],
         seller: listing.seller,
         buyer: buyerAddress
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============ ABI Encoding Endpoints ============
+// These return pre-encoded transaction data so Flutter doesn't need to know about ABI
+
+/**
+ * POST /api/marketplace/list/encode
+ * Encode a list() transaction after signing
+ *
+ * Body: { tokenId, price, licenseType, licenseHash, expiry, signature }
+ * Returns: { txData } - ready to submit to blockchain
+ */
+router.post('/list/encode', authMiddleware, async (req, res, next) => {
+  try {
+    const { tokenId, price, licenseType, licenseHash, expiry, signature } = req.body;
+
+    if (tokenId === undefined || !price || licenseType === undefined || !licenseHash || !signature) {
+      return res.status(400).json({
+        error: 'Missing required fields: tokenId, price, licenseType, licenseHash, signature',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Validate signature format
+    const sigValidation = validateSignature(signature);
+    if (!sigValidation.valid) {
+      return res.status(400).json({ error: sigValidation.error, code: 'INVALID_SIGNATURE' });
+    }
+
+    const txData = encodeList(tokenId, price, licenseType, licenseHash, expiry || 0, signature);
+
+    res.json({
+      success: true,
+      txData
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/marketplace/buy/encode
+ * Encode a buy() transaction after signing
+ *
+ * Body: { tokenId, licenseType, signature }
+ * Returns: { txData, value } - ready to submit to blockchain
+ */
+router.post('/buy/encode', authMiddleware, async (req, res, next) => {
+  try {
+    const { tokenId, licenseType, signature } = req.body;
+
+    if (tokenId === undefined || licenseType === undefined || !signature) {
+      return res.status(400).json({
+        error: 'Missing required fields: tokenId, licenseType, signature',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Validate signature format
+    const sigValidation = validateSignature(signature);
+    if (!sigValidation.valid) {
+      return res.status(400).json({ error: sigValidation.error, code: 'INVALID_SIGNATURE' });
+    }
+
+    // Parse license type
+    const { valid, licenseTypeNum, error: licenseError } = parseLicenseType(licenseType);
+    if (!valid) {
+      return res.status(400).json({ error: licenseError, code: 'INVALID_LICENSE_TYPE' });
+    }
+
+    // Get listing to return the value (price) needed
+    const listing = await blockchainService.getListing(tokenId, licenseTypeNum);
+    if (!listing.active) {
+      return res.status(404).json({ error: 'Token is not listed', code: 'NOT_LISTED' });
+    }
+
+    const txData = encodeBuy(tokenId, licenseTypeNum, signature);
+
+    res.json({
+      success: true,
+      txData,
+      value: listing.price // Wei to send with transaction
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/marketplace/delist/encode
+ * Encode a delist() or delistAll() transaction
+ *
+ * Body: { tokenId, licenseType } or { tokenId, all: true }
+ * Returns: { txData } - ready to submit to blockchain
+ */
+router.post('/delist/encode', authMiddleware, async (req, res, next) => {
+  try {
+    const { tokenId, licenseType, all } = req.body;
+
+    if (tokenId === undefined) {
+      return res.status(400).json({ error: 'Missing tokenId', code: 'MISSING_TOKEN_ID' });
+    }
+
+    let txData;
+    if (all) {
+      txData = encodeDelistAll(tokenId);
+    } else {
+      const { valid, licenseTypeNum, error: licenseError } = parseLicenseType(licenseType);
+      if (!valid) {
+        return res.status(400).json({ error: licenseError, code: 'INVALID_LICENSE_TYPE' });
+      }
+      txData = encodeDelist(tokenId, licenseTypeNum);
+    }
+
+    res.json({
+      success: true,
+      txData
     });
   } catch (error) {
     next(error);

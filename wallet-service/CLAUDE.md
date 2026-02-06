@@ -80,6 +80,29 @@ Flutter App
 - CORS restricted to localhost origins
 - For production, replace test accounts with real wallet connections
 
+## E2E Tests
+
+| Script | Description |
+|--------|-------------|
+| `e2e-wallet-mint.js` | Basic mint flow with 1x1 pixel test images |
+| `e2e-real-images.js` | Mint flow with real artwork images |
+| `e2e-marketplace-test.js` | Full marketplace listing/buy flow |
+| `e2e-mint-test.js` | Direct signing mint (no wallet service) |
+
+### Test Images
+
+**Always use images from `~/Desktop/photos/nfts` for realistic testing.**
+
+This folder contains the canonical test images for NFTmarket development. The 1x1 pixel generators in some scripts are only for speed testing.
+
+```bash
+# Quick test with generated pixels
+node e2e-wallet-mint.js
+
+# Real test with actual artwork
+node e2e-real-images.js
+```
+
 ## Test Accounts
 
 The service provides Hardhat's default test accounts for local development:

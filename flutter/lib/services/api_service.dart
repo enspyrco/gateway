@@ -206,6 +206,17 @@ class ApiService {
   // Backend handles all marketplace logic. Client just signs and submits.
   // Flow: 1) Call prepare endpoint 2) Sign typed data 3) Submit to contract
 
+  /// Get contract address from backend's EIP-712 domain
+  /// This is the single source of truth for the contract address
+  Future<String> getContractAddress() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/marketplace/eip712/domain'),
+    );
+    final data = await _handleResponse(response);
+    final domain = data['domain'] as Map<String, dynamic>;
+    return domain['verifyingContract'] as String;
+  }
+
   /// Get all active listings (public)
   Future<List<Map<String, dynamic>>> getListings() async {
     final response = await http.get(
@@ -245,14 +256,17 @@ class ApiService {
 
   /// Prepare a delisting - backend validates ownership
   /// Returns contract call params
+  /// licenseType must be one of: 'display', 'commercial', 'transfer'
   Future<Map<String, dynamic>> prepareDelisting({
     required int tokenId,
+    required String licenseType,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/api/marketplace/delist'),
       headers: _headers,
       body: jsonEncode({
         'tokenId': tokenId,
+        'licenseType': licenseType,
       }),
     );
     return _handleResponse(response);
@@ -260,14 +274,81 @@ class ApiService {
 
   /// Prepare a purchase - backend handles all logic
   /// Returns typed data to sign and contract call params
+  /// licenseType must be one of: 'display', 'commercial', 'transfer'
   Future<Map<String, dynamic>> preparePurchase({
     required int tokenId,
+    required String licenseType,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/api/marketplace/buy'),
       headers: _headers,
       body: jsonEncode({
         'tokenId': tokenId,
+        'licenseType': licenseType,
+      }),
+    );
+    return _handleResponse(response);
+  }
+
+  // ============ ABI Encoding (Backend handles all encoding) ============
+
+  /// Encode a list transaction after signing
+  /// Returns pre-encoded txData ready to submit
+  Future<Map<String, dynamic>> encodeListTransaction({
+    required int tokenId,
+    required String price,
+    required int licenseType,
+    required String licenseHash,
+    required int expiry,
+    required String signature,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/marketplace/list/encode'),
+      headers: _headers,
+      body: jsonEncode({
+        'tokenId': tokenId,
+        'price': price,
+        'licenseType': licenseType,
+        'licenseHash': licenseHash,
+        'expiry': expiry,
+        'signature': signature,
+      }),
+    );
+    return _handleResponse(response);
+  }
+
+  /// Encode a buy transaction after signing
+  /// Returns pre-encoded txData and value (price in wei)
+  Future<Map<String, dynamic>> encodeBuyTransaction({
+    required int tokenId,
+    required String licenseType,
+    required String signature,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/marketplace/buy/encode'),
+      headers: _headers,
+      body: jsonEncode({
+        'tokenId': tokenId,
+        'licenseType': licenseType,
+        'signature': signature,
+      }),
+    );
+    return _handleResponse(response);
+  }
+
+  /// Encode a delist transaction
+  /// Returns pre-encoded txData ready to submit
+  Future<Map<String, dynamic>> encodeDelistTransaction({
+    required int tokenId,
+    String? licenseType,
+    bool all = false,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/marketplace/delist/encode'),
+      headers: _headers,
+      body: jsonEncode({
+        'tokenId': tokenId,
+        if (all) 'all': true else 'licenseType': licenseType,
       }),
     );
     return _handleResponse(response);

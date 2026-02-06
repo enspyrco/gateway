@@ -13,8 +13,7 @@ const router = express.Router();
 
 const ipfsService = require('../services/ipfs');
 const blockchainService = require('../services/blockchain');
-
-const LICENSE_NAMES = ['display', 'commercial', 'transfer'];
+const { LICENSE_TYPE_NAMES, buildListingsArray, hasAnyListing } = require('../utils/license-utils');
 
 /**
  * GET /api/gallery
@@ -74,12 +73,17 @@ router.get('/:address', async (req, res, next) => {
       t => t.currentOwner.toLowerCase() === address.toLowerCase()
     );
 
-    // Build response from blockchain data
-    const tokens = ownedTokens.map((token) => {
+    // Build response from blockchain data, including multi-license listing info
+    const tokens = await Promise.all(ownedTokens.map(async (token) => {
       // Use IPFS URI from blockchain for the image
       const imageUrl = token.ipfsUri
         ? ipfsService.getGatewayUrl(token.ipfsUri)
         : null;
+
+      // Get all listings for this token (multi-license support)
+      const allListings = await blockchainService.getAllListingsForToken(token.tokenId);
+      const isListed = hasAnyListing(allListings);
+      const listings = buildListingsArray(allListings, false); // false = no details (seller, nonce, etc.)
 
       return {
         tokenId: token.tokenId,
@@ -88,7 +92,7 @@ router.get('/:address', async (req, res, next) => {
         ipfsUri: token.ipfsUri,
         metadataUri: token.uri, // Arweave URI for full metadata
         // License info from blockchain
-        ownerLicense: LICENSE_NAMES[token.ownerLicense] || 'unknown',
+        ownerLicense: LICENSE_TYPE_NAMES[token.ownerLicense] || 'unknown',
         creator: token.creator,
         copyrightOwner: token.copyrightOwner,
         mintedAt: token.mintedAt,
@@ -96,8 +100,14 @@ router.get('/:address', async (req, res, next) => {
         isOriginal: token.isOriginal,
         parentToken: token.parentToken,
         originalToken: token.originalToken,
+        // Multi-license listing info
+        isListed,
+        listings, // Array of {licenseType, price, priceEth}
+        // Legacy single-listing fields (for backwards compatibility, use first listing)
+        listingLicenseType: listings.length > 0 ? listings[0].licenseType : null,
+        listingPrice: listings.length > 0 ? listings[0].price : null,
       };
-    });
+    }));
 
     res.json({
       owner: address.toLowerCase(),
