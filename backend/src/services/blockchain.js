@@ -1375,6 +1375,62 @@ function startEventListener(callbacks = {}) {
   }
 }
 
+/**
+ * Get the highest license level a buyer already owns for a given original image
+ * Used to enforce license upgrade rules (can upgrade, cannot downgrade/rebuy)
+ *
+ * @param {string} buyerAddress - The potential buyer's address
+ * @param {number} originalTokenId - The original token ID (the image being licensed)
+ * @returns {Promise<number|null>} The highest license level owned (0=display, 1=commercial, 2=transfer), or null if none
+ */
+async function getBuyerExistingLicenseLevel(buyerAddress, originalTokenId) {
+  const normalizedBuyer = buyerAddress.toLowerCase();
+  let highestLevel = null;
+
+  if (USE_MOCK) {
+    for (const [tokenId, token] of mockTokens) {
+      // Check if buyer owns this token
+      if (token.currentOwner.toLowerCase() !== normalizedBuyer) continue;
+
+      // Check if this token is for the same original image
+      const tokenOriginal = token.isOriginal ? tokenId : token.originalToken;
+      if (tokenOriginal !== originalTokenId) continue;
+
+      // Track highest license level
+      const level = token.ownerLicense;
+      if (highestLevel === null || level > highestLevel) {
+        highestLevel = level;
+      }
+    }
+    return highestLevel;
+  }
+
+  // For real blockchain, iterate through tokens
+  const nftmarket = getContract();
+  const supply = await nftmarket.totalSupply();
+
+  for (let i = 0; i < supply; i++) {
+    try {
+      const owner = await nftmarket.ownerOf(i);
+      if (owner.toLowerCase() !== normalizedBuyer) continue;
+
+      const tokenData = await nftmarket.getTokenData(i);
+      const tokenOriginal = tokenData.isOriginal ? i : Number(tokenData.originalToken);
+      if (tokenOriginal !== originalTokenId) continue;
+
+      const level = Number(tokenData.ownerLicense);
+      if (highestLevel === null || level > highestLevel) {
+        highestLevel = level;
+      }
+    } catch (e) {
+      // Token may not exist, skip
+      continue;
+    }
+  }
+
+  return highestLevel;
+}
+
 module.exports = {
   reserveTokenId,
   mint,
@@ -1390,6 +1446,7 @@ module.exports = {
   checkCommercialRights,
   checkCopyrightOwnership,
   getMaxSellableLicense,
+  getBuyerExistingLicenseLevel,
   LicenseType,
   // EIP-712 helpers
   getEIP712Domain,
