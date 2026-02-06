@@ -77,6 +77,32 @@ These run inside the backend process. Data is persisted to `backend/.mock-data/`
 - **Persistence**: `backend/.mock-data/blockchain-*.json`
 - **Note**: NOT used when running with local Hardhat (we use real blockchain)
 
+### Mock Persistence
+
+Mock services can persist data to disk via `backend/src/services/mock-persistence.js`:
+
+- **Enable**: `MOCK_PERSISTENCE=true` (or omit — enabled by default)
+- **Disable**: `MOCK_PERSISTENCE=false` (startup scripts set this)
+- **Directory**: `backend/.mock-data/`
+- **Files**:
+  - `ipfs.json` — Mock IPFS content
+  - `arweave.json` — Mock Arweave metadata
+  - `storage.json` — Mock Firebase Storage blobs
+  - `firestore-*.json` — Mock Firestore collections
+  - `blockchain-*.json` — Mock blockchain tokens and listings
+
+When enabled, data survives backend restarts. Use `clearAll()` in the persistence module to reset.
+
+### Stale Mock Data Warning
+
+When Hardhat restarts, blockchain state resets to zero — but persisted mock data still references old token IDs and addresses. This causes mismatches. The `start-services.sh` script handles this by clearing `backend/.mock-data/` on every run:
+
+```bash
+rm -rf backend/.mock-data
+```
+
+If you restart Hardhat manually, remember to clear mock data too.
+
 ### Clearing Mock Data
 To reset all mock data:
 ```bash
@@ -152,6 +178,31 @@ Backend API
     ├→ Mock/Real Storage (store encrypted original)
     └→ Mock/Real KMS (encryption keys)
 ```
+
+## Service Management Scripts
+
+| Script | Purpose | When to Use |
+|--------|---------|-------------|
+| `./start-services.sh` | Stops existing services, clears mock data, starts Hardhat + deploys contract + registers minter + starts wallet service + backend | Starting a fresh dev session |
+| `./stop-services.sh` | Force-kills all services by port (3000, 3001, 8545) | Cleaning up after development |
+| `./smoke-test.sh` | 11 tests: service health, contract deployment, minter registration, E2E mint | Verifying everything works |
+| `./start-all.sh` | Same as `start-services.sh` plus Flutter | Starting everything including UI |
+
+### Log File Locations
+
+| Service | Log File |
+|---------|----------|
+| Hardhat node | `/tmp/hardhat-node.log` |
+| Wallet service | `/tmp/wallet-service.log` |
+| Backend | `/tmp/backend.log` |
+
+### Contract Deployment Flow
+
+`start-services.sh` runs this sequence:
+
+1. `npx hardhat run scripts/deploy.js --network localhost` — deploys proxy + implementation, writes `contracts/deployment.json`
+2. `npx hardhat run scripts/setup-minter.js --network localhost` — registers Hardhat account #0 as a minter under Authority 0
+3. Backend reads `NFTMARKET_CONTRACT_ADDRESS` from env or auto-loads from `contracts/deployment.json`
 
 ## Quick Start (Local Development)
 

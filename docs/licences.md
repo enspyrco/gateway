@@ -27,6 +27,16 @@ You can only sell rights equal to or less than what you have:
 - Commercial holder → can only sell Commercial or Display
 - Display holder → can only sell Display
 
+This is enforced on-chain using the numeric enum values (`Display=0 < Commercial=1 < Transfer=2`). When listing an original token, the contract checks:
+
+```solidity
+if (licenseType > tokenData[tokenId].ownerLicense) {
+    revert CannotEscalateRights();
+}
+```
+
+For example, if your `ownerLicense` is `Commercial` (1) and you try to list as `Transfer` (2), the comparison `2 > 1` triggers the revert.
+
 ## How Sales Work
 
 ### Original Token Sales
@@ -41,12 +51,14 @@ When selling an **original token** (created by the original mint):
 
 ### License Token Sales
 
-**License tokens cannot sub-license.** They can only be sold via Transfer, which transfers the token itself (not copyright) to the new owner.
+**License tokens cannot sub-license.** They can only be sold via Transfer, which transfers the token itself to the new owner. The buyer inherits whatever license level the token carries — no copyright changes hands (copyright stays with the original token's copyright owner).
 
 | Sale Type | What Happens |
 |-----------|--------------|
-| Display/Commercial | **NOT ALLOWED** - reverts with `LicenseTokensCannotSubLicense` |
-| Transfer | Token transferred, buyer gets same license level |
+| Display/Commercial | **NOT ALLOWED** — reverts with `LicenseTokensCannotSubLicense` |
+| Transfer | Token itself moves to buyer, buyer inherits the token's `ownerLicense` level |
+
+For example, if Bob has a Commercial license token and sells it to Carol via Transfer, Carol now holds the token with Commercial rights. The token's `ownerLicense` doesn't change — only `ownerOf()` changes.
 
 ## Provenance Tracking
 
@@ -153,6 +165,24 @@ Result:
 - Token 0: Eve owns, Transfer rights, is still original
 - Alice has Display rights (moral rights preserved)
 - Eve can create new license tokens from Token 0
+
+### Scenario 4: After a Transfer Sale
+
+Continuing from Scenario 3, what Alice and Eve can each do:
+
+**Alice** (former copyright owner, now has Display rights only):
+- Can display the artwork for personal use
+- Cannot use it commercially
+- Cannot grant licenses to anyone
+- Her Display rights are permanent (recorded via `DisplayRightsRetained` event)
+
+**Eve** (new copyright owner):
+- Owns Token 0 with full Transfer rights
+- Can list Display, Commercial, or Transfer licenses
+- Can sell multiple Display/Commercial licenses (each mints a new token)
+- If Eve sells Transfer to Frank, Eve retains Display rights too
+
+This creates a chain of display rights: Alice has display, Eve has display (if she sells Transfer), Frank has copyright. The `creator` field (Alice) never changes.
 
 ## Rights Verification
 

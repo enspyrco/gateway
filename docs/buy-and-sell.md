@@ -137,77 +137,128 @@ This proves both parties agreed to the exact same terms.
 
 ## License Rights Transfer
 
-### Display Sale
+### Display Sale (New License Token Minted)
 
-Buyer gets display rights. Copyright owner doesn't change.
-
-```
-Before: Owner=Seller, Copyright=Seller, License=Display/Commercial/Transfer
-After:  Owner=Buyer, Copyright=Seller, License=Display
-```
-
-### Commercial Sale
-
-Buyer gets commercial usage rights. Copyright owner doesn't change.
+A **new license token** is minted for the buyer. The seller keeps their original token and full copyright.
 
 ```
-Before: Owner=Seller, Copyright=Seller, License=Commercial/Transfer
-After:  Owner=Buyer, Copyright=Seller, License=Commercial
+Before: Seller owns Token 0 (original, Transfer rights)
+After:  Seller still owns Token 0 (unchanged)
+        Buyer receives Token N (license token, Display rights)
+        Token N → parentToken=0, isOriginal=false
 ```
 
-### Transfer Sale (Copyright Transfer)
+The original token's other listings remain active — the seller can still sell Commercial or Transfer.
 
-Buyer gets full copyright. Seller retains personal display rights.
+### Commercial Sale (New License Token Minted)
+
+Same mechanics as Display — a new license token is minted for the buyer.
 
 ```
-Before: Owner=Seller, Copyright=Seller, License=Transfer
-After:  Owner=Buyer, Copyright=Buyer, License=Transfer
-        Seller gets hasDisplayLicense[seller] = true
+Before: Seller owns Token 0 (original, Commercial or Transfer rights)
+After:  Seller still owns Token 0 (unchanged)
+        Buyer receives Token N (license token, Commercial rights)
+        Token N → parentToken=0, isOriginal=false
 ```
 
-The seller can still display the image for personal use, but has no commercial rights.
+### Transfer Sale (Token + Copyright Transfer)
+
+The actual token transfers to the buyer along with copyright. Seller retains personal display rights.
+
+```
+Before: Seller owns Token 0, Copyright=Seller
+After:  Buyer owns Token 0, Copyright=Buyer, License=Transfer
+        Seller gets hasDisplayRights[seller][Token 0] = true
+```
+
+All listings for this token are cleared (since ownership changed). The seller can still display the image for personal use, but has no commercial rights.
+
+### License Token Sales
+
+License tokens (non-originals) **cannot sub-license**. They can only be sold via Transfer, which transfers the token itself:
+
+```
+Bob owns Token 1 (license token, Display rights)
+Bob lists Token 1 as Transfer → Token 1 moves to Carol
+Carol now has Display rights (same as Bob had)
+```
+
+Attempting to list a license token as Display or Commercial reverts with `LicenseTokensCannotSubLicense`.
 
 ---
 
 ## Payment Distribution
 
 ```
-Sale price: 1 ETH
+Sale price: 1 ETH (authority fee: 250 bps = 2.5%)
                     ┌─────────────────────┐
-                    │   Platform: 2.5%    │ → 0.025 ETH
+                    │   Minter fee: 2.5%  │ → 0.025 ETH (accrued, pull pattern)
                     ├─────────────────────┤
-                    │   Seller: 97.5%     │ → 0.975 ETH
+                    │   Seller: 97.5%     │ → 0.975 ETH (paid immediately)
                     └─────────────────────┘
 ```
 
-- **Platform fee**: 2.5% to NFTmarket
-- **Seller**: Remainder (97.5%)
+- **Minter fee**: Configurable per-authority in basis points (max 50%). Accrued to the wallet that minted the token — withdrawn via `withdrawFees()` (pull pattern).
+- **Seller**: Remainder paid immediately on purchase.
 
 ---
 
 ## Delisting
 
-Owner can delist at any time:
+Owner can delist a specific license type or all at once:
 
 ```solidity
-function delist(uint256 tokenId) external {
+// Remove one license type listing
+function delist(uint256 tokenId, LicenseType licenseType) external {
     // Only seller can delist
-    // Sets listing.active = false
+    // Sets listing for this license type to inactive
+    // Emits Delisted event
+}
+
+// Remove all license type listings for a token
+function delistAll(uint256 tokenId) external {
+    // Only token owner can call
+    // Clears Display, Commercial, and Transfer listings
     // Emits Delisted event
 }
 ```
 
 Listings also auto-expire if `expiry` timestamp passes.
 
+### Multi-License Listings
+
+A token can have up to 3 simultaneous listings — one per license type — at different prices:
+
+```
+Token 0 listings:
+  [Display]    → 0.5 ETH (active)
+  [Commercial] → 2.0 ETH (active)
+  [Transfer]   → 10 ETH  (active)
+```
+
+When a buyer purchases a specific license type, only that listing is consumed:
+- **Display/Commercial purchase**: The listing is consumed, a new license token is minted, other listings remain active
+- **Transfer purchase**: All listings are cleared (ownership is changing)
+
 ---
 
 ## External Transfers
 
-If a token is transferred outside the marketplace (e.g., direct transfer, OpenSea):
+If a token is transferred outside the marketplace (e.g., direct transfer, OpenSea), the contract **automatically delists all license types** via the `_update` hook:
 
-1. Listing becomes invalid (seller no longer owns token)
-2. Smart contract checks ownership on any buy attempt
-3. Buy will fail with `NotTokenOwner`
+```solidity
+function _update(address to, uint256 tokenId, address auth) internal override {
+    // Auto-delist all license types when transferred
+    for (uint8 i = 0; i <= uint8(LicenseType.Transfer); i++) {
+        if (listings[tokenId][i].active) {
+            listings[tokenId][i].active = false;
+        }
+    }
+    emit Delisted(tokenId, from);
+}
+```
+
+This is proactive, not passive — listings don't just fail on buy, they are actively cleaned up when ownership changes.
 
 ---
 

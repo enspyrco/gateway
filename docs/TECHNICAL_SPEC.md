@@ -11,7 +11,7 @@ AI art marketplace with verifiable provenance, watermark-based authentication, a
 
 ## Solution
 
-Combine invisible watermarking + NFT minting + legal licensing into a single $1 transaction.
+Combine invisible watermarking + NFT minting + legal licensing into a single transaction.
 
 ```
 Artist uploads image
@@ -64,29 +64,53 @@ Reuse `watermarking-functions/` C++ library:
 - Survives print-and-scan
 - Non-blind detection (requires encrypted original)
 
-### 2. Smart Contract (ERC-721)
+### 2. Smart Contract (ERC-721, UUPS Upgradeable)
 
 ```solidity
-// Polygon deployment
-contract NFTmarketNFT is ERC721, ERC721URIStorage {
-    struct TokenData {
-        string licenseType;      // "display" | "commercial" | "transfer"
-        bytes32 imageHash;       // SHA-256 of original
-        bytes32 licenseHash;     // SHA-256 of signed license
-        uint256 mintedAt;
+// Polygon deployment — UUPS proxy pattern
+contract NFTmarketNFT is ERC721Upgradeable, ERC721URIStorageUpgradeable,
+    OwnableUpgradeable, ReentrancyGuardUpgradeable, EIP712Upgradeable, UUPSUpgradeable
+{
+    enum LicenseType {
+        Display,      // Personal display only (0)
+        Commercial,   // Commercial usage rights (1)
+        Transfer      // Full copyright transfer (2)
     }
 
-    mapping(uint256 => TokenData) public tokenData;
+    struct TokenData {
+        address creator;          // Original creator — never changes, always has Display rights
+        address copyrightOwner;   // Who owns the copyright — changes on Transfer sales
+        LicenseType ownerLicense; // What license the current NFT owner has
+        bytes32 imageHash;        // SHA-256 of watermarked image
+        uint256 mintedAt;
+        string ipfsUri;           // IPFS URI of watermarked image (public)
+        uint256 parentToken;      // Token this was licensed from (0 if original)
+        uint256 originalToken;    // The root original token in the provenance chain
+        bool isOriginal;          // True if this is the original mint, false if license
+        uint256 authorityId;      // Which authority minted this token
+        address minter;           // Wallet that minted (receives fees on sales)
+    }
 
-    function mint(
-        address to,
-        string memory uri,
-        string memory licenseType,
-        bytes32 imageHash,
-        bytes32 licenseHash
-    ) public returns (uint256);
+    struct Authority {
+        address admin;           // Can add/remove minters for this authority
+        uint96 feeBps;           // Fee in basis points (250 = 2.5%)
+        bool isActive;
+        uint256 registeredAt;
+    }
 }
 ```
+
+#### Multi-License Marketplace
+
+A single token can have up to 3 simultaneous listings — one per license type — at different prices. This allows sellers to offer Display at 0.5 ETH, Commercial at 2 ETH, and Transfer at 10 ETH simultaneously.
+
+```
+listings[tokenId][0] → Display listing
+listings[tokenId][1] → Commercial listing
+listings[tokenId][2] → Transfer listing
+```
+
+Key functions: `list()`, `buy()`, `delist(tokenId, licenseType)`, `delistAll(tokenId)`, `getAllListings(tokenId)`
 
 ### 3. Key Management
 
@@ -124,11 +148,13 @@ NFT Metadata:
 
 ### 5. License Types
 
-| Type | Rights Granted | Price Modifier |
-|------|----------------|----------------|
-| `display` | Personal display, resale of NFT | Base ($1) |
-| `commercial` | Monetization, merchandise, derivatives | +$4 ($5) |
-| `transfer` | Full copyright transfer to buyer | +$9 ($10) |
+| Type | Rights Granted | What Seller Keeps |
+|------|----------------|-------------------|
+| `Display` | Personal display, resale of NFT | Copyright, commercial rights |
+| `Commercial` | Monetization, merchandise, derivatives | Copyright |
+| `Transfer` | Full copyright transfer to buyer | Display rights only |
+
+Prices are set by the seller per listing. License hierarchy is enforced on-chain — you cannot sell more rights than you have (reverts with `CannotEscalateRights`).
 
 ### 6. Detection Service
 
@@ -270,50 +296,38 @@ Page shows:
 
 ## Database Schema
 
+### On-Chain (Source of Truth)
+
+Token ownership, IPFS URIs, Arweave URIs, license types, provenance, and marketplace listings all live on the blockchain via the `NFTmarketNFT` contract. The backend reads from the contract for gallery, marketplace, and verification endpoints.
+
+### Arweave (Permanent Metadata)
+
+```json
+{
+  "name": "Artwork Title",
+  "description": "Artist description",
+  "image": "ipfs://Qm.../watermarked.png",
+  "license": { "type": "Transfer", "text": "..." },
+  "properties": { "prompt": "...", "style": "...", "seed": 123 }
+}
+```
+
 ### Firestore Collections
 
+Firestore stores **only** encrypted original references (not token metadata):
+
 ```
-/users/{walletAddress}
+/encrypted-refs/{tokenId}
 {
-  displayName: string,
-  email: string (optional),
-  created: timestamp,
-  totalMints: number,
-  totalSales: number
-}
-
-/tokens/{tokenId}
-{
-  contractAddress: string,
-  owner: walletAddress,
-  creator: walletAddress,
-  imageHash: string,
-  encryptedBlobUrl: string,
-  previewUrl: string,
-  licenseType: "display" | "commercial" | "transfer",
-  licenseHash: string,
-  price: number (if listed),
-  created: timestamp,
-  lastTransfer: timestamp
-}
-
-/keys/{tokenId}
-{
-  encryptedKey: string,      // Encrypted with KMS master key
-  imageHash: string,
+  storagePath: string,       // Firebase Storage path to encrypted original
+  keyId: string,             // KMS key identifier
   created: timestamp
 }
-
-/detections/{detectionId}
-{
-  tokenId: string,
-  requester: walletAddress,
-  capturedImageHash: string,
-  result: boolean,
-  confidence: number,
-  timestamp: timestamp
-}
 ```
+
+### AI Generations (In-Memory)
+
+Generated images are stored in backend memory with 1-hour TTL. Not persisted to any database. See [AI Generation](generate.md).
 
 ## API Endpoints
 
@@ -321,56 +335,69 @@ Page shows:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/tokens` | GET | List tokens (paginated) |
-| `/api/tokens/{id}` | GET | Get token details |
-| `/api/verify/{id}` | GET | Public verification page |
+| `/api/gallery` | GET | List all minted tokens |
+| `/api/marketplace` | GET | List all active listings |
+| `/api/marketplace/:tokenId` | GET | Get listing details (all license types) |
+| `/api/marketplace/eip712/domain` | GET | Get EIP-712 domain for signatures |
+| `/api/marketplace/nonce/:address` | GET | Get current nonce for address |
+| `/api/verify/:tokenId` | GET | Public token verification |
 | `/api/detect` | POST | Run watermark detection |
+| `/api/generate/styles` | GET | Get AI generation style presets |
 
-### Authenticated (wallet signature required)
+### Authenticated (SIWE wallet signature required)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/mint` | POST | Mint new token |
-| `/api/list` | POST | List token for sale |
-| `/api/delist` | POST | Remove listing |
-| `/api/my/tokens` | GET | User's tokens |
-| `/api/my/sales` | GET | User's sales history |
+| `/api/mint` | POST | Mint new token (watermark, encrypt, IPFS, blockchain) |
+| `/api/marketplace/list/typed-data` | POST | Get EIP-712 data for listing |
+| `/api/marketplace/buy/typed-data` | POST | Get EIP-712 data for buying |
+| `/api/marketplace/list` | POST | Prepare listing (returns typed data + contract call) |
+| `/api/marketplace/buy` | POST | Prepare purchase with license upgrade validation |
+| `/api/marketplace/delist` | POST | Prepare delisting (single or all license types) |
+| `/api/generate` | POST | Generate images from prompt (rate limited: 10/hr) |
+| `/api/generate/:id` | GET | Get generation details |
+| `/api/generate/:id/image/:index` | GET | Retrieve generated image as PNG |
+
+The backend prepares transaction data; the client signs with their wallet and calls the smart contract directly. See [AI Generation](generate.md) for the full generate API.
 
 ## Revenue Model
 
-| Service | Price | Margin |
-|---------|-------|--------|
-| Basic mint (display license) | $1 | ~$0.65 |
-| Commercial license mint | $5 | ~$4.30 |
-| Full transfer mint | $10 | ~$9.30 |
-| Marketplace sale | 2.5% fee | 2.5% |
-| Forensic report | $50 | ~$45 |
-| Bulk copyright registration | $5/image | ~$4.90 |
+Fees are configured per-authority in basis points (250 bps = 2.5%) and distributed via a pull pattern:
+
+| Revenue Source | How It Works |
+|----------------|-------------|
+| Marketplace sales | Authority fee (configurable bps, max 50%) accrued to minter wallet |
+| Fee withdrawal | Minters call `withdrawFees()` to collect accrued fees |
+
+The fee goes to the **minter** of the token (the wallet that called `mint()`), not a fixed platform wallet. This supports the multi-authority model where third-party watermarking services can earn fees on tokens they mint.
 
 ### Cost Breakdown (per mint)
 
 | Item | Cost |
 |------|------|
 | Polygon gas | ~$0.01 |
-| IPFS pinning | ~$0.01 |
+| IPFS pinning (Pinata) | ~$0.01 |
+| Arweave metadata | ~$0.001 |
 | KMS operation | ~$0.001 |
-| Stripe fee (on $1) | ~$0.33 |
 | Compute (watermark) | ~$0.01 |
-| **Total** | ~$0.36 |
+| **Total** | ~$0.03 |
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|------------|
 | Frontend | Flutter Web |
-| Backend | Node.js (Cloud Run) |
-| Watermarking | C++ (existing engine) |
-| Blockchain | Polygon (ERC-721) |
-| Wallet | WalletConnect / MetaMask |
-| Storage | IPFS (Pinata) + Firestore |
+| Backend | Node.js / Express |
+| Watermarking | C++ engine or Cloud API |
+| AI Generation | Stability AI (Ultra endpoint) |
+| Blockchain | Polygon (ERC-721, UUPS upgradeable) |
+| Wallet | Wallet Service (dev) / WalletConnect (prod) |
+| Image Storage | IPFS (Pinata) — watermarked previews |
+| Metadata Storage | Arweave — permanent NFT metadata JSON |
+| Encrypted Storage | Firebase Storage — encrypted originals |
+| Database | Firestore — encrypted original references |
 | Key Management | Google Cloud KMS |
-| Payments | Stripe |
-| Auth | Wallet signature (SIWE) |
+| Auth | Sign-In with Ethereum (SIWE) |
 
 ## Security Considerations
 
@@ -394,38 +421,9 @@ Page shows:
 - Professional audit before mainnet
 - Upgradeable proxy pattern (optional)
 
-## MVP Scope
-
-### Phase 1: Core (8-12 weeks)
-- [ ] Smart contract deployment (Polygon testnet)
-- [ ] Basic mint flow (upload → watermark → encrypt → mint)
-- [ ] Wallet connection (MetaMask)
-- [ ] Token gallery view
-- [ ] Basic detection endpoint
-
-### Phase 2: Marketplace (4-6 weeks)
-- [ ] List/buy functionality
-- [ ] Payment integration (crypto only first)
-- [ ] User profiles
-- [ ] Search/filter
-
-### Phase 3: Trust & Safety (4-6 weeks)
-- [ ] Duplicate detection at upload
-- [ ] Reporting system
-- [ ] Forensic reports
-- [ ] DMCA process
-
-### Phase 4: Growth (ongoing)
-- [ ] Fiat payments (Stripe)
-- [ ] Mobile app
-- [ ] Physical art QR codes
-- [ ] Copyright registration integration
-- [ ] API for third-party verification
-
 ## Open Questions
 
-1. **Pricing strategy** - Is $1 too low? Should commercial licenses cost more?
-2. **Chain choice** - Polygon vs Base vs Arbitrum?
-3. **Detection access** - Free for everyone or paid/rate-limited?
-4. **Dispute resolution** - How to handle conflicting ownership claims?
-5. **AI detection** - Should we detect/flag AI-generated images (SynthID)?
+1. **Detection access** — Free for everyone or paid/rate-limited?
+2. **Dispute resolution** — How to handle conflicting ownership claims?
+3. **Mainnet deployment** — Polygon PoS vs Polygon zkEVM?
+4. **Fiat on-ramp** — Integration for users without crypto wallets?
