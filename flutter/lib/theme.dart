@@ -4,24 +4,24 @@ import 'package:flutter/material.dart';
 /// Use these instead of magic numbers like 0.15 or 0.3
 class NFTmarketOpacity {
   // Subtle - barely visible backgrounds, borders
-  static const double subtle = 0.06;      // Border overlays
-  static const double faint = 0.08;       // Very light backgrounds
-  static const double light = 0.1;        // Light backgrounds
-  static const double muted = 0.12;       // Muted badge backgrounds
+  static const double subtle = 0.06; // Border overlays
+  static const double faint = 0.08; // Very light backgrounds
+  static const double light = 0.1; // Light backgrounds
+  static const double muted = 0.12; // Muted badge backgrounds
 
   // Medium - visible but not dominant
-  static const double soft = 0.15;        // Soft backgrounds, disabled states
-  static const double medium = 0.2;       // Medium emphasis, hover states
-  static const double moderate = 0.3;     // Moderate emphasis, borders
+  static const double soft = 0.15; // Soft backgrounds, disabled states
+  static const double medium = 0.2; // Medium emphasis, hover states
+  static const double moderate = 0.3; // Moderate emphasis, borders
 
   // Strong - clearly visible
-  static const double emphasis = 0.4;     // Strong borders, active states
-  static const double strong = 0.5;       // Strong emphasis, selected states
+  static const double emphasis = 0.4; // Strong borders, active states
+  static const double strong = 0.5; // Strong emphasis, selected states
 
   // Near opaque - almost solid
-  static const double prominent = 0.8;    // Prominent elements
-  static const double vivid = 0.9;        // Very visible, status badges
-  static const double intense = 0.95;     // Nearly solid
+  static const double prominent = 0.8; // Prominent elements
+  static const double vivid = 0.9; // Very visible, status badges
+  static const double intense = 0.95; // Nearly solid
 }
 
 /// NFTmarket Premium Dark Theme Colors
@@ -36,35 +36,37 @@ class NFTmarketColors {
   static const surfaceBorder = Color(0x0FFFFFFF); // rgba(255,255,255,0.06)
 
   // Accent colors
-  static const accent = Color(0xFFC9A962);       // Gold - primary accent
-  static const accentLight = Color(0xFFE5D4A1);  // Light gold - highlights
-  static const primary = Color(0xFF6366F1);       // Indigo - interactive
-  static const primaryLight = Color(0xFF818CF8);  // Lighter indigo
+  static const accent = Color(0xFFC9A962); // Gold - primary accent
+  static const accentLight = Color(0xFFE5D4A1); // Light gold - highlights
+  static const primary = Color(0xFF6366F1); // Indigo - interactive
+  static const primaryLight = Color(0xFF818CF8); // Lighter indigo
 
   // Text hierarchy
-  static const textPrimary = Color(0xFFFFFFFF);   // White
+  static const textPrimary = Color(0xFFFFFFFF); // White
   static const textSecondary = Color(0xFF9CA3AF); // Gray 400
-  static const textMuted = Color(0xFF6B7280);     // Gray 500
-  static const textBody = Color(0xFFE5E7EB);      // Gray 200
+  static const textMuted = Color(0xFF6B7280); // Gray 500
+  static const textBody = Color(0xFFE5E7EB); // Gray 200
 
   // Status colors (refined for dark backgrounds)
-  static const success = Color(0xFF34D399);       // Emerald 400
-  static const warning = Color(0xFFFBBF24);       // Amber 400
-  static const error = Color(0xFFF87171);         // Red 400
-  static const info = Color(0xFF60A5FA);          // Blue 400
+  static const success = Color(0xFF34D399); // Emerald 400
+  static const warning = Color(0xFFFBBF24); // Amber 400
+  static const error = Color(0xFFF87171); // Red 400
+  static const info = Color(0xFF60A5FA); // Blue 400
 
   // License badge colors (darker, premium)
-  static const displayBlue = Color(0xFF3B82F6);     // Blue 500
+  static const displayBlue = Color(0xFF3B82F6); // Blue 500
   static const commercialOrange = Color(0xFFF59E0B); // Amber 500
-  static const transferPurple = Color(0xFFA855F7);   // Purple 500
+  static const transferPurple = Color(0xFFA855F7); // Purple 500
 
   // Card gradient colors
   static const cardGradientStart = Color(0xFF141418);
   static const cardGradientEnd = Color(0xFF1A1A20);
 
   // Hover/focus glow
-  static Color get accentGlow => accent.withValues(alpha: NFTmarketOpacity.medium);
-  static Color get primaryGlow => primary.withValues(alpha: NFTmarketOpacity.moderate);
+  static Color get accentGlow =>
+      accent.withValues(alpha: NFTmarketOpacity.medium);
+  static Color get primaryGlow =>
+      primary.withValues(alpha: NFTmarketOpacity.moderate);
 }
 
 class NFTmarketTheme {

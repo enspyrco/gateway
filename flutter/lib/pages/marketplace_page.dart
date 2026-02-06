@@ -250,8 +250,7 @@ class _ListingCardState extends State<_ListingCard> {
     final name = widget.listing['name'] ?? 'NFT #${widget.listing['tokenId']}';
     final price = widget.listing['priceEth'] ?? '?';
     // Use imageUrl from blockchain IPFS URI, fallback to previewUrl for backwards compatibility
-    final imageUrl =
-        widget.listing['imageUrl'] ?? widget.listing['previewUrl'];
+    final imageUrl = widget.listing['imageUrl'] ?? widget.listing['previewUrl'];
     final seller = widget.listing['seller'] ?? '';
     final shortSeller = seller.length > 10
         ? '${seller.substring(0, 6)}...${seller.substring(seller.length - 4)}'
@@ -372,7 +371,8 @@ class _ListingCardState extends State<_ListingCard> {
                           ),
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
-                            color: NFTmarketColors.accent.withValues(alpha: 0.3),
+                            color:
+                                NFTmarketColors.accent.withValues(alpha: 0.3),
                             width: 1,
                           ),
                         ),
@@ -384,8 +384,8 @@ class _ListingCardState extends State<_ListingCard> {
                               width: 18,
                               height: 18,
                               decoration: BoxDecoration(
-                                color:
-                                    NFTmarketColors.accent.withValues(alpha: 0.2),
+                                color: NFTmarketColors.accent
+                                    .withValues(alpha: 0.2),
                                 shape: BoxShape.circle,
                               ),
                               child: const Center(

@@ -246,8 +246,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
           ),
           if (isListed && listingLicenseType != null) ...[
             _buildDivider(),
-            _buildInfoRow('License Offered',
-                _getLicenseDisplayName(listingLicenseType)),
+            _buildInfoRow(
+                'License Offered', _getLicenseDisplayName(listingLicenseType)),
           ],
           _buildDivider(),
           _buildInfoRow('Minted', _formatDate(token.mintedAt)),
@@ -606,8 +606,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                 const SizedBox(height: 8),
                 const Text(
                   'Choose what rights the buyer will receive',
-                  style:
-                      TextStyle(color: NFTmarketColors.textSecondary, fontSize: 13),
+                  style: TextStyle(
+                      color: NFTmarketColors.textSecondary, fontSize: 13),
                 ),
                 const SizedBox(height: 12),
                 ...LicenseType.values.map((license) {
@@ -630,9 +630,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                                   ],
                                 )
                               : null,
-                          color: isSelected
-                              ? null
-                              : NFTmarketColors.surfaceLight,
+                          color:
+                              isSelected ? null : NFTmarketColors.surfaceLight,
                           borderRadius: BorderRadius.circular(8),
                           border: Border.all(
                             color: isSelected
@@ -1052,9 +1051,7 @@ class _PremiumActionButtonState extends State<_PremiumActionButton> {
                       height: 18,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: widget.isOutlined
-                            ? widget.color
-                            : Colors.white,
+                        color: widget.isOutlined ? widget.color : Colors.white,
                       ),
                     )
                   else if (widget.icon != null)

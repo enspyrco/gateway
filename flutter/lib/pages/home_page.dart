@@ -137,13 +137,11 @@ class HomePage extends StatelessWidget {
                 );
               }
               return _PremiumButton(
-                onPressed:
-                    wallet.isConnecting ? null : () => wallet.connect(),
-                icon: wallet.isConnecting
-                    ? null
-                    : Icons.account_balance_wallet,
-                label:
-                    wallet.isConnecting ? 'Connecting...' : 'Connect Wallet to Start',
+                onPressed: wallet.isConnecting ? null : () => wallet.connect(),
+                icon: wallet.isConnecting ? null : Icons.account_balance_wallet,
+                label: wallet.isConnecting
+                    ? 'Connecting...'
+                    : 'Connect Wallet to Start',
                 isPrimary: true,
                 isLoading: wallet.isConnecting,
               );
@@ -620,7 +618,10 @@ class _StepCardState extends State<_StepCard> {
               decoration: BoxDecoration(
                 gradient: _isHovered
                     ? const LinearGradient(
-                        colors: [NFTmarketColors.accent, NFTmarketColors.primary],
+                        colors: [
+                          NFTmarketColors.accent,
+                          NFTmarketColors.primary
+                        ],
                       )
                     : null,
                 color: _isHovered ? null : NFTmarketColors.surfaceLight,
@@ -644,9 +645,7 @@ class _StepCardState extends State<_StepCard> {
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 18,
-                    color: _isHovered
-                        ? Colors.white
-                        : NFTmarketColors.accent,
+                    color: _isHovered ? Colors.white : NFTmarketColors.accent,
                   ),
                 ),
               ),

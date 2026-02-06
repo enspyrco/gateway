@@ -446,8 +446,7 @@ class _ConnectedButtonState extends State<_ConnectedButton> {
                   _TestAccountPickerDialog(wallet: widget.wallet),
             );
           } else if (value == 'copy') {
-            Clipboard.setData(
-                ClipboardData(text: widget.wallet.address ?? ''));
+            Clipboard.setData(ClipboardData(text: widget.wallet.address ?? ''));
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: const Text('Address copied to clipboard'),

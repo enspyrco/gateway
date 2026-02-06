@@ -473,8 +473,8 @@ class _GalleryPageState extends State<GalleryPage> {
             const SizedBox(height: 8),
             Text(
               subtitle,
-              style:
-                  const TextStyle(color: NFTmarketColors.textMuted, fontSize: 12),
+              style: const TextStyle(
+                  color: NFTmarketColors.textMuted, fontSize: 12),
             ),
           ],
           if (showAction && actionLabel != null && onAction != null) ...[
@@ -688,8 +688,9 @@ class _TokenCardState extends State<_TokenCard> {
     // Use imageUrl from blockchain IPFS URI, fallback to previewUrl for backwards compatibility
     final imageUrl = widget.token['imageUrl'] ?? widget.token['previewUrl'];
     // ownerLicense shows the current owner's license level
-    final ownerLicense =
-        widget.token['ownerLicense'] ?? widget.token['licenseType'] ?? 'unknown';
+    final ownerLicense = widget.token['ownerLicense'] ??
+        widget.token['licenseType'] ??
+        'unknown';
     final creator = widget.token['creator'] ?? '';
     final creatorName = _formatAddress(creator, widget.accounts);
     final copyrightOwner = widget.token['copyrightOwner'] ?? creator;
@@ -780,7 +781,8 @@ class _TokenCardState extends State<_TokenCard> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: NFTmarketColors.accent.withValues(alpha: 0.95),
+                                  color: NFTmarketColors.accent
+                                      .withValues(alpha: 0.95),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
                                 child: Row(
@@ -808,8 +810,10 @@ class _TokenCardState extends State<_TokenCard> {
                               // Show each listing type with price
                               if (listings.isNotEmpty)
                                 ...listings.map<Widget>((listing) {
-                                  final type = listing['licenseType'] as String? ?? '';
-                                  final priceEth = listing['priceEth'] as String?;
+                                  final type =
+                                      listing['licenseType'] as String? ?? '';
+                                  final priceEth =
+                                      listing['priceEth'] as String?;
                                   final color = _getLicenseColor(type);
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 2),
