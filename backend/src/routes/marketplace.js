@@ -29,6 +29,28 @@ const {
 } = require('../utils/abi-encoder');
 
 /**
+ * Validate signature format (hex string, 65 bytes = 130 hex chars + 0x prefix)
+ * @param {string} signature
+ * @returns {{ valid: boolean, error?: string }}
+ */
+function validateSignature(signature) {
+  if (!signature || typeof signature !== 'string') {
+    return { valid: false, error: 'Signature is required' };
+  }
+  if (!signature.startsWith('0x')) {
+    return { valid: false, error: 'Signature must start with 0x' };
+  }
+  // 65 bytes = 130 hex chars + "0x" = 132 total
+  if (signature.length !== 132) {
+    return { valid: false, error: 'Invalid signature length (expected 65 bytes)' };
+  }
+  if (!/^0x[0-9a-fA-F]{130}$/.test(signature)) {
+    return { valid: false, error: 'Signature contains invalid characters' };
+  }
+  return { valid: true };
+}
+
+/**
  * GET /api/marketplace
  * Get all active listings
  */
@@ -592,6 +614,12 @@ router.post('/list/encode', authMiddleware, async (req, res, next) => {
       });
     }
 
+    // Validate signature format
+    const sigValidation = validateSignature(signature);
+    if (!sigValidation.valid) {
+      return res.status(400).json({ error: sigValidation.error, code: 'INVALID_SIGNATURE' });
+    }
+
     const txData = encodeList(tokenId, price, licenseType, licenseHash, expiry || 0, signature);
 
     res.json({
@@ -619,6 +647,12 @@ router.post('/buy/encode', authMiddleware, async (req, res, next) => {
         error: 'Missing required fields: tokenId, licenseType, signature',
         code: 'MISSING_FIELDS'
       });
+    }
+
+    // Validate signature format
+    const sigValidation = validateSignature(signature);
+    if (!sigValidation.valid) {
+      return res.status(400).json({ error: sigValidation.error, code: 'INVALID_SIGNATURE' });
     }
 
     // Parse license type
