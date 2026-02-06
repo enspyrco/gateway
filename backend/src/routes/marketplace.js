@@ -270,54 +270,6 @@ router.post('/list/typed-data', authMiddleware, async (req, res, next) => {
 });
 
 /**
- * GET /api/marketplace/:tokenId/license-status
- * Check if the authenticated user already owns a license for this image
- * Used by frontend to show appropriate buy options (upgrade vs blocked)
- *
- * Returns: { existingLicense: string|null, canBuy: { display, commercial, transfer } }
- */
-router.get('/:tokenId/license-status', authMiddleware, async (req, res, next) => {
-  try {
-    const tokenId = parseInt(req.params.tokenId);
-    const buyerAddress = req.wallet;
-
-    if (isNaN(tokenId)) {
-      return res.status(400).json({ error: 'Invalid tokenId' });
-    }
-
-    // Get the original token ID for this listing
-    const tokenData = await blockchainService.getTokenData(tokenId);
-    const originalTokenId = tokenData.isOriginal ? tokenId : tokenData.originalToken;
-
-    // Check buyer's existing license level for this image
-    const existingLevel = await blockchainService.getBuyerExistingLicenseLevel(buyerAddress, originalTokenId);
-
-    const LICENSE_NAMES = ['display', 'commercial', 'transfer'];
-    const existingLicense = existingLevel !== null ? LICENSE_NAMES[existingLevel] : null;
-
-    // Determine what the buyer can purchase (upgrades only)
-    const canBuy = {
-      display: existingLevel === null, // Can only buy display if no existing license
-      commercial: existingLevel === null || existingLevel < 1, // Can buy if no license or only display
-      transfer: existingLevel === null || existingLevel < 2 // Can buy if no license, display, or commercial
-    };
-
-    res.json({
-      tokenId,
-      originalTokenId,
-      existingLicense,
-      existingLevel,
-      canBuy,
-      message: existingLicense
-        ? `You own a ${existingLicense} license for this image. You can only upgrade to a higher license type.`
-        : null
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
  * POST /api/marketplace/buy/typed-data
  * Get EIP-712 typed data for buying a listed token
  * Client signs this, then submits to the contract with payment
@@ -567,34 +519,6 @@ router.post('/buy', authMiddleware, async (req, res, next) => {
     // Can't buy your own token
     if (listing.seller.toLowerCase() === buyerAddress.toLowerCase()) {
       return res.status(400).json({ error: 'Cannot buy your own token', code: 'CANNOT_BUY_OWN' });
-    }
-
-    // License upgrade validation: can upgrade (display→commercial→transfer), cannot downgrade
-    // Get the original token ID for this listing
-    const tokenData = await blockchainService.getTokenData(tokenId);
-    const originalTokenId = tokenData.isOriginal ? tokenId : tokenData.originalToken;
-
-    // Check if buyer already owns a license for this image
-    const existingLevel = await blockchainService.getBuyerExistingLicenseLevel(buyerAddress, originalTokenId);
-    if (existingLevel !== null) {
-      const LICENSE_NAMES = ['display', 'commercial', 'transfer'];
-      if (licenseTypeNum <= existingLevel) {
-        // Trying to buy same level or downgrade
-        const existingName = LICENSE_NAMES[existingLevel] || 'unknown';
-        const requestedName = LICENSE_NAMES[licenseTypeNum] || 'unknown';
-        if (licenseTypeNum === existingLevel) {
-          return res.status(400).json({
-            error: `You already own a ${existingName} license for this image`,
-            code: 'ALREADY_OWNED'
-          });
-        } else {
-          return res.status(400).json({
-            error: `Cannot downgrade: you already own a ${existingName} license (requested ${requestedName})`,
-            code: 'CANNOT_DOWNGRADE'
-          });
-        }
-      }
-      // If licenseTypeNum > existingLevel, this is an upgrade - allowed
     }
 
     // Get EIP-712 domain
