@@ -104,7 +104,9 @@ contract NFTmarketNFT is
 
     // Token storage
     mapping(uint256 => TokenData) public tokenData;
-    mapping(uint256 => Listing) public listings;
+    // Multi-license listings: tokenId => licenseType => Listing
+    // Allows same token to be listed at different prices for Display, Commercial, Transfer
+    mapping(uint256 => mapping(uint8 => Listing)) public listings;
     mapping(bytes32 => bool) public imageHashExists;
     mapping(address => uint256) public nonces;
     mapping(uint256 => Reservation) public reservations;
@@ -558,6 +560,7 @@ contract NFTmarketNFT is
     /**
      * @notice List a token for sale with seller's signed commitment
      * @dev Cannot offer more rights than you currently have
+     *      Multi-license: can list same token at different prices for Display, Commercial, Transfer
      */
     function list(
         uint256 tokenId,
@@ -570,7 +573,8 @@ contract NFTmarketNFT is
         if (ownerOf(tokenId) != msg.sender) {
             revert NotTokenOwner();
         }
-        if (listings[tokenId].active) {
+        // Check if THIS license type is already listed (allows multiple license types)
+        if (listings[tokenId][uint8(licenseType)].active) {
             revert AlreadyListed();
         }
         if (price == 0) {
@@ -614,7 +618,7 @@ contract NFTmarketNFT is
             revert InvalidSignature();
         }
 
-        listings[tokenId] = Listing({
+        listings[tokenId][uint8(licenseType)] = Listing({
             seller: msg.sender,
             price: price,
             licenseType: licenseType,
@@ -629,10 +633,12 @@ contract NFTmarketNFT is
     }
 
     /**
-     * @notice Remove a listing
+     * @notice Remove a specific license type listing
+     * @param tokenId The token to delist
+     * @param licenseType Which license type listing to remove
      */
-    function delist(uint256 tokenId) external {
-        Listing storage listing = listings[tokenId];
+    function delist(uint256 tokenId, LicenseType licenseType) external {
+        Listing storage listing = listings[tokenId][uint8(licenseType)];
 
         if (!listing.active) {
             revert NotListed();
@@ -647,11 +653,39 @@ contract NFTmarketNFT is
     }
 
     /**
+     * @notice Remove all listings for a token
+     * @param tokenId The token to delist completely
+     */
+    function delistAll(uint256 tokenId) external {
+        if (ownerOf(tokenId) != msg.sender) {
+            revert NotTokenOwner();
+        }
+
+        bool anyDelisted = false;
+        uint8 maxLicenseType = uint8(LicenseType.Transfer);
+        for (uint8 i = 0; i <= maxLicenseType; i++) {
+            if (listings[tokenId][i].active) {
+                listings[tokenId][i].active = false;
+                anyDelisted = true;
+            }
+        }
+
+        if (!anyDelisted) {
+            revert NotListed();
+        }
+
+        emit Delisted(tokenId, msg.sender);
+    }
+
+    /**
      * @notice Buy a listed token with buyer's signed acceptance
      * @dev Handles license transfer and retention of Display rights
+     * @param tokenId The token to buy
+     * @param licenseType Which license type listing to purchase
+     * @param signature Buyer's EIP-712 signature
      */
-    function buy(uint256 tokenId, bytes calldata signature) external payable nonReentrant {
-        Listing storage listing = listings[tokenId];
+    function buy(uint256 tokenId, LicenseType licenseType, bytes calldata signature) external payable nonReentrant {
+        Listing storage listing = listings[tokenId][uint8(licenseType)];
 
         if (!listing.active) {
             revert NotListed();
@@ -686,11 +720,10 @@ contract NFTmarketNFT is
 
         address seller = listing.seller;
         uint256 price = listing.price;
-        LicenseType licenseType = listing.licenseType;
         bytes32 licenseHash = listing.licenseHash;
         bytes memory sellerSig = listing.sellerSignature;
 
-        // Clear listing before transfers
+        // Clear this listing before transfers
         listing.active = false;
 
         // Calculate and distribute payments (fee goes to token's minter)
@@ -701,16 +734,21 @@ contract NFTmarketNFT is
         if (!data.isOriginal) {
             // License token sale: just transfer the token, buyer gets current license level
             // No copyright transfer, no new rights - just change of ownership
+            // Also clear any other listings since token ownership is changing
+            _clearAllListings(tokenId);
             _transfer(seller, msg.sender, tokenId);
             emit Sold(tokenId, seller, msg.sender, price, data.ownerLicense, licenseHash);
         } else if (licenseType == LicenseType.Transfer) {
             // Original token Transfer sale: actual token transfer with copyright
+            // Clear all listings since token ownership is changing
+            _clearAllListings(tokenId);
             _transferLicenseRights(tokenId, seller, msg.sender, licenseType);
             _transfer(seller, msg.sender, tokenId);
             emit Sold(tokenId, seller, msg.sender, price, licenseType, licenseHash);
         } else {
             // Original token Display/Commercial sale: mint new license token for buyer
             // Original token stays with seller who keeps copyright
+            // Other listings remain active (seller can still sell other license types)
             uint256 newTokenId = _mintLicenseToken(tokenId, msg.sender, licenseType, licenseHash);
             emit LicenseGranted(newTokenId, tokenId, data.originalToken, seller, msg.sender, licenseType, licenseHash);
         }
@@ -722,6 +760,16 @@ contract NFTmarketNFT is
         }
 
         emit BilateralAgreement(tokenId, sellerSig, signature, block.timestamp);
+    }
+
+    /**
+     * @notice Clear all listings for a token (internal helper)
+     */
+    function _clearAllListings(uint256 tokenId) internal {
+        uint8 maxLicenseType = uint8(LicenseType.Transfer);
+        for (uint8 i = 0; i <= maxLicenseType; i++) {
+            listings[tokenId][i].active = false;
+        }
     }
 
     /**
@@ -896,22 +944,22 @@ contract NFTmarketNFT is
     }
 
     /**
-     * @notice Get listing info
+     * @notice Get listing info for a specific license type
+     * @param tokenId The token to query
+     * @param licenseType Which license type listing to get
      */
-    function getListing(uint256 tokenId) external view returns (
+    function getListing(uint256 tokenId, LicenseType licenseType) external view returns (
         address seller,
         uint256 price,
-        LicenseType licenseType,
         bytes32 licenseHash,
         uint256 nonce,
         uint256 expiry,
         bool active
     ) {
-        Listing memory listing = listings[tokenId];
+        Listing memory listing = listings[tokenId][uint8(licenseType)];
         return (
             listing.seller,
             listing.price,
-            listing.licenseType,
             listing.licenseHash,
             listing.nonce,
             listing.expiry,
@@ -920,10 +968,44 @@ contract NFTmarketNFT is
     }
 
     /**
-     * @notice Get the seller's signature for a listing
+     * @notice Get all active listings for a token
+     * @param tokenId The token to query
+     * @return displayPrice Price for Display license (0 if not listed)
+     * @return displayActive Whether Display license is actively listed
+     * @return commercialPrice Price for Commercial license (0 if not listed)
+     * @return commercialActive Whether Commercial license is actively listed
+     * @return transferPrice Price for full Transfer (0 if not listed)
+     * @return transferActive Whether Transfer is actively listed
      */
-    function getListingSignature(uint256 tokenId) external view returns (bytes memory) {
-        return listings[tokenId].sellerSignature;
+    function getAllListings(uint256 tokenId) external view returns (
+        uint256 displayPrice,
+        bool displayActive,
+        uint256 commercialPrice,
+        bool commercialActive,
+        uint256 transferPrice,
+        bool transferActive
+    ) {
+        Listing memory display = listings[tokenId][uint8(LicenseType.Display)];
+        Listing memory commercial = listings[tokenId][uint8(LicenseType.Commercial)];
+        Listing memory transfer = listings[tokenId][uint8(LicenseType.Transfer)];
+
+        return (
+            display.price,
+            display.active,
+            commercial.price,
+            commercial.active,
+            transfer.price,
+            transfer.active
+        );
+    }
+
+    /**
+     * @notice Get the seller's signature for a listing
+     * @param tokenId The token to query
+     * @param licenseType Which license type listing to get signature for
+     */
+    function getListingSignature(uint256 tokenId, LicenseType licenseType) external view returns (bytes memory) {
+        return listings[tokenId][uint8(licenseType)].sellerSignature;
     }
 
     /**
@@ -1024,10 +1106,18 @@ contract NFTmarketNFT is
     function _update(address to, uint256 tokenId, address auth) internal override returns (address) {
         address from = super._update(to, tokenId, auth);
 
-        // Auto-delist when transferred outside marketplace
-        if (listings[tokenId].active && from != address(0)) {
-            listings[tokenId].active = false;
-            emit Delisted(tokenId, from);
+        // Auto-delist all license types when transferred outside marketplace
+        if (from != address(0)) {
+            bool anyDelisted = false;
+            for (uint8 i = 0; i <= uint8(LicenseType.Transfer); i++) {
+                if (listings[tokenId][i].active) {
+                    listings[tokenId][i].active = false;
+                    anyDelisted = true;
+                }
+            }
+            if (anyDelisted) {
+                emit Delisted(tokenId, from);
+            }
         }
 
         return from;
