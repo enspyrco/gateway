@@ -24,7 +24,10 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
   bool _loading = true;
   String? _error;
   Map<String, dynamic>? _listing;
+  Map<String, dynamic>?
+      _licenseStatus; // User's existing license for this image
   bool _actionLoading = false;
+  String? _lastWalletAddress; // Track wallet changes to reload license status
 
   @override
   void initState() {
@@ -52,11 +55,32 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
         _listing = listing;
         _loading = false;
       });
+
+      // Fetch license status if user is connected (do after initial load for better UX)
+      _loadLicenseStatus();
     } catch (e) {
       setState(() {
         _error = e.toString();
         _loading = false;
       });
+    }
+  }
+
+  /// Load user's existing license status for this image (if connected)
+  Future<void> _loadLicenseStatus() async {
+    final wallet = context.read<WalletProvider>();
+    if (!wallet.isConnected || wallet.authToken == null) return;
+
+    try {
+      final api = ApiService(authToken: wallet.authToken);
+      final status = await api.getLicenseStatus(widget.tokenId);
+      debugPrint('License status for token ${widget.tokenId}: $status');
+      setState(() {
+        _licenseStatus = status;
+      });
+    } catch (e) {
+      debugPrint('Failed to get license status: $e');
+      // Not critical, just means we won't show upgrade hints
     }
   }
 
@@ -114,6 +138,17 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     final wallet = context.watch<WalletProvider>();
     final isOwner = wallet.isConnected &&
         wallet.address?.toLowerCase() == token.currentOwner.toLowerCase();
+
+    // Reload license status if wallet address changed
+    final currentWalletAddress = wallet.isConnected ? wallet.address : null;
+    if (currentWalletAddress != _lastWalletAddress) {
+      _lastWalletAddress = currentWalletAddress;
+      // Clear old status and reload
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        setState(() => _licenseStatus = null);
+        _loadLicenseStatus();
+      });
+    }
 
     return SingleChildScrollView(
       child: Center(
@@ -381,15 +416,25 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
           const SizedBox(height: 8),
         ],
         if (!isOwner && isListed && wallet.isConnected) ...[
+          // Show existing license warning if user already owns a license for this image
+          if (_licenseStatus?['existingLicense'] != null) ...[
+            _buildExistingLicenseInfo(),
+            const SizedBox(height: 8),
+          ],
           _buildBilateralAgreementInfo(),
           const SizedBox(height: 8),
-          _PremiumActionButton(
-            onPressed: _actionLoading ? null : () => _buy(),
-            icon: _actionLoading ? null : Icons.shopping_cart,
-            label: 'Buy for $price ETH',
-            isLoading: _actionLoading,
-            color: NFTmarketColors.primary,
-          ),
+          // Check if user can buy this specific license type
+          if (_canBuyListedLicense()) ...[
+            _PremiumActionButton(
+              onPressed: _actionLoading ? null : () => _buy(),
+              icon: _actionLoading ? null : Icons.shopping_cart,
+              label: _getBuyButtonLabel(price),
+              isLoading: _actionLoading,
+              color: NFTmarketColors.primary,
+            ),
+          ] else ...[
+            _buildCannotBuyMessage(),
+          ],
           const SizedBox(height: 8),
         ],
         if (!isOwner && isListed && !wallet.isConnected) ...[
@@ -467,6 +512,110 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
             style: const TextStyle(
               fontWeight: FontWeight.bold,
               color: NFTmarketColors.accent,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Check if user can buy the currently listed license type
+  bool _canBuyListedLicense() {
+    if (_licenseStatus == null)
+      return true; // No status loaded yet, allow attempt
+    final canBuy = _licenseStatus!['canBuy'] as Map<String, dynamic>?;
+    if (canBuy == null) return true;
+
+    final listingLicenseType = _listing?['licenseType'] as String?;
+    if (listingLicenseType == null) return true;
+
+    return canBuy[listingLicenseType] == true;
+  }
+
+  /// Get appropriate buy button label (shows "Upgrade" if applicable)
+  String _getBuyButtonLabel(String? price) {
+    final existingLicense = _licenseStatus?['existingLicense'] as String?;
+    if (existingLicense != null) {
+      return 'Upgrade to ${_listing?['licenseType']} for $price ETH';
+    }
+    return 'Buy for $price ETH';
+  }
+
+  /// Show info about user's existing license
+  Widget _buildExistingLicenseInfo() {
+    final existingLicense = _licenseStatus?['existingLicense'] as String?;
+    if (existingLicense == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: NFTmarketColors.warning.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: NFTmarketColors.warning.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: NFTmarketColors.warning.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.info_outline,
+                color: NFTmarketColors.warning, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'You own a $existingLicense license for this image',
+              style: const TextStyle(
+                color: NFTmarketColors.warning,
+                fontSize: 13,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Show message when user cannot buy (downgrade not allowed)
+  Widget _buildCannotBuyMessage() {
+    final existingLicense = _licenseStatus?['existingLicense'] as String?;
+    final listingLicense = _listing?['licenseType'] as String?;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: NFTmarketColors.textSecondary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: NFTmarketColors.textSecondary.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: NFTmarketColors.textSecondary.withValues(alpha: 0.2),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.block,
+                color: NFTmarketColors.textSecondary, size: 16),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              existingLicense == listingLicense
+                  ? 'You already own a $existingLicense license'
+                  : 'Cannot downgrade from $existingLicense to $listingLicense',
+              style: const TextStyle(
+                color: NFTmarketColors.textSecondary,
+                fontSize: 13,
+              ),
             ),
           ),
         ],

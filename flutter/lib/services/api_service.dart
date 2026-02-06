@@ -235,6 +235,16 @@ class ApiService {
     return _handleResponse(response);
   }
 
+  /// Get user's license status for a token (what they already own, what they can buy)
+  /// Returns: { existingLicense, canBuy: { display, commercial, transfer } }
+  Future<Map<String, dynamic>> getLicenseStatus(int tokenId) async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/marketplace/$tokenId/license-status'),
+      headers: _headers,
+    );
+    return _handleResponse(response);
+  }
+
   /// Prepare a listing - backend handles all logic
   /// Returns typed data to sign and contract call params
   Future<Map<String, dynamic>> prepareListing({
