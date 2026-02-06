@@ -130,7 +130,7 @@ describe('Documentation Compliance', function () {
 
       const purchaseSig = await bob.signTypedData(domain, purchaseTypes, purchaseValue);
 
-      await nftmarket.connect(bob).buy(tokenId, 0, purchaseSig, { value: price });
+      await nftmarket.connect(bob).buy(tokenId, 2, purchaseSig, { value: price });
 
       const pendingFeesAfter = await nftmarket.pendingFees(minter.address);
       const sellerBalanceAfter = await ethers.provider.getBalance(alice.address);
@@ -272,7 +272,7 @@ describe('Documentation Compliance', function () {
       sig = await alice.signTypedData(domain, types, value);
       await expect(nftmarket.connect(alice).list(0, ethers.parseEther('1'), 1, licenseHash, 0, sig))
         .to.not.be.reverted;
-      await nftmarket.connect(alice).delist(0, 0);
+      await nftmarket.connect(alice).delist(0, 1);
 
       // Test Transfer license (2)
       value = { tokenId: 0, price: ethers.parseEther('1'), licenseType: 2, licenseHash, nonce: 2, expiry: 0 };
@@ -370,7 +370,7 @@ describe('Documentation Compliance', function () {
         tokenId: 0, price, licenseType: LicenseType.Transfer, licenseHash, seller: alice.address, nonce: 0
       });
 
-      await expect(nftmarket.connect(bob).buy(0, 0, purchaseSig, { value: price }))
+      await expect(nftmarket.connect(bob).buy(0, LicenseType.Transfer, purchaseSig, { value: price }))
         .to.emit(nftmarket, 'Sold')
         .withArgs(0, alice.address, bob.address, price, LicenseType.Transfer, licenseHash);
     });
