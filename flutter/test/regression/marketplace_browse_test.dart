@@ -23,7 +23,8 @@ void main() {
 
   group('Marketplace Browse', () {
     group('Loading State', () {
-      testWidgets('shows loading indicator while fetching listings', (tester) async {
+      testWidgets('shows loading indicator while fetching listings',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             const Scaffold(
@@ -285,8 +286,10 @@ void main() {
         expect(find.text('Art #3'), findsOneWidget);
       });
 
-      testWidgets('mixed license listings show different badge colors', (tester) async {
-        final listings = MarketplaceFixtures.mixedLicenseListings()['listings'] as List;
+      testWidgets('mixed license listings show different badge colors',
+          (tester) async {
+        final listings =
+            MarketplaceFixtures.mixedLicenseListings()['listings'] as List;
 
         await tester.pumpWidget(
           buildTestWidget(
@@ -309,7 +312,8 @@ void main() {
     });
 
     group('Wallet Connection Integration', () {
-      testWidgets('shows connect wallet button when not connected', (tester) async {
+      testWidgets('shows connect wallet button when not connected',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _BuyButtonForListingWidget(isConnected: false, price: '1.0'),
@@ -346,7 +350,8 @@ void main() {
                     const Text('Marketplace'),
                     const SizedBox(width: 12),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 4),
                       decoration: BoxDecoration(
                         color: NFTmarketColors.accent.withValues(alpha: 0.15),
                         borderRadius: BorderRadius.circular(12),
@@ -567,10 +572,12 @@ class _BuyButtonForListingWidget extends StatelessWidget {
 Container? _findBadgeContainer(WidgetTester tester) {
   try {
     return tester.widget<Container>(
-      find.descendant(
-        of: find.byType(_LicenseBadgeWidget),
-        matching: find.byType(Container),
-      ).first,
+      find
+          .descendant(
+            of: find.byType(_LicenseBadgeWidget),
+            matching: find.byType(Container),
+          )
+          .first,
     );
   } catch (_) {
     return null;

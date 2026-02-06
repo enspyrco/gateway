@@ -66,7 +66,8 @@ class TestApp extends StatelessWidget {
         ChangeNotifierProvider<WalletProvider>.value(value: wallet),
         ChangeNotifierProxyProvider<WalletProvider, MintProvider>(
           create: (_) => mint,
-          update: (_, walletProv, mintProv) => mintProv!..updateWallet(walletProv),
+          update: (_, walletProv, mintProv) =>
+              mintProv!..updateWallet(walletProv),
         ),
       ],
       child: MaterialApp(
@@ -228,7 +229,8 @@ class TestWalletProvider extends ChangeNotifier implements WalletProvider {
   @override
   Future<Uint8List> signTypedData(Map<String, dynamic> typedData) async {
     if (!isConnected) throw Exception('Wallet not connected');
-    return Uint8List.fromList(List<int>.filled(65, 0xab)); // Mock signature bytes
+    return Uint8List.fromList(
+        List<int>.filled(65, 0xab)); // Mock signature bytes
   }
 
   @override
@@ -252,19 +254,24 @@ class TestWalletProvider extends ChangeNotifier implements WalletProvider {
 
   // Fee simulation (simplified)
   @override
-  List<FeeTransaction> get feeTransactions => List.unmodifiable(_feeTransactions);
+  List<FeeTransaction> get feeTransactions =>
+      List.unmodifiable(_feeTransactions);
   @override
-  BigInt get platformBalance => _simulatedBalances[platformWallet.address] ?? BigInt.zero;
+  BigInt get platformBalance =>
+      _simulatedBalances[platformWallet.address] ?? BigInt.zero;
   @override
-  BigInt get currentBalance => _address != null ? getSimulatedBalance(_address!) : BigInt.zero;
+  BigInt get currentBalance =>
+      _address != null ? getSimulatedBalance(_address!) : BigInt.zero;
   @override
   bool get hasActiveSubscription {
     if (_address == null) return false;
     final expiry = _subscriptionExpiry[_address!];
     return expiry != null && expiry.isAfter(DateTime.now());
   }
+
   @override
-  DateTime? get subscriptionExpiry => _address != null ? _subscriptionExpiry[_address!] : null;
+  DateTime? get subscriptionExpiry =>
+      _address != null ? _subscriptionExpiry[_address!] : null;
   @override
   List<FeeTransaction> get userFeeTransactions => [];
   @override
@@ -283,7 +290,8 @@ class TestWalletProvider extends ChangeNotifier implements WalletProvider {
   }
 
   @override
-  BigInt getSimulatedBalance(String address) => _simulatedBalances[address] ?? BigInt.zero;
+  BigInt getSimulatedBalance(String address) =>
+      _simulatedBalances[address] ?? BigInt.zero;
 
   @override
   Future<bool> paySubscriptionFee() async => true;
@@ -298,7 +306,8 @@ class TestWalletProvider extends ChangeNotifier implements WalletProvider {
   TestAccount? getAccountByNickname(String nickname) {
     final lower = nickname.toLowerCase();
     try {
-      return _availableAccounts.firstWhere((a) => a.nickname.toLowerCase() == lower);
+      return _availableAccounts
+          .firstWhere((a) => a.nickname.toLowerCase() == lower);
     } catch (_) {
       return null;
     }
@@ -309,7 +318,8 @@ class TestWalletProvider extends ChangeNotifier implements WalletProvider {
 
   // Required by WalletProvider but not needed in most tests
   @override
-  WalletService get walletService => throw UnimplementedError('Use TestWalletProvider for testing');
+  WalletService get walletService =>
+      throw UnimplementedError('Use TestWalletProvider for testing');
 }
 
 /// Creates a TestWalletProvider connected as Alice

@@ -80,8 +80,10 @@ void main() {
         expect(LicenseType.fromString('display'), equals(LicenseType.display));
         expect(LicenseType.fromString('Display'), equals(LicenseType.display));
         expect(LicenseType.fromString('DISPLAY'), equals(LicenseType.display));
-        expect(LicenseType.fromString('commercial'), equals(LicenseType.commercial));
-        expect(LicenseType.fromString('transfer'), equals(LicenseType.transfer));
+        expect(LicenseType.fromString('commercial'),
+            equals(LicenseType.commercial));
+        expect(
+            LicenseType.fromString('transfer'), equals(LicenseType.transfer));
       });
 
       test('LicenseType.fromString defaults to display for unknown values', () {
@@ -101,7 +103,12 @@ void main() {
       bool canUpgrade(String? existing, String target) {
         if (existing == null) return true; // No existing license, can buy any
 
-        const hierarchy = {'display': 0, 'commercial': 1, 'transfer': 2, 'copyright': 3};
+        const hierarchy = {
+          'display': 0,
+          'commercial': 1,
+          'transfer': 2,
+          'copyright': 3
+        };
         final existingLevel = hierarchy[existing] ?? -1;
         final targetLevel = hierarchy[target] ?? -1;
 
@@ -154,7 +161,8 @@ void main() {
 
   group('License Status UI Components', () {
     group('Existing License Info Box', () {
-      testWidgets('shows existing license when user owns display', (tester) async {
+      testWidgets('shows existing license when user owns display',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _ExistingLicenseInfoWidget(
@@ -164,11 +172,13 @@ void main() {
           ),
         );
 
-        expect(find.text('You own a display license for this image'), findsOneWidget);
+        expect(find.text('You own a display license for this image'),
+            findsOneWidget);
         expect(find.byIcon(Icons.info_outline), findsOneWidget);
       });
 
-      testWidgets('shows existing license when user owns commercial', (tester) async {
+      testWidgets('shows existing license when user owns commercial',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _ExistingLicenseInfoWidget(
@@ -178,7 +188,8 @@ void main() {
           ),
         );
 
-        expect(find.text('You own a commercial license for this image'), findsOneWidget);
+        expect(find.text('You own a commercial license for this image'),
+            findsOneWidget);
       });
 
       testWidgets('does not show when no existing license', (tester) async {
@@ -215,7 +226,8 @@ void main() {
         expect(find.byIcon(Icons.block), findsOneWidget);
       });
 
-      testWidgets('shows already owned message for same license', (tester) async {
+      testWidgets('shows already owned message for same license',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _CannotBuyMessageWidget(
@@ -234,7 +246,8 @@ void main() {
     });
 
     group('Buy Button Label', () {
-      testWidgets('shows "Buy for X ETH" when no existing license', (tester) async {
+      testWidgets('shows "Buy for X ETH" when no existing license',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _BuyButtonWidget(
@@ -249,7 +262,8 @@ void main() {
         expect(find.text('Buy for 1.5 ETH'), findsOneWidget);
       });
 
-      testWidgets('shows "Upgrade to X for Y ETH" when upgrading', (tester) async {
+      testWidgets('shows "Upgrade to X for Y ETH" when upgrading',
+          (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
             _BuyButtonWidget(
@@ -323,7 +337,8 @@ void main() {
       expect(NFTmarketColors.transferPurple, equals(const Color(0xFFA855F7)));
     });
 
-    testWidgets('license badge shows correct label for display', (tester) async {
+    testWidgets('license badge shows correct label for display',
+        (tester) async {
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(

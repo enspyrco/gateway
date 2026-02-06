@@ -207,14 +207,18 @@ void main() {
 
       test('fromString parses valid values', () {
         expect(LicenseType.fromString('display'), equals(LicenseType.display));
-        expect(LicenseType.fromString('commercial'), equals(LicenseType.commercial));
-        expect(LicenseType.fromString('transfer'), equals(LicenseType.transfer));
+        expect(LicenseType.fromString('commercial'),
+            equals(LicenseType.commercial));
+        expect(
+            LicenseType.fromString('transfer'), equals(LicenseType.transfer));
       });
 
       test('fromString is case-insensitive', () {
         expect(LicenseType.fromString('DISPLAY'), equals(LicenseType.display));
-        expect(LicenseType.fromString('Commercial'), equals(LicenseType.commercial));
-        expect(LicenseType.fromString('TRANSFER'), equals(LicenseType.transfer));
+        expect(LicenseType.fromString('Commercial'),
+            equals(LicenseType.commercial));
+        expect(
+            LicenseType.fromString('TRANSFER'), equals(LicenseType.transfer));
       });
 
       test('fromString defaults to display for unknown values', () {
