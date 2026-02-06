@@ -81,7 +81,7 @@ describe("NFTmarketNFT", function () {
 
   // Helper to buy a token with signature
   async function buyToken(signer, tokenId, value) {
-    const listing = await nftmarket.getListing(tokenId);
+    const listing = await nftmarket.getListing(tokenId, 0);
     const signature = await signPurchaseAcceptance(
       signer,
       tokenId,
@@ -91,7 +91,7 @@ describe("NFTmarketNFT", function () {
       listing.seller,
       listing.nonce
     );
-    return nftmarket.connect(signer).buy(tokenId, signature, { value });
+    return nftmarket.connect(signer).buy(tokenId, 0, signature, { value });
   }
 
   // Helper to reserve and mint a token (new reservation pattern with minter)
@@ -480,7 +480,7 @@ describe("NFTmarketNFT", function () {
 
     it("Should route fee to original minter for license tokens too", async function () {
       // Sell Display license - this creates a new license token
-      await nftmarket.connect(artist).delist(0);
+      await nftmarket.connect(artist).delist(0, 0);
       await listToken(artist, 0, listPrice, LicenseType.Display);
 
       const pendingFeesBefore = await nftmarket.pendingFees(minter.address);
@@ -520,7 +520,7 @@ describe("NFTmarketNFT", function () {
         .to.emit(nftmarket, "Listed")
         .withArgs(0, artist.address, price, LicenseType.Display, licenseHash, 0, 0);
 
-      const listing = await nftmarket.getListing(0);
+      const listing = await nftmarket.getListing(0, 0);
       expect(listing.seller).to.equal(artist.address);
       expect(listing.price).to.equal(price);
       expect(listing.licenseType).to.equal(LicenseType.Display);
@@ -582,7 +582,7 @@ describe("NFTmarketNFT", function () {
       await expect(listToken(artist, 0, price, LicenseType.Display, futureExpiry))
         .to.emit(nftmarket, "Listed");
 
-      const listing = await nftmarket.getListing(0);
+      const listing = await nftmarket.getListing(0, 0);
       expect(listing.expiry).to.equal(futureExpiry);
     });
 
@@ -600,11 +600,11 @@ describe("NFTmarketNFT", function () {
     it("Should allow owner to delist", async function () {
       await listToken(artist, 0, ethers.parseEther("1"));
 
-      await expect(nftmarket.connect(artist).delist(0))
+      await expect(nftmarket.connect(artist).delist(0, 0))
         .to.emit(nftmarket, "Delisted")
         .withArgs(0, artist.address);
 
-      const listing = await nftmarket.getListing(0);
+      const listing = await nftmarket.getListing(0, 0);
       expect(listing.active).to.be.false;
     });
 
@@ -643,7 +643,7 @@ describe("NFTmarketNFT", function () {
       expect(await nftmarket.ownerOf(0)).to.equal(buyer.address);
 
       // Check listing cleared
-      const listing = await nftmarket.getListing(0);
+      const listing = await nftmarket.getListing(0, 0);
       expect(listing.active).to.be.false;
 
       // Check payments (2.5% fee accrued to minter, seller gets rest)
@@ -658,7 +658,7 @@ describe("NFTmarketNFT", function () {
     });
 
     it("Should emit BilateralAgreement with both signatures", async function () {
-      const listing = await nftmarket.getListing(0);
+      const listing = await nftmarket.getListing(0, 0);
       const buyerSignature = await signPurchaseAcceptance(
         buyer,
         0,
@@ -669,7 +669,7 @@ describe("NFTmarketNFT", function () {
         listing.nonce
       );
 
-      const tx = await nftmarket.connect(buyer).buy(0, buyerSignature, { value: listPrice });
+      const tx = await nftmarket.connect(buyer).buy(0, 0, buyerSignature, { value: listPrice });
       const receipt = await tx.wait();
 
       // Find the BilateralAgreement event
@@ -688,7 +688,7 @@ describe("NFTmarketNFT", function () {
     });
 
     it("Should reject purchase with invalid buyer signature", async function () {
-      const listing = await nftmarket.getListing(0);
+      const listing = await nftmarket.getListing(0, 0);
 
       // Sign with wrong signer
       const wrongSignature = await signPurchaseAcceptance(
@@ -702,12 +702,12 @@ describe("NFTmarketNFT", function () {
       );
 
       await expect(
-        nftmarket.connect(buyer).buy(0, wrongSignature, { value: listPrice })
+        nftmarket.connect(buyer).buy(0, 0, wrongSignature, { value: listPrice })
       ).to.be.revertedWithCustomError(nftmarket, "InvalidSignature");
     });
 
     it("Should reject purchase with mismatched terms in signature", async function () {
-      const listing = await nftmarket.getListing(0);
+      const listing = await nftmarket.getListing(0, 0);
 
       // Sign with wrong price
       const wrongSignature = await signPurchaseAcceptance(
@@ -721,22 +721,22 @@ describe("NFTmarketNFT", function () {
       );
 
       await expect(
-        nftmarket.connect(buyer).buy(0, wrongSignature, { value: listPrice })
+        nftmarket.connect(buyer).buy(0, 0, wrongSignature, { value: listPrice })
       ).to.be.revertedWithCustomError(nftmarket, "InvalidSignature");
     });
 
     it("Should not allow buying unlisted token", async function () {
-      await nftmarket.connect(artist).delist(0);
+      await nftmarket.connect(artist).delist(0, 0);
 
       const signature = await signPurchaseAcceptance(buyer, 0, listPrice, LicenseType.Display, licenseHash, artist.address, 0);
 
       await expect(
-        nftmarket.connect(buyer).buy(0, signature, { value: listPrice })
+        nftmarket.connect(buyer).buy(0, 0, signature, { value: listPrice })
       ).to.be.revertedWithCustomError(nftmarket, "NotListed");
     });
 
     it("Should not allow insufficient payment", async function () {
-      const listing = await nftmarket.getListing(0);
+      const listing = await nftmarket.getListing(0, 0);
       const signature = await signPurchaseAcceptance(
         buyer,
         0,
@@ -748,12 +748,12 @@ describe("NFTmarketNFT", function () {
       );
 
       await expect(
-        nftmarket.connect(buyer).buy(0, signature, { value: listPrice / 2n })
+        nftmarket.connect(buyer).buy(0, 0, signature, { value: listPrice / 2n })
       ).to.be.revertedWithCustomError(nftmarket, "InsufficientPayment");
     });
 
     it("Should not allow buying own token", async function () {
-      const listing = await nftmarket.getListing(0);
+      const listing = await nftmarket.getListing(0, 0);
       const signature = await signPurchaseAcceptance(
         artist,
         0,
@@ -765,7 +765,7 @@ describe("NFTmarketNFT", function () {
       );
 
       await expect(
-        nftmarket.connect(artist).buy(0, signature, { value: listPrice })
+        nftmarket.connect(artist).buy(0, 0, signature, { value: listPrice })
       ).to.be.revertedWithCustomError(nftmarket, "CannotBuyOwnToken");
     });
 
@@ -775,7 +775,7 @@ describe("NFTmarketNFT", function () {
 
       const buyerBalanceBefore = await ethers.provider.getBalance(buyer.address);
 
-      const listing = await nftmarket.getListing(0);
+      const listing = await nftmarket.getListing(0, 0);
       const signature = await signPurchaseAcceptance(
         buyer,
         0,
@@ -786,7 +786,7 @@ describe("NFTmarketNFT", function () {
         listing.nonce
       );
 
-      const tx = await nftmarket.connect(buyer).buy(0, signature, { value: totalPayment });
+      const tx = await nftmarket.connect(buyer).buy(0, 0, signature, { value: totalPayment });
       const receipt = await tx.wait();
       const gasUsed = receipt.gasUsed * receipt.gasPrice;
 
@@ -801,7 +801,7 @@ describe("NFTmarketNFT", function () {
       // Transfer outside marketplace should delist
       await nftmarket.connect(artist).transferFrom(artist.address, buyer.address, 0);
 
-      const listing = await nftmarket.getListing(0);
+      const listing = await nftmarket.getListing(0, 0);
       expect(listing.active).to.be.false;
     });
   });
@@ -843,7 +843,7 @@ describe("NFTmarketNFT", function () {
 
       // First listing succeeds
       await nftmarket.connect(artist).list(0, price, LicenseType.Display, licenseHash, 0, signature);
-      await nftmarket.connect(artist).delist(0);
+      await nftmarket.connect(artist).delist(0, 0);
 
       // Trying to reuse same signature should fail (nonce has incremented)
       await expect(
@@ -856,10 +856,10 @@ describe("NFTmarketNFT", function () {
 
       // List once
       await listToken(artist, 0, price);
-      const firstListing = await nftmarket.getListing(0);
+      const firstListing = await nftmarket.getListing(0, 0);
 
       // Delist
-      await nftmarket.connect(artist).delist(0);
+      await nftmarket.connect(artist).delist(0, 0);
 
       // List again (new nonce)
       await listToken(artist, 0, price);
@@ -876,7 +876,7 @@ describe("NFTmarketNFT", function () {
       );
 
       await expect(
-        nftmarket.connect(buyer).buy(0, oldNonceSignature, { value: price })
+        nftmarket.connect(buyer).buy(0, 0, oldNonceSignature, { value: price })
       ).to.be.revertedWithCustomError(nftmarket, "InvalidSignature");
     });
   });
@@ -911,10 +911,10 @@ describe("NFTmarketNFT", function () {
       it("Should allow listing at same or lower license level", async function () {
         // Creator has Transfer, can list at any level
         await expect(listToken(artist, 0, price, LicenseType.Display)).to.not.be.reverted;
-        await nftmarket.connect(artist).delist(0);
+        await nftmarket.connect(artist).delist(0, 0);
 
         await expect(listToken(artist, 0, price, LicenseType.Commercial)).to.not.be.reverted;
-        await nftmarket.connect(artist).delist(0);
+        await nftmarket.connect(artist).delist(0, 0);
 
         await expect(listToken(artist, 0, price, LicenseType.Transfer)).to.not.be.reverted;
       });
@@ -1056,12 +1056,12 @@ describe("NFTmarketNFT", function () {
 
         await listToken(artist, 1, price, LicenseType.Transfer);
 
-        const listing = await nftmarket.getListing(1);
+        const listing = await nftmarket.getListing(1, 0);
         const signature = await signPurchaseAcceptance(
           buyer, 1, listing.price, listing.licenseType, listing.licenseHash, listing.seller, listing.nonce
         );
 
-        await expect(nftmarket.connect(buyer).buy(1, signature, { value: price }))
+        await expect(nftmarket.connect(buyer).buy(1, 0, signature, { value: price }))
           .to.emit(nftmarket, "CopyrightTransferred")
           .withArgs(1, artist.address, buyer.address);
       });
@@ -1072,12 +1072,12 @@ describe("NFTmarketNFT", function () {
 
         await listToken(artist, 1, price, LicenseType.Transfer);
 
-        const listing = await nftmarket.getListing(1);
+        const listing = await nftmarket.getListing(1, 0);
         const signature = await signPurchaseAcceptance(
           buyer, 1, listing.price, listing.licenseType, listing.licenseHash, listing.seller, listing.nonce
         );
 
-        await expect(nftmarket.connect(buyer).buy(1, signature, { value: price }))
+        await expect(nftmarket.connect(buyer).buy(1, 0, signature, { value: price }))
           .to.emit(nftmarket, "DisplayRightsRetained")
           .withArgs(1, artist.address);
       });
@@ -1275,12 +1275,12 @@ describe("NFTmarketNFT", function () {
       await listToken(artist, tokenId, price, LicenseType.Transfer);
 
       // Buy token - get nonce from listing, not getNonce
-      const listing = await nftmarket.getListing(tokenId);
+      const listing = await nftmarket.getListing(tokenId, 0);
       const buyerSig = await signPurchaseAcceptance(
         buyer, tokenId, price, LicenseType.Transfer, listing.licenseHash, artist.address, listing.nonce
       );
 
-      await nftmarket.connect(buyer).buy(tokenId, buyerSig, { value: price });
+      await nftmarket.connect(buyer).buy(tokenId, 0, buyerSig, { value: price });
 
       // Fee should be accrued for minter, not transferred yet
       const expectedFee = (price * BigInt(DEFAULT_FEE_BPS)) / 10000n;
@@ -1292,11 +1292,11 @@ describe("NFTmarketNFT", function () {
 
       // List and sell token
       await listToken(artist, tokenId, price, LicenseType.Transfer);
-      const listing = await nftmarket.getListing(tokenId);
+      const listing = await nftmarket.getListing(tokenId, 0);
       const buyerSig = await signPurchaseAcceptance(
         buyer, tokenId, price, LicenseType.Transfer, listing.licenseHash, artist.address, listing.nonce
       );
-      await nftmarket.connect(buyer).buy(tokenId, buyerSig, { value: price });
+      await nftmarket.connect(buyer).buy(tokenId, 0, buyerSig, { value: price });
 
       const expectedFee = (price * BigInt(DEFAULT_FEE_BPS)) / 10000n;
       const minterBalanceBefore = await ethers.provider.getBalance(minter.address);
@@ -1327,14 +1327,14 @@ describe("NFTmarketNFT", function () {
 
       // List and sell
       await listToken(artist, tokenId, price, LicenseType.Transfer);
-      const listing = await nftmarket.getListing(tokenId);
+      const listing = await nftmarket.getListing(tokenId, 0);
       const buyerSig = await signPurchaseAcceptance(
         buyer, tokenId, price, LicenseType.Transfer, listing.licenseHash, artist.address, listing.nonce
       );
 
       // Check FeeAccrued event on buy
       await expect(
-        nftmarket.connect(buyer).buy(tokenId, buyerSig, { value: price })
+        nftmarket.connect(buyer).buy(tokenId, 0, buyerSig, { value: price })
       ).to.emit(nftmarket, "FeeAccrued")
         .withArgs(minter.address, tokenId, expectedFee);
 
@@ -1388,13 +1388,13 @@ describe("NFTmarketNFT", function () {
       await nftmarket.connect(owner).deactivateAuthority(0);
 
       // Should still be able to buy - get nonce from listing
-      const listing = await nftmarket.getListing(tokenId);
+      const listing = await nftmarket.getListing(tokenId, 0);
       const buyerSig = await signPurchaseAcceptance(
         buyer, tokenId, price, LicenseType.Transfer, listing.licenseHash, artist.address, listing.nonce
       );
 
       await expect(
-        nftmarket.connect(buyer).buy(tokenId, buyerSig, { value: price })
+        nftmarket.connect(buyer).buy(tokenId, 0, buyerSig, { value: price })
       ).to.not.be.reverted;
 
       expect(await nftmarket.ownerOf(tokenId)).to.equal(buyer.address);
@@ -1410,11 +1410,11 @@ describe("NFTmarketNFT", function () {
       await nftmarket.connect(owner).deactivateAuthority(0);
 
       // Buy token - get nonce from listing
-      const listing = await nftmarket.getListing(tokenId);
+      const listing = await nftmarket.getListing(tokenId, 0);
       const buyerSig = await signPurchaseAcceptance(
         buyer, tokenId, price, LicenseType.Transfer, listing.licenseHash, artist.address, listing.nonce
       );
-      await nftmarket.connect(buyer).buy(tokenId, buyerSig, { value: price });
+      await nftmarket.connect(buyer).buy(tokenId, 0, buyerSig, { value: price });
 
       // Fees should still be accrued
       const expectedFee = (price * BigInt(DEFAULT_FEE_BPS)) / 10000n;
@@ -1461,12 +1461,12 @@ describe("NFTmarketNFT", function () {
 
       // Sell Display license - creates license token
       await listToken(artist, originalTokenId, price, LicenseType.Display);
-      const listing = await nftmarket.getListing(originalTokenId);
+      const listing = await nftmarket.getListing(originalTokenId, 0);
       const buyerSig = await signPurchaseAcceptance(
         buyer, originalTokenId, price, LicenseType.Display, listing.licenseHash, artist.address, listing.nonce
       );
 
-      const buyTx = await nftmarket.connect(buyer).buy(originalTokenId, buyerSig, { value: price });
+      const buyTx = await nftmarket.connect(buyer).buy(originalTokenId, 0, buyerSig, { value: price });
       const buyReceipt = await buyTx.wait();
 
       // Find the new license token
