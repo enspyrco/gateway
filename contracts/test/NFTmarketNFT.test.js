@@ -532,7 +532,7 @@ describe("NFTmarketNFT", function () {
       const price = ethers.parseEther("0.5");
       await listToken(artist, 0, price);
 
-      const storedSig = await nftmarket.getListingSignature(0);
+      const storedSig = await nftmarket.getListingSignature(0, 0);
       expect(storedSig.length).to.be.greaterThan(0);
     });
 
