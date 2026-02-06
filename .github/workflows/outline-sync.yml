@@ -1,0 +1,22 @@
+name: Sync Docs to Outline
+
+on:
+  pull_request:
+    paths: ['docs/**/*.md']
+
+jobs:
+  sync:
+    name: Outline Sync
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: 10xdeca/outline-sync-action@main
+        with:
+          outline_api_key: ${{ secrets.OUTLINE_API_KEY }}
+          collection_id: ${{ secrets.OUTLINE_COLLECTION_ID }}
+          outline_base_url: 'https://wiki.xdeca.com'
+          file_pattern: 'docs/**/*.md'
+          exclude_pattern: 'CLAUDE.md,**/CLAUDE.md'
