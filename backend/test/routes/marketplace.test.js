@@ -144,7 +144,7 @@ describe('Marketplace Route', () => {
       const res = await request(app)
         .post('/api/marketplace/delist')
         .set('Authorization', `Bearer ${authTokenA}`)
-        .send({ tokenId })
+        .send({ tokenId, licenseType: 'display' })
         .expect(200);
 
       expect(res.body.success).toBe(true);
@@ -173,7 +173,7 @@ describe('Marketplace Route', () => {
       const res = await request(app)
         .post('/api/marketplace/buy')
         .set('Authorization', `Bearer ${authTokenB}`)
-        .send({ tokenId })
+        .send({ tokenId, licenseType: 'display' })
         .expect(200);
 
       expect(res.body.success).toBe(true);
@@ -188,7 +188,7 @@ describe('Marketplace Route', () => {
       const res = await request(app)
         .post('/api/marketplace/buy')
         .set('Authorization', `Bearer ${authTokenB}`)
-        .send({ tokenId })
+        .send({ tokenId, licenseType: 'display' })
         .expect(404);
 
       expect(res.body.code).toBe('NOT_LISTED');
