@@ -1169,6 +1169,9 @@ async function getActiveListings() {
   }
 
   // For real blockchain, iterate through tokens and check all license types
+  // NOTE: This approach uses getAllListings() to check active status (1 call per token),
+  // then getListing() only for active listings to get full details (seller, nonce, etc.).
+  // For production scale, consider using an event indexer (e.g., The Graph) instead.
   const nftmarket = getContract();
   const supply = await nftmarket.totalSupply();
   const listings = [];
