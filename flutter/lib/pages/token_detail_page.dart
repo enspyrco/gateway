@@ -6,7 +6,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/token.dart';
 import '../services/api_service.dart';
-import '../services/contract_service.dart';
 import '../providers/wallet_provider.dart';
 import '../widgets/wallet_button.dart';
 import '../theme.dart';
@@ -773,8 +772,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       );
 
       // Step 4: Submit transaction via wallet service
-      final contractService = await ContractService.getInstance();
-      final contractAddress = contractService.contractAddress;
+      final contractAddress = await api.getContractAddress();
 
       final txResult = await wallet.sendTransaction(
         to: contractAddress,
@@ -841,8 +839,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       );
 
       // Step 3: Submit transaction via wallet service
-      final contractService = await ContractService.getInstance();
-      final contractAddress = contractService.contractAddress;
+      final contractAddress = await api.getContractAddress();
 
       final txResult = await wallet.sendTransaction(
         to: contractAddress,
@@ -914,8 +911,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       );
 
       // Step 4: Submit transaction via wallet service
-      final contractService = await ContractService.getInstance();
-      final contractAddress = contractService.contractAddress;
+      final contractAddress = await api.getContractAddress();
 
       final txResult = await wallet.sendTransaction(
         to: contractAddress,

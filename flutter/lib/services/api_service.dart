@@ -206,6 +206,17 @@ class ApiService {
   // Backend handles all marketplace logic. Client just signs and submits.
   // Flow: 1) Call prepare endpoint 2) Sign typed data 3) Submit to contract
 
+  /// Get contract address from backend's EIP-712 domain
+  /// This is the single source of truth for the contract address
+  Future<String> getContractAddress() async {
+    final response = await http.get(
+      Uri.parse('$baseUrl/api/marketplace/eip712/domain'),
+    );
+    final data = await _handleResponse(response);
+    final domain = data['domain'] as Map<String, dynamic>;
+    return domain['verifyingContract'] as String;
+  }
+
   /// Get all active listings (public)
   Future<List<Map<String, dynamic>>> getListings() async {
     final response = await http.get(
