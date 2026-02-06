@@ -21,6 +21,12 @@ const {
   buildListingsArray,
   hasAnyListing
 } = require('../utils/license-utils');
+const {
+  encodeList,
+  encodeBuy,
+  encodeDelist,
+  encodeDelistAll
+} = require('../utils/abi-encoder');
 
 /**
  * GET /api/marketplace
@@ -559,6 +565,115 @@ router.post('/buy', authMiddleware, async (req, res, next) => {
         seller: listing.seller,
         buyer: buyerAddress
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ============ ABI Encoding Endpoints ============
+// These return pre-encoded transaction data so Flutter doesn't need to know about ABI
+
+/**
+ * POST /api/marketplace/list/encode
+ * Encode a list() transaction after signing
+ *
+ * Body: { tokenId, price, licenseType, licenseHash, expiry, signature }
+ * Returns: { txData } - ready to submit to blockchain
+ */
+router.post('/list/encode', authMiddleware, async (req, res, next) => {
+  try {
+    const { tokenId, price, licenseType, licenseHash, expiry, signature } = req.body;
+
+    if (tokenId === undefined || !price || licenseType === undefined || !licenseHash || !signature) {
+      return res.status(400).json({
+        error: 'Missing required fields: tokenId, price, licenseType, licenseHash, signature',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    const txData = encodeList(tokenId, price, licenseType, licenseHash, expiry || 0, signature);
+
+    res.json({
+      success: true,
+      txData
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/marketplace/buy/encode
+ * Encode a buy() transaction after signing
+ *
+ * Body: { tokenId, licenseType, signature }
+ * Returns: { txData, value } - ready to submit to blockchain
+ */
+router.post('/buy/encode', authMiddleware, async (req, res, next) => {
+  try {
+    const { tokenId, licenseType, signature } = req.body;
+
+    if (tokenId === undefined || licenseType === undefined || !signature) {
+      return res.status(400).json({
+        error: 'Missing required fields: tokenId, licenseType, signature',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Parse license type
+    const { valid, licenseTypeNum, error: licenseError } = parseLicenseType(licenseType);
+    if (!valid) {
+      return res.status(400).json({ error: licenseError, code: 'INVALID_LICENSE_TYPE' });
+    }
+
+    // Get listing to return the value (price) needed
+    const listing = await blockchainService.getListing(tokenId, licenseTypeNum);
+    if (!listing.active) {
+      return res.status(404).json({ error: 'Token is not listed', code: 'NOT_LISTED' });
+    }
+
+    const txData = encodeBuy(tokenId, licenseTypeNum, signature);
+
+    res.json({
+      success: true,
+      txData,
+      value: listing.price // Wei to send with transaction
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /api/marketplace/delist/encode
+ * Encode a delist() or delistAll() transaction
+ *
+ * Body: { tokenId, licenseType } or { tokenId, all: true }
+ * Returns: { txData } - ready to submit to blockchain
+ */
+router.post('/delist/encode', authMiddleware, async (req, res, next) => {
+  try {
+    const { tokenId, licenseType, all } = req.body;
+
+    if (tokenId === undefined) {
+      return res.status(400).json({ error: 'Missing tokenId', code: 'MISSING_TOKEN_ID' });
+    }
+
+    let txData;
+    if (all) {
+      txData = encodeDelistAll(tokenId);
+    } else {
+      const { valid, licenseTypeNum, error: licenseError } = parseLicenseType(licenseType);
+      if (!valid) {
+        return res.status(400).json({ error: licenseError, code: 'INVALID_LICENSE_TYPE' });
+      }
+      txData = encodeDelist(tokenId, licenseTypeNum);
+    }
+
+    res.json({
+      success: true,
+      txData
     });
   } catch (error) {
     next(error);

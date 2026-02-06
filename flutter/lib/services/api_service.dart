@@ -279,6 +279,70 @@ class ApiService {
     return _handleResponse(response);
   }
 
+  // ============ ABI Encoding (Backend handles all encoding) ============
+
+  /// Encode a list transaction after signing
+  /// Returns pre-encoded txData ready to submit
+  Future<Map<String, dynamic>> encodeListTransaction({
+    required int tokenId,
+    required String price,
+    required int licenseType,
+    required String licenseHash,
+    required int expiry,
+    required String signature,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/marketplace/list/encode'),
+      headers: _headers,
+      body: jsonEncode({
+        'tokenId': tokenId,
+        'price': price,
+        'licenseType': licenseType,
+        'licenseHash': licenseHash,
+        'expiry': expiry,
+        'signature': signature,
+      }),
+    );
+    return _handleResponse(response);
+  }
+
+  /// Encode a buy transaction after signing
+  /// Returns pre-encoded txData and value (price in wei)
+  Future<Map<String, dynamic>> encodeBuyTransaction({
+    required int tokenId,
+    required String licenseType,
+    required String signature,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/marketplace/buy/encode'),
+      headers: _headers,
+      body: jsonEncode({
+        'tokenId': tokenId,
+        'licenseType': licenseType,
+        'signature': signature,
+      }),
+    );
+    return _handleResponse(response);
+  }
+
+  /// Encode a delist transaction
+  /// Returns pre-encoded txData ready to submit
+  Future<Map<String, dynamic>> encodeDelistTransaction({
+    required int tokenId,
+    String? licenseType,
+    bool all = false,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/marketplace/delist/encode'),
+      headers: _headers,
+      body: jsonEncode({
+        'tokenId': tokenId,
+        if (all) 'all': true else 'licenseType': licenseType,
+      }),
+    );
+    return _handleResponse(response);
+  }
+
   // ============ AI Generation ============
 
   /// Get available style presets (public)

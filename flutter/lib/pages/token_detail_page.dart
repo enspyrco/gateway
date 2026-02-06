@@ -758,26 +758,27 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       final contractCall =
           prepareResult['contractCall'] as Map<String, dynamic>;
 
-      final signature = await wallet.signTypedData(typedData);
+      final signatureBytes = await wallet.signTypedData(typedData);
+      final signatureHex =
+          '0x${signatureBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
 
-      // Step 3: Submit transaction via wallet service
-      // Get contract address from contract service
+      // Step 3: Call backend to encode transaction (backend handles ABI encoding)
+      final encodeResult = await api.encodeListTransaction(
+        tokenId: contractCall['params']['tokenId'] as int,
+        price: contractCall['params']['price'].toString(),
+        licenseType: contractCall['params']['licenseType'] as int,
+        licenseHash: contractCall['params']['licenseHash'] as String,
+        expiry: contractCall['params']['expiry'] as int,
+        signature: signatureHex,
+      );
+
+      // Step 4: Submit transaction via wallet service
       final contractService = await ContractService.getInstance();
       final contractAddress = contractService.contractAddress;
 
-      // Build transaction data for list() call
-      final txData = _encodeListCall(
-        tokenId: contractCall['params']['tokenId'] as int,
-        price: BigInt.parse(contractCall['params']['price'].toString()),
-        licenseType: contractCall['params']['licenseType'] as int,
-        licenseHash: contractCall['params']['licenseHash'] as String,
-        expiry: BigInt.from(contractCall['params']['expiry'] as int),
-        signature: signature,
-      );
-
       final txResult = await wallet.sendTransaction(
         to: contractAddress,
-        data: txData,
+        data: encodeResult['txData'] as String,
       );
 
       debugPrint('List transaction hash: ${txResult.hash}');
@@ -830,21 +831,22 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
       debugPrint('Delist prepare result: $prepareResult');
 
-      // Step 2: Submit transaction via wallet service
-      final contractService = await ContractService.getInstance();
-      final contractAddress = contractService.contractAddress;
+      // Step 2: Call backend to encode transaction (backend handles ABI encoding)
       final contractCall =
           prepareResult['contractCall'] as Map<String, dynamic>;
 
-      // Build transaction data for delist() call
-      final txData = _encodeDelistCall(
+      final encodeResult = await api.encodeDelistTransaction(
         tokenId: contractCall['params']['tokenId'] as int,
-        licenseType: contractCall['params']['licenseType'] as int,
+        licenseType: licenseType,
       );
+
+      // Step 3: Submit transaction via wallet service
+      final contractService = await ContractService.getInstance();
+      final contractAddress = contractService.contractAddress;
 
       final txResult = await wallet.sendTransaction(
         to: contractAddress,
-        data: txData,
+        data: encodeResult['txData'] as String,
       );
 
       debugPrint('Delist transaction hash: ${txResult.hash}');
@@ -899,26 +901,26 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
       // Step 2: Sign the typed data via wallet service
       final typedData = prepareResult['typedData'] as Map<String, dynamic>;
-      final contractCall =
-          prepareResult['contractCall'] as Map<String, dynamic>;
 
-      final signature = await wallet.signTypedData(typedData);
+      final signatureBytes = await wallet.signTypedData(typedData);
+      final signatureHex =
+          '0x${signatureBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
 
-      // Step 3: Submit transaction via wallet service
+      // Step 3: Call backend to encode transaction (backend handles ABI encoding)
+      final encodeResult = await api.encodeBuyTransaction(
+        tokenId: widget.tokenId,
+        licenseType: licenseType,
+        signature: signatureHex,
+      );
+
+      // Step 4: Submit transaction via wallet service
       final contractService = await ContractService.getInstance();
       final contractAddress = contractService.contractAddress;
 
-      // Build transaction data for buy() call
-      final txData = _encodeBuyCall(
-        tokenId: contractCall['params']['tokenId'] as int,
-        licenseType: contractCall['params']['licenseType'] as int,
-        signature: signature,
-      );
-
       final txResult = await wallet.sendTransaction(
         to: contractAddress,
-        data: txData,
-        value: contractCall['value'] as String,
+        data: encodeResult['txData'] as String,
+        value: encodeResult['value'] as String,
       );
 
       debugPrint('Buy transaction hash: ${txResult.hash}');
@@ -950,89 +952,6 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     } finally {
       setState(() => _actionLoading = false);
     }
-  }
-
-  // ABI encoding helpers
-
-  /// Encode list(uint256,uint256,uint8,bytes32,uint256,bytes) call
-  String _encodeListCall({
-    required int tokenId,
-    required BigInt price,
-    required int licenseType,
-    required String licenseHash,
-    required BigInt expiry,
-    required Uint8List signature,
-  }) {
-    // Function selector: list(uint256,uint256,uint8,bytes32,uint256,bytes)
-    // keccak256("list(uint256,uint256,uint8,bytes32,uint256,bytes)")[0:4] = 0x69c6945f
-    const selector = '0x69c6945f';
-
-    // Encode fixed-size parameters
-    final tokenIdHex = tokenId.toRadixString(16).padLeft(64, '0');
-    final priceHex = price.toRadixString(16).padLeft(64, '0');
-    final licenseTypeHex = licenseType.toRadixString(16).padLeft(64, '0');
-    final licenseHashHex = licenseHash.replaceFirst('0x', '').padLeft(64, '0');
-    final expiryHex = expiry.toRadixString(16).padLeft(64, '0');
-
-    // Offset for dynamic bytes parameter (6 * 32 = 192 = 0xc0)
-    final signatureOffset = 'c0'.padLeft(64, '0');
-
-    // Signature length
-    final signatureLengthHex =
-        signature.length.toRadixString(16).padLeft(64, '0');
-
-    // Signature data (padded to 32-byte boundary)
-    final signatureHex =
-        signature.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    final paddedLength = ((signature.length + 31) ~/ 32) * 64;
-    final signatureDataHex = signatureHex.padRight(paddedLength, '0');
-
-    return '$selector$tokenIdHex$priceHex$licenseTypeHex$licenseHashHex$expiryHex$signatureOffset$signatureLengthHex$signatureDataHex';
-  }
-
-  /// Encode delist(uint256,uint8) call
-  String _encodeDelistCall({
-    required int tokenId,
-    required int licenseType,
-  }) {
-    // Function selector: delist(uint256,uint8)
-    // keccak256("delist(uint256,uint8)")[0:4] = 0xec31de07
-    const selector = '0xec31de07';
-    final tokenIdHex = tokenId.toRadixString(16).padLeft(64, '0');
-    final licenseTypeHex = licenseType.toRadixString(16).padLeft(64, '0');
-    return '$selector$tokenIdHex$licenseTypeHex';
-  }
-
-  /// Encode buy(uint256,uint8,bytes) call
-  String _encodeBuyCall({
-    required int tokenId,
-    required int licenseType,
-    required Uint8List signature,
-  }) {
-    // Function selector: buy(uint256,uint8,bytes)
-    // keccak256("buy(uint256,uint8,bytes)")[0:4] = 0x472c0b9f
-    const selector = '0x472c0b9f';
-
-    // Token ID
-    final tokenIdHex = tokenId.toRadixString(16).padLeft(64, '0');
-
-    // License type (uint8, padded to 32 bytes)
-    final licenseTypeHex = licenseType.toRadixString(16).padLeft(64, '0');
-
-    // Offset for dynamic bytes parameter (3 * 32 = 96 = 0x60)
-    final signatureOffset = '60'.padLeft(64, '0');
-
-    // Signature length
-    final signatureLengthHex =
-        signature.length.toRadixString(16).padLeft(64, '0');
-
-    // Signature data (padded to 32-byte boundary)
-    final signatureHex =
-        signature.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
-    final paddedLength = ((signature.length + 31) ~/ 32) * 64;
-    final signatureDataHex = signatureHex.padRight(paddedLength, '0');
-
-    return '$selector$tokenIdHex$licenseTypeHex$signatureOffset$signatureLengthHex$signatureDataHex';
   }
 
   String _shortAddress(String address) {
