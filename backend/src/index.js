@@ -233,7 +233,8 @@ app.get('/api/marketplace/nonce/:address', async (req, res, next) => {
 // Authenticated routes
 app.use('/api/mint', authMiddleware, mintRouter(upload));
 app.use('/api/detect', authMiddleware, detectRouter(upload));
-app.use('/api/marketplace', authMiddleware, marketplaceRouter);
+// Marketplace has mixed auth: GET routes are public, POST routes use authMiddleware internally
+app.use('/api/marketplace', marketplaceRouter);
 app.use('/api/generate', authMiddleware, generateRouter());
 app.use('/api/license', licenseRouter);
 
