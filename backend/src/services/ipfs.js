@@ -143,6 +143,85 @@ async function fetch(ipfsUri) {
 }
 
 /**
+ * Unpin a file from IPFS (removes from Pinata)
+ * @param {string} ipfsUri - IPFS URI (ipfs://...) or CID
+ * @returns {Promise<boolean>} - true if unpinned successfully
+ */
+async function unpin(ipfsUri) {
+  // Extract CID from URI if needed
+  const cid = ipfsUri.startsWith("ipfs://")
+    ? ipfsUri.replace("ipfs://", "")
+    : ipfsUri;
+
+  if (USE_MOCK_IPFS) {
+    const existed = mockStore.has(cid);
+    mockStore.delete(cid);
+    saveMockStore();
+    console.log(`[MOCK IPFS] Unpinned ${cid} (existed: ${existed})`);
+    return existed;
+  }
+
+  const client = getPinata();
+
+  try {
+    // Pinata SDK v3 uses files.delete() for unpinning
+    await client.files.delete([cid]);
+
+    // Also remove from our upload cache if present
+    for (const [hash, uri] of uploadCache.entries()) {
+      if (uri === `ipfs://${cid}`) {
+        uploadCache.delete(hash);
+        persistence.saveMap('ipfs-cache', uploadCache);
+        break;
+      }
+    }
+
+    console.log(`[IPFS] Unpinned ${cid}`);
+    return true;
+  } catch (error) {
+    // Handle case where file wasn't pinned or already unpinned
+    if (error.message?.includes('not found') || error.status === 404) {
+      console.log(`[IPFS] ${cid} was not pinned or already unpinned`);
+      return false;
+    }
+    throw error;
+  }
+}
+
+/**
+ * List all pinned files (useful for cleanup)
+ * @param {Object} options - Filter options
+ * @param {number} options.limit - Max results (default 100)
+ * @param {string} options.status - Pin status filter
+ * @returns {Promise<Array>} - List of pinned files with CID and metadata
+ */
+async function listPins(options = {}) {
+  const { limit = 100 } = options;
+
+  if (USE_MOCK_IPFS) {
+    const pins = Array.from(mockStore.keys()).map(cid => ({
+      cid,
+      size: mockStore.get(cid)?.length || 0,
+      created: new Date().toISOString(),
+    }));
+    console.log(`[MOCK IPFS] Listed ${pins.length} pins`);
+    return pins.slice(0, limit);
+  }
+
+  const client = getPinata();
+
+  const result = await client.files.list().limit(limit);
+
+  return result.files.map(file => ({
+    cid: file.cid,
+    name: file.name,
+    size: file.size,
+    created: file.created_at,
+    mimeType: file.mime_type,
+  }));
+}
+
+/**
  * Get MIME type from filename
  */
 function getMimeType(filename) {
@@ -163,4 +242,6 @@ module.exports = {
   uploadJson,
   getGatewayUrl,
   fetch,
+  unpin,
+  listPins,
 };
