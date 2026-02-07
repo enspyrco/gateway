@@ -97,12 +97,14 @@ mod tests {
         let mut b = vec![0.0; size];
         let shift_y = 2;
         let shift_x = 3;
-        b[shift_y * 8 + shift_x] = 1.0;
+        let shift_linear = shift_y * 8 + shift_x;
+        b[shift_linear] = 1.0;
 
         let result = correlator.correlate(&a, &b);
 
-        // Peak should be at (8-2, 8-3) = (6, 5) due to FFT correlation convention
-        let expected_idx = (8 - shift_y) * 8 + (8 - shift_x);
+        // FFT correlation formula: IFFT(FFT(a) * conj(FFT(b)))
+        // For a peak at position k in b, correlation peaks at (size - k)
+        let expected_idx = size - shift_linear;
         let max_idx = result.iter()
             .enumerate()
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap())

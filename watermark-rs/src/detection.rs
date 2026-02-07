@@ -132,7 +132,7 @@ fn shifts_to_ascii(shifts: &[usize], p_sq: usize) -> String {
     let mut chars = Vec::new();
     while value > 0 {
         let c = (value & 0x7F) as u8;
-        if c >= 32 && c < 127 {
+        if (32..127).contains(&c) {
             chars.push(c as char);
         }
         value >>= 7;
