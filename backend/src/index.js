@@ -238,6 +238,56 @@ app.use('/api/marketplace', marketplaceRouter);
 app.use('/api/generate', authMiddleware, generateRouter());
 app.use('/api/license', licenseRouter);
 
+// Admin IPFS management endpoints (authenticated)
+app.get('/api/admin/ipfs/pins', authMiddleware, async (req, res, next) => {
+  try {
+    const limit = parseInt(req.query.limit, 10) || 100;
+    const pins = await ipfsService.listPins({ limit });
+    res.json({ count: pins.length, pins });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.delete('/api/admin/ipfs/unpin/:cid', authMiddleware, async (req, res, next) => {
+  try {
+    const { cid } = req.params;
+    const success = await ipfsService.unpin(cid);
+    res.json({
+      cid,
+      unpinned: success,
+      message: success ? 'Successfully unpinned' : 'Was not pinned or already unpinned'
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.post('/api/admin/ipfs/unpin', authMiddleware, async (req, res, next) => {
+  try {
+    const { cids } = req.body;
+    if (!Array.isArray(cids) || cids.length === 0) {
+      return res.status(400).json({ error: 'cids array required', code: 'INVALID_REQUEST' });
+    }
+
+    const results = await Promise.all(
+      cids.map(async (cid) => ({
+        cid,
+        unpinned: await ipfsService.unpin(cid)
+      }))
+    );
+
+    const unpinnedCount = results.filter(r => r.unpinned).length;
+    res.json({
+      total: cids.length,
+      unpinned: unpinnedCount,
+      results
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
