@@ -11,7 +11,12 @@ num-traits = "0.2"
 image = "0.25"
 clap = { version = "4.4", features = ["derive"] }
 anyhow = "1.0"
+rand = "0.8"
 
 [[bin]]
 name = "detect"
 path = "src/bin/detect.rs"
+
+[[bin]]
+name = "degrade"
+path = "src/bin/degrade.rs"
