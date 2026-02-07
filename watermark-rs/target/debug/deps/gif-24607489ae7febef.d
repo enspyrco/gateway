@@ -1,0 +1,12 @@
+/Users/robin/git/NFTmarket/watermark-rs/target/debug/deps/gif-24607489ae7febef.d: /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/lib.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/common.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/encoder.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/reader/mod.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/reader/converter.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/reader/decoder.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/traits.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/../README.md
+
+/Users/robin/git/NFTmarket/watermark-rs/target/debug/deps/libgif-24607489ae7febef.rmeta: /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/lib.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/common.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/encoder.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/reader/mod.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/reader/converter.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/reader/decoder.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/traits.rs /Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/../README.md
+
+/Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/lib.rs:
+/Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/common.rs:
+/Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/encoder.rs:
+/Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/reader/mod.rs:
+/Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/reader/converter.rs:
+/Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/reader/decoder.rs:
+/Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/traits.rs:
+/Users/robin/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/gif-0.14.1/src/../README.md:
