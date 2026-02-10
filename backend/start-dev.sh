@@ -5,6 +5,8 @@ export USE_MOCK_FIRESTORE=true
 export USE_MOCK_BLOCKCHAIN=true
 export USE_KMS=false
 export MOCK_PERSISTENCE=false
-export DEV_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+# Rust blind detection binary
+export BLIND_DETECT_BINARY="../watermark-rs/target/release/detect"
 
 npm run dev

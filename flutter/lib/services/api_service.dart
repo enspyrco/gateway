@@ -128,7 +128,7 @@ class ApiService {
 
   // ============ Detection ============
 
-  /// Run watermark detection
+  /// Run watermark detection (non-blind, requires tokenId)
   Future<Map<String, dynamic>> detect({
     required int tokenId,
     required Uint8List capturedImageBytes,
@@ -152,6 +152,31 @@ class ApiService {
     final streamedResponse = await request.send();
     final response = await http.Response.fromStream(streamedResponse);
     return _handleResponse(response);
+  }
+
+  /// Run blind watermark detection (extracts watermark without reference)
+  /// Returns detected wallet:tokenId from the image itself
+  Future<BlindDetectionResult> detectBlind({
+    required Uint8List imageBytes,
+    required String fileName,
+  }) async {
+    final uri = Uri.parse('$baseUrl/api/detect/blind');
+    final request = http.MultipartRequest('POST', uri);
+
+    if (authToken != null) {
+      request.headers['Authorization'] = 'Bearer $authToken';
+    }
+
+    request.files.add(http.MultipartFile.fromBytes(
+      'image',
+      imageBytes,
+      filename: fileName,
+    ));
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    final data = await _handleResponse(response);
+    return BlindDetectionResult.fromJson(data);
   }
 
   // ============ Public Verification ============
@@ -455,6 +480,71 @@ class GeneratedImage {
       id: json['id'] ?? '',
       seed: json['seed'] ?? 0,
       url: json['url'] ?? '',
+    );
+  }
+}
+
+/// Result from blind watermark detection
+class BlindDetectionResult {
+  final bool detected;
+  final int? tokenId;
+  final String? wallet;
+  final double confidence;
+  final String? message;
+  final int sequencesDecoded;
+  final DetectedToken? token;
+  final String? error;
+
+  BlindDetectionResult({
+    required this.detected,
+    this.tokenId,
+    this.wallet,
+    required this.confidence,
+    this.message,
+    this.sequencesDecoded = 0,
+    this.token,
+    this.error,
+  });
+
+  factory BlindDetectionResult.fromJson(Map<String, dynamic> json) {
+    return BlindDetectionResult(
+      detected: json['detected'] ?? false,
+      tokenId: json['tokenId'] as int?,
+      wallet: json['wallet'] as String?,
+      confidence: (json['confidence'] ?? 0).toDouble(),
+      message: json['message'] as String?,
+      sequencesDecoded: json['sequencesDecoded'] ?? 0,
+      token: json['token'] != null
+          ? DetectedToken.fromJson(json['token'])
+          : null,
+      error: json['error'] as String?,
+    );
+  }
+}
+
+/// Token info returned with blind detection
+class DetectedToken {
+  final int tokenId;
+  final String creator;
+  final String currentOwner;
+  final String copyrightOwner;
+  final String licenseType;
+
+  DetectedToken({
+    required this.tokenId,
+    required this.creator,
+    required this.currentOwner,
+    required this.copyrightOwner,
+    required this.licenseType,
+  });
+
+  factory DetectedToken.fromJson(Map<String, dynamic> json) {
+    return DetectedToken(
+      tokenId: json['tokenId'] ?? 0,
+      creator: json['creator'] ?? '',
+      currentOwner: json['currentOwner'] ?? '',
+      copyrightOwner: json['copyrightOwner'] ?? '',
+      licenseType: json['licenseType'] ?? 'unknown',
     );
   }
 }

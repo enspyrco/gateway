@@ -28,10 +28,10 @@ export USE_MOCK_WATERMARK=true
 export USE_MOCK_IPFS=false  # Use real Pinata IPFS
 export USE_MOCK_ARWEAVE=true
 export USE_MOCK_FIRESTORE=true
-export USE_MOCK_STORAGE=true
-export USE_KMS=false
 export MOCK_PERSISTENCE=true
-export DEV_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+# Rust blind detection binary
+export BLIND_DETECT_BINARY="../watermark-rs/target/release/detect"
 
 echo "Starting with LOCAL HARDHAT BLOCKCHAIN"
 echo "Contract: $NFTMARKET_CONTRACT_ADDRESS"

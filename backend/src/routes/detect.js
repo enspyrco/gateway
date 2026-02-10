@@ -1,112 +1,113 @@
 /**
  * Detection API routes
- * POST /api/detect - Detect watermark in captured image
+ * POST /api/detect/blind - Blind detection (extract watermark without reference)
  *
- * Storage architecture:
- * - Encrypted original is in Firebase Storage (path from Firestore)
- * - Token data comes from blockchain
+ * Uses the Rust blind detector to find embedded wallet:tokenId.
  */
 
 const express = require('express');
-const crypto = require('crypto');
 const { spawn } = require('child_process');
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 
-const encryptionService = require('../services/encryption');
-const storageService = require('../services/storage');
 const blockchainService = require('../services/blockchain');
-const firestoreService = require('../services/firestore');
 
-const DETECT_BINARY = process.env.DETECT_BINARY || './detect-wm';
+const BLIND_DETECT_BINARY = process.env.BLIND_DETECT_BINARY || './detect';
+const USE_MOCK_WATERMARK = process.env.USE_MOCK_WATERMARK === 'true';
 
 function createRouter(upload) {
   const router = express.Router();
 
   /**
-   * POST /api/detect
+   * POST /api/detect/blind
+   *
+   * Blind watermark detection - extracts watermark without needing a reference.
+   * Uses the Rust blind detector to find embedded wallet:tokenId.
    *
    * Body (multipart/form-data):
-   * - capturedImage: File (required) - Photo of potentially watermarked artwork
-   * - tokenId: number (required) - Token ID to check against
+   * - image: File (required) - Image to check for watermark
    *
    * Returns:
    * - detected: boolean
+   * - tokenId: number (if found)
+   * - wallet: string (creator wallet, if found)
    * - confidence: number
-   * - message: string (decoded watermark message)
-   * - owner: string (current NFT owner)
-   * - licenseType: string
+   * - message: string (raw watermark message)
+   * - token: object (token info from blockchain, if found)
    */
-  router.post('/', upload.single('capturedImage'), async (req, res, next) => {
+  router.post('/blind', upload.single('image'), async (req, res, next) => {
     const detectId = uuidv4();
 
     try {
-      console.log(`[${detectId}] Starting detection for wallet: ${req.wallet}`);
+      console.log(`[${detectId}] Starting blind detection for wallet: ${req.wallet}`);
 
-      const { tokenId } = req.body;
-      const capturedBuffer = req.file?.buffer;
+      const imageBuffer = req.file?.buffer;
 
-      if (!capturedBuffer) {
+      if (!imageBuffer) {
         return res.status(400).json({
-          error: 'Captured image required',
+          error: 'Image file required',
           code: 'MISSING_IMAGE'
         });
       }
 
-      if (!tokenId) {
-        return res.status(400).json({
-          error: 'Token ID required',
-          code: 'MISSING_TOKEN_ID'
+      // Run blind detection
+      console.log(`[${detectId}] Running blind detection...`);
+      const result = await runBlindDetection(detectId, imageBuffer);
+
+      if (!result.detected) {
+        console.log(`[${detectId}] No watermark detected`);
+        return res.json({
+          detected: false,
+          message: 'No watermark detected in this image',
+          confidence: 0
         });
       }
 
-      // Step 1: Verify requester owns the NFT (optional, could allow anyone)
-      const isOwner = await blockchainService.isOwner(tokenId, req.wallet);
-      if (!isOwner) {
-        // Allow detection but note they're not the owner
-        console.log(`[${detectId}] Requester is not token owner`);
-      }
+      // Parse the watermark message (format: "walletAddress:tokenId")
+      const [wallet, tokenIdStr] = result.message.split(':');
+      const tokenId = parseInt(tokenIdStr, 10);
 
-      // Step 2: Get encrypted original reference from Firestore
-      const encryptedRef = await firestoreService.getEncryptedRef(tokenId);
-      if (!encryptedRef) {
-        return res.status(404).json({
-          error: 'Encrypted original not found',
-          code: 'ORIGINAL_NOT_FOUND'
+      if (!wallet || isNaN(tokenId)) {
+        console.log(`[${detectId}] Invalid watermark format: ${result.message}`);
+        return res.json({
+          detected: true,
+          message: result.message,
+          confidence: result.confidence,
+          error: 'Watermark detected but format is invalid'
         });
       }
 
-      // Step 3: Fetch encrypted original from Firebase Storage
-      console.log(`[${detectId}] Fetching encrypted original from Firebase Storage...`);
-      const encryptedBuffer = await storageService.downloadEncrypted(encryptedRef.storagePath);
+      // Look up token on blockchain
+      let token = null;
+      try {
+        const tokenData = await blockchainService.getTokenData(tokenId);
+        token = {
+          tokenId,
+          creator: tokenData.creator,
+          currentOwner: tokenData.currentOwner,
+          copyrightOwner: tokenData.copyrightOwner,
+          licenseType: ['display', 'commercial', 'transfer'][tokenData.ownerLicense] || 'unknown'
+        };
+      } catch (e) {
+        console.log(`[${detectId}] Token ${tokenId} not found on blockchain`);
+      }
 
-      // Step 4: Decrypt original
-      console.log(`[${detectId}] Decrypting original...`);
-      const originalBuffer = await encryptionService.decrypt(encryptedBuffer, encryptedRef.keyId);
-
-      // Step 5: Run detection
-      console.log(`[${detectId}] Running detection...`);
-      const result = await runDetection(detectId, originalBuffer, capturedBuffer);
-
-      // Step 6: Get current owner from chain
-      const tokenData = await blockchainService.getTokenData(tokenId);
-
-      console.log(`[${detectId}] Detection complete: ${result.detected ? 'FOUND' : 'NOT FOUND'}`);
+      console.log(`[${detectId}] Blind detection complete: wallet=${wallet}, tokenId=${tokenId}`);
 
       res.json({
-        detected: result.detected,
+        detected: true,
+        tokenId,
+        wallet,
         confidence: result.confidence,
         message: result.message,
-        owner: tokenData.currentOwner,
-        creator: tokenData.creator,
-        licenseType: ['display', 'commercial', 'transfer'][tokenData.ownerLicense],
-        statistics: result.statistics
+        sequencesDecoded: result.sequencesDecoded,
+        token
       });
 
     } catch (error) {
-      console.error(`[${detectId}] Detection failed:`, error);
+      console.error(`[${detectId}] Blind detection failed:`, error);
       next(error);
     }
   });
@@ -115,34 +116,36 @@ function createRouter(upload) {
 }
 
 /**
- * Run the C++ detection binary
+ * Run the Rust blind detection binary
  */
-async function runDetection(detectId, originalBuffer, capturedBuffer) {
+async function runBlindDetection(detectId, imageBuffer) {
+  // Mock mode for development
+  if (USE_MOCK_WATERMARK) {
+    console.log(`[${detectId}] MOCK: Blind detection - simulating no watermark found`);
+    return {
+      detected: false,
+      message: '',
+      confidence: 0,
+      sequencesDecoded: 0
+    };
+  }
+
   const tempDir = os.tmpdir();
-  const originalPath = path.join(tempDir, `${detectId}-original.png`);
-  const capturedPath = path.join(tempDir, `${detectId}-captured.png`);
-  const resultPath = path.join(tempDir, `${detectId}.json`);
+  const imagePath = path.join(tempDir, `${detectId}-blind.png`);
 
   try {
-    // Write images to temp files
-    await fs.writeFile(originalPath, originalBuffer);
-    await fs.writeFile(capturedPath, capturedBuffer);
+    // Write image to temp file
+    await fs.writeFile(imagePath, imageBuffer);
 
-    // Run detection binary
-    await new Promise((resolve, reject) => {
-      const proc = spawn(DETECT_BINARY, [detectId, originalPath, capturedPath]);
+    // Run Rust blind detection binary
+    const output = await new Promise((resolve, reject) => {
+      const proc = spawn(BLIND_DETECT_BINARY, [imagePath]);
 
       let stdout = '';
       let stderr = '';
 
       proc.stdout.on('data', (data) => {
         stdout += data.toString();
-        const lines = data.toString().split('\n');
-        for (const line of lines) {
-          if (line.startsWith('PROGRESS:')) {
-            console.log(`[${detectId}] ${line.replace('PROGRESS:', '')}`);
-          }
-        }
       });
 
       proc.stderr.on('data', (data) => {
@@ -150,39 +153,42 @@ async function runDetection(detectId, originalBuffer, capturedBuffer) {
       });
 
       proc.on('close', (code) => {
-        if (code === 0) {
-          resolve(stdout);
-        } else {
-          reject(new Error(`Detection binary exited with code ${code}: ${stderr}`));
-        }
+        // Exit code 0 = watermark found, 1 = not found
+        resolve({ code, stdout, stderr });
       });
 
       proc.on('error', (err) => {
-        reject(new Error(`Failed to run detection binary: ${err.message}`));
+        reject(new Error(`Failed to run blind detection binary: ${err.message}`));
       });
     });
 
-    // Read results
-    const resultJson = await fs.readFile(resultPath, 'utf-8');
-    const result = JSON.parse(resultJson);
+    // Parse output
+    const lines = output.stdout.split('\n');
+    let detected = output.code === 0;
+    let message = '';
+    let confidence = 0;
+    let sequencesDecoded = 0;
 
-    return {
-      detected: result.detected || false,
-      confidence: result.confidence || 0,
-      message: result.message || '',
-      statistics: result.statistics || null
-    };
+    for (const line of lines) {
+      if (line.startsWith('Message: ')) {
+        // Extract message between quotes
+        const match = line.match(/Message: "(.+)"/);
+        if (match) message = match[1];
+      } else if (line.startsWith('Minimum confidence:')) {
+        const match = line.match(/Minimum confidence: ([\d.]+)/);
+        if (match) confidence = parseFloat(match[1]);
+      } else if (line.startsWith('Sequences decoded:')) {
+        const match = line.match(/Sequences decoded: (\d+)/);
+        if (match) sequencesDecoded = parseInt(match[1], 10);
+      }
+    }
+
+    return { detected, message, confidence, sequencesDecoded };
 
   } finally {
     // Cleanup
-    await cleanup(originalPath, capturedPath, resultPath);
-  }
-}
-
-async function cleanup(...paths) {
-  for (const p of paths) {
     try {
-      await fs.unlink(p);
+      await fs.unlink(imagePath);
     } catch {
       // Ignore
     }
