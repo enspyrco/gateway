@@ -188,6 +188,15 @@ class HomePage extends StatelessWidget {
               onAction: () => context.go('/gallery'),
               accentColor: NFTmarketColors.transferPurple,
             ),
+            _FeatureCard(
+              icon: Icons.search,
+              title: 'Detect Watermark',
+              description:
+                  'Upload any image to check if it contains an NFTmarket watermark.',
+              actionLabel: 'Detect',
+              onAction: () => context.go('/detect'),
+              accentColor: NFTmarketColors.info,
+            ),
           ],
         ),
       ],

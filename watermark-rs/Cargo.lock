@@ -1159,6 +1159,7 @@ dependencies = [
  "anyhow",
  "clap",
  "image",
+ "num-bigint",
  "num-complex",
  "num-traits",
  "rand 0.8.5",

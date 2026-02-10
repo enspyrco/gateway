@@ -1,6 +1,6 @@
 /**
  * NFTmarket Backend API
- * Handles: watermarking, encryption, IPFS upload, NFT minting
+ * Handles: watermarking, IPFS upload, NFT minting, blind detection
  */
 
 require('dotenv').config();
@@ -16,6 +16,7 @@ const marketplaceRouter = require('./routes/marketplace');
 const generateRouter = require('./routes/generate');
 const galleryRouter = require('./routes/gallery');
 const licenseRouter = require('./routes/license');
+const perceptualRouter = require('./routes/perceptual');
 const blockchainService = require('./services/blockchain');
 
 const app = express();
@@ -237,6 +238,13 @@ app.use('/api/detect', authMiddleware, detectRouter(upload));
 app.use('/api/marketplace', marketplaceRouter);
 app.use('/api/generate', authMiddleware, generateRouter());
 app.use('/api/license', licenseRouter);
+// Perceptual matching for infringement detection (print-camera, merchandise)
+// Stats endpoint is public for transparency
+app.get('/api/perceptual/stats', (req, res) => {
+  const perceptualService = require('./services/perceptual');
+  res.json(perceptualService.getStats());
+});
+app.use('/api/perceptual', authMiddleware, perceptualRouter(upload));
 
 // Admin IPFS management endpoints (authenticated)
 app.get('/api/admin/ipfs/pins', authMiddleware, async (req, res, next) => {

@@ -139,13 +139,13 @@ async function applyWatermarkViaAPI(imageBuffer, message) {
 }
 
 /**
- * Apply watermark via local C++ binary
+ * Apply watermark via local Rust binary
  */
 async function applyWatermarkViaBinary(imageBuffer, message) {
   const tempId = uuidv4();
   const tempDir = os.tmpdir();
   const inputPath = path.join(tempDir, `${tempId}-input.png`);
-  const outputPath = path.join(tempDir, `${tempId}-input-marked.png`);
+  const outputPath = path.join(tempDir, `${tempId}-output.png`);
 
   try {
     // Convert to PNG (required by watermark binary)
@@ -155,7 +155,7 @@ async function applyWatermarkViaBinary(imageBuffer, message) {
     await fs.writeFile(inputPath, pngBuffer);
 
     // Run watermark binary
-    await runWatermarkBinary(inputPath, message);
+    await runWatermarkBinary(inputPath, outputPath, message);
 
     // Read result
     const watermarkedBuffer = await fs.readFile(outputPath);
@@ -168,15 +168,16 @@ async function applyWatermarkViaBinary(imageBuffer, message) {
 }
 
 /**
- * Run the C++ watermark binary
+ * Run the Rust watermark binary
+ * Usage: embed <INPUT_PATH> <OUTPUT_PATH> <MESSAGE> [--strength <STRENGTH>]
  */
-function runWatermarkBinary(filePath, message) {
+function runWatermarkBinary(inputPath, outputPath, message) {
   return new Promise((resolve, reject) => {
     const args = [
-      filePath,
-      path.basename(filePath),
+      inputPath,
+      outputPath,
       message,
-      WATERMARK_STRENGTH,
+      '--strength', WATERMARK_STRENGTH,
     ];
 
     console.log(`Running: ${WATERMARK_BINARY} ${args.join(" ")}`);

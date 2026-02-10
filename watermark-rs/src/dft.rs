@@ -9,8 +9,10 @@ use std::sync::Arc;
 
 /// Extract the p×p watermark coefficients from an image.
 ///
-/// The watermark is embedded in the low-frequency coefficients of the DFT.
-/// We extract a p×p block from the center of the frequency domain.
+/// The watermark is embedded in the low-frequency coefficients of the DFT
+/// at positions [1..p+1, 1..p+1], avoiding the DC component at [0,0].
+///
+/// This matches the C++ implementation's extractMark function.
 pub fn extract_mark(
     pixels: &[f64],
     height: usize,
@@ -20,17 +22,15 @@ pub fn extract_mark(
     // Compute 2D DFT
     let spectrum = dft_2d(pixels, height, width);
 
-    // Extract p×p coefficients from low frequencies
+    // Extract p×p coefficients from positions [1..p+1, 1..p+1]
+    // This avoids the DC component at [0,0]
     let mut mark = vec![0.0; p * p];
 
-    for y in 0..p {
-        for x in 0..p {
-            // Map to frequency domain indices (centered at DC)
-            let fy = if y < p / 2 { y } else { height - (p - y) };
-            let fx = if x < p / 2 { x } else { width - (p - x) };
-
-            let idx = fy * width + fx;
-            mark[y * p + x] = spectrum[idx].norm();
+    for i in 0..p {
+        for j in 0..p {
+            let idx = (i + 1) * width + (j + 1);
+            // Use the real part for correlation (matching C++ behavior)
+            mark[i * p + j] = spectrum[idx].re;
         }
     }
 
@@ -38,7 +38,7 @@ pub fn extract_mark(
 }
 
 /// Compute 2D DFT using row-column decomposition.
-fn dft_2d(pixels: &[f64], height: usize, width: usize) -> Vec<Complex64> {
+pub fn dft_2d(pixels: &[f64], height: usize, width: usize) -> Vec<Complex64> {
     let mut planner = FftPlanner::new();
     let fft_row: Arc<dyn Fft<f64>> = planner.plan_fft_forward(width);
     let fft_col: Arc<dyn Fft<f64>> = planner.plan_fft_forward(height);
