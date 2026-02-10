@@ -320,15 +320,48 @@ class _DetectPageState extends State<DetectPage> {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.red.shade200),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.error_outline, color: Colors.red.shade700),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              _detectError!,
-              style: TextStyle(color: Colors.red.shade700),
-            ),
+          Row(
+            children: [
+              Icon(Icons.error_outline, color: Colors.red.shade700),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  _detectError!,
+                  style: TextStyle(color: Colors.red.shade700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _detectError = null;
+                  });
+                },
+                icon: const Icon(Icons.close, size: 18),
+                label: const Text('Dismiss'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red.shade700,
+                ),
+              ),
+              const SizedBox(width: 8),
+              ElevatedButton.icon(
+                onPressed: _detect,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Retry'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade600,
+                  foregroundColor: Colors.white,
+                ),
+              ),
+            ],
           ),
         ],
       ),

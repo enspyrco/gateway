@@ -6,8 +6,6 @@
  * complete ownership history for each token.
  */
 
-const FormData = require('form-data');
-
 const BACKEND = 'http://localhost:3000';
 const WALLET_SERVICE = 'http://localhost:3001';
 
@@ -44,37 +42,27 @@ async function getAuthToken(address) {
 }
 
 async function detectImage(authToken, imageBuffer) {
-  const form = new FormData();
-  form.append('image', imageBuffer, { filename: 'image.png', contentType: 'image/png' });
+  // Use fetch with Blob for consistency with other scripts
+  const { Blob } = require('buffer');
 
-  return new Promise((resolve, reject) => {
-    const http = require('http');
-    const url = new URL(BACKEND + '/api/detect/blind');
+  const formData = new FormData();
+  const blob = new Blob([imageBuffer], { type: 'image/png' });
+  formData.append('image', blob, 'image.png');
 
-    const req = http.request({
-      hostname: url.hostname,
-      port: url.port,
-      path: url.pathname,
-      method: 'POST',
-      headers: {
-        'Authorization': 'Bearer ' + authToken,
-        ...form.getHeaders()
-      }
-    }, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
-      res.on('end', () => {
-        try {
-          resolve(JSON.parse(data));
-        } catch (e) {
-          reject(new Error('Invalid JSON: ' + data.slice(0, 100)));
-        }
-      });
-    });
-
-    req.on('error', reject);
-    form.pipe(req);
+  const response = await fetch(BACKEND + '/api/detect/blind', {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer ' + authToken
+    },
+    body: formData
   });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Detection failed (${response.status}): ${text.slice(0, 100)}`);
+  }
+
+  return response.json();
 }
 
 async function run() {
