@@ -10,6 +10,7 @@ import 'pages/marketplace_page.dart';
 import 'pages/generate_page.dart';
 import 'pages/token_detail_page.dart';
 import 'pages/verify_page.dart';
+import 'pages/detect_page.dart';
 
 final router = GoRouter(
   initialLocation: '/',
@@ -54,6 +55,10 @@ final router = GoRouter(
     GoRoute(
       path: '/generate',
       builder: (context, state) => const GeneratePage(),
+    ),
+    GoRoute(
+      path: '/detect',
+      builder: (context, state) => const DetectPage(),
     ),
     GoRoute(
       path: '/token/:tokenId',

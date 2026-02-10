@@ -41,8 +41,9 @@ export MOCK_PERSISTENCE=false
 
 # Real IPFS (Pinata)
 export USE_MOCK_IPFS=false
-export USE_KMS=false
-export DEV_ENCRYPTION_KEY=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+# Rust blind detection binary
+export BLIND_DETECT_BINARY="../watermark-rs/target/release/detect"
 
 echo "Starting with:"
 echo "  - Hardhat blockchain: $POLYGON_RPC_URL"

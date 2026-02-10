@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Backend Overview
 
-Express.js API handling watermarking, encryption, IPFS uploads, and blockchain interactions for the NFTmarket platform. See the root `CLAUDE.md` for full project architecture.
+Express.js API handling watermarking, IPFS uploads, and blockchain interactions for the NFTmarket platform. See the root `CLAUDE.md` for full project architecture.
 
 ## Commands
 
@@ -49,42 +49,37 @@ src/
 ├── middleware/
 │   └── auth.js        # SIWE authentication, mock signature support
 ├── routes/
-│   ├── mint.js        # /api/mint - upload, watermark, encrypt, mint
+│   ├── mint.js        # /api/mint - upload, watermark, mint
 │   ├── marketplace.js # /api/marketplace - list, buy, delist (uses blockchain + Arweave)
 │   ├── gallery.js     # /api/gallery - view tokens (uses blockchain + IPFS only)
 │   ├── generate.js    # /api/generate - AI image generation
-│   ├── detect.js      # /api/detect - watermark detection
+│   ├── detect.js      # /api/detect/blind - blind watermark detection (Rust Legendre)
+│   ├── perceptual.js  # /api/perceptual - perceptual hash matching for infringement
 │   ├── verify.js      # /api/verify - token verification (uses blockchain + Arweave)
 │   └── license.js     # /api/license - license documents (uses blockchain + Arweave)
 └── services/
     ├── blockchain.js     # Ethers.js contract calls, mock mode
-    ├── watermark.js      # Cloud API or C++ binary, mock mode
-    ├── encryption.js     # AES-256, Cloud KMS or dev key
+    ├── watermark.js      # Cloud API or local binary for watermark embedding
     ├── ipfs.js           # Pinata uploads for watermarked images, mock mode
     ├── arweave.js        # Permanent metadata/license storage, mock mode
-    ├── firestore.js      # ONLY encrypted original references (storagePath, keyId)
-    ├── storage.js        # Firebase Storage for encrypted originals
+    ├── perceptual.js     # Perceptual hashing for infringement detection
     ├── ai-generation.js  # Stability AI integration, mock mode
     └── mock-persistence.js # Optional disk persistence for mock data
 ```
 
 ## Storage Architecture
 
-**IMPORTANT**: Data is stored in specific locations - do not mix them up:
-
 | Storage | What it stores |
 |---------|----------------|
-| Blockchain | Token ownership, IPFS URI, Arweave URI, license type, provenance |
+| Blockchain | Token ownership, IPFS URI, Arweave URI, license type, provenance, imageHash |
 | Arweave | Metadata JSON (name, description), license documents |
-| IPFS | Watermarked preview images |
-| Firebase Storage | Encrypted original images |
-| Firestore | **ONLY** encrypted original ref (storagePath + keyId) |
-| KMS | Encryption keys |
+| IPFS | Watermarked images (public) |
+| Perceptual DB | Hash signatures for infringement detection |
 
-Routes must use the correct data sources:
-- `gallery.js`, `marketplace.js`, `verify.js`, `license.js` → Blockchain + Arweave (NOT Firestore)
-- `detect.js` → Firestore only for `getEncryptedRef()` to find encrypted original
-- `mint.js` → Stores encrypted ref via `storeEncryptedRef()`, NOT `createToken()`
+Routes use the correct data sources:
+- `gallery.js`, `marketplace.js`, `verify.js`, `license.js` → Blockchain + Arweave
+- `detect.js` → Rust blind detector (extracts wallet:tokenId from watermark)
+- `perceptual.js` → In-memory perceptual hash database
 
 ## Route Ordering
 
@@ -111,10 +106,8 @@ All external services support mock mode via environment variables. See `mock.md`
 | `USE_MOCK_IPFS=true` | In-memory storage, fake CIDs |
 | `USE_MOCK_ARWEAVE=true` | In-memory metadata storage |
 | `USE_MOCK_FIRESTORE=true` | In-memory Maps |
-| `USE_MOCK_STORAGE=true` | In-memory blob storage |
-| `USE_MOCK_WATERMARK=true` | Return image unchanged |
+| `USE_MOCK_WATERMARK=true` | Return image unchanged, mock blind detection |
 | `USE_MOCK_AI=true` | Return placeholder images |
-| `USE_KMS=false` | Use `DEV_ENCRYPTION_KEY` instead of Cloud KMS |
 
 ### Mock Persistence
 
@@ -123,6 +116,24 @@ Mock services can persist to `.mock-data/` directory via `mock-persistence.js`:
 - When enabled, data survives backend restarts
 - JSON files for tokens, listings, IPFS content, etc.
 - Use `clearAll()` to reset mock state
+
+## Watermark Detection
+
+The system uses **blind detection** - the Rust Legendre detector extracts the `wallet:tokenId` message directly from the watermarked image without needing a reference image.
+
+```bash
+# Binary location (set via BLIND_DETECT_BINARY env var)
+../watermark-rs/target/release/detect
+
+# Build the detector
+cd ../watermark-rs && cargo build --release --bin detect
+```
+
+Detection returns:
+- `detected`: boolean
+- `message`: "walletAddress:tokenId"
+- `confidence`: detection confidence score
+- `token`: blockchain data if token exists
 
 ## Authentication
 
@@ -164,7 +175,7 @@ The gallery reads from blockchain, then follows the IPFS URI to get watermarked 
 1. Blockchain → get token data including `ipfsUri`
 2. IPFS → fetch watermarked image via `ipfsService.getGatewayUrl(token.ipfsUri)`
 
-No Firestore involved. Token ownership comes from blockchain (source of truth).
+Token ownership comes from blockchain (source of truth).
 
 ## Wallet Service (Dev Mode)
 
@@ -183,7 +194,7 @@ cd ../wallet-service && npm run dev  # Start wallet service
 The API uses `imageUrl` (from blockchain IPFS URI) as the primary image field. For backwards compatibility, some endpoints also return `previewUrl`. When updating routes, ensure both fields are populated:
 
 ```javascript
-const ipfsUri = tokenData.ipfsUri || firestoreData?.ipfsUri;
+const ipfsUri = tokenData.ipfsUri;
 const imageUrl = ipfsUri ? ipfsService.getGatewayUrl(ipfsUri) : null;
 res.json({
   imageUrl,
@@ -238,7 +249,7 @@ Backend and wallet service handle SIGTERM/SIGINT for clean port release:
 2. **Contract address mismatch**: Backend loads from `deployment.json`, ensure it matches Hardhat deployment
 3. **Gallery empty after redeploy**: Contract was redeployed - need to mint new tokens
 4. **Port 3000 in use**: `lsof -ti:3000 | xargs kill -9`
-5. **Broken images**: Ensure route returns `imageUrl` from blockchain's `ipfsUri` field, not just Firestore
+5. **Broken images**: Ensure route returns `imageUrl` from blockchain's `ipfsUri` field
 6. **Watermark API failing**: Set `USE_MOCK_WATERMARK=true` in start script if cloud API unavailable
 7. **Nonce errors in tests**: Occasional "nonce too low" errors occur but don't affect verification - the retry logic handles most cases
 8. **IPFS CORS errors**: Images must be proxied through backend (`/ipfs/:hash`) not direct Pinata gateway URLs

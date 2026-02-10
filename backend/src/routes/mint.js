@@ -1,6 +1,6 @@
 /**
  * Mint API routes
- * POST /api/mint - Watermark, encrypt, upload, mint NFT
+ * POST /api/mint - Watermark, upload to IPFS, mint NFT
  */
 
 const express = require('express');
@@ -8,12 +8,10 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 
 const watermarkService = require('../services/watermark');
-const encryptionService = require('../services/encryption');
 const ipfsService = require('../services/ipfs');
 const arweaveService = require('../services/arweave');
-const storageService = require('../services/storage');
 const blockchainService = require('../services/blockchain');
-const firestoreService = require('../services/firestore');
+const perceptualService = require('../services/perceptual');
 
 // Note: Token ID reservation is now handled by the smart contract
 // The old mutex approach was flawed - it only protected this single backend instance
@@ -35,7 +33,6 @@ function createRouter(upload) {
    * Returns:
    * - tokenId: number
    * - transactionHash: string
-   * - storagePath: string (Firebase Storage path for encrypted original)
    * - ipfsUri: string (IPFS URI for watermarked image)
    * - metadataUri: string (Arweave URI for metadata)
    * - imageHash: string (SHA-256 of watermarked image)
@@ -75,7 +72,7 @@ function createRouter(upload) {
 
       // All mint variables declared here
       let reservedTokenId, tokenId, transactionHash, watermarkId, imageHash;
-      let keyId, storagePath, ipfsUri, metadataUri, licenseHash;
+      let ipfsUri, metadataUri, licenseHash;
 
       // Step 1: Reserve token ID on-chain (guarantees this ID is ours)
       // This is atomic - no one else can get this ID
@@ -96,27 +93,12 @@ function createRouter(upload) {
       // Step 3: Calculate image hash of watermarked image (for integrity verification)
       imageHash = crypto.createHash('sha256').update(watermarkedBuffer).digest('hex');
 
-      // Step 4: Encrypt ORIGINAL image (not watermarked) for authorized access
-      console.log(`[${mintId}] Encrypting original image...`);
-      const encryptResult = await encryptionService.encrypt(
-        imageBuffer,  // Original image, not watermarked
-        mintId
-      );
-      const encryptedBuffer = encryptResult.encryptedBuffer;
-      keyId = encryptResult.keyId;
-
-      // Upload in parallel:
-      // - IPFS: Full watermarked image (public)
-      // - Firebase Storage: Encrypted original (private, for authorized decryption)
-      console.log(`[${mintId}] Uploading to IPFS and Firebase Storage...`);
-      [storagePath, ipfsUri] = await Promise.all([
-        storageService.uploadEncrypted(encryptedBuffer, mintId),
-        ipfsService.upload(watermarkedBuffer, `${mintId}-watermarked.png`)
-      ]);
+      // Step 4: Upload watermarked image to IPFS
+      console.log(`[${mintId}] Uploading to IPFS...`);
+      ipfsUri = await ipfsService.upload(watermarkedBuffer, `${mintId}-watermarked.png`);
       console.log(`[${mintId}] Watermarked image uploaded to IPFS: ${ipfsUri}`);
-      console.log(`[${mintId}] Encrypted original uploaded to Firebase Storage: ${storagePath}`);
 
-      // Step 6: Generate license hash
+      // Step 5: Generate license hash
       licenseHash = null;
       if (licenseType) {
         const licenseText = generateLicenseTemplate(licenseType);
@@ -126,7 +108,6 @@ function createRouter(upload) {
       }
 
       // Step 6: Create and upload metadata to Arweave (permanent storage)
-      // Note: encrypted_original is NOT in metadata - it's private in Firebase Storage
       console.log(`[${mintId}] Creating metadata...`);
       const metadata = {
         name,
@@ -153,9 +134,7 @@ function createRouter(upload) {
       });
       metadataUri = `ar://${metadataTxId}`;
 
-      // Step 8: Mint NFT on-chain with reserved token ID
-      // The reservation guarantees this ID is ours - no verification needed
-      // Note: storagePath is NOT sent to blockchain (V2) - stored in Firestore only
+      // Step 7: Mint NFT on-chain with reserved token ID
       console.log(`[${mintId}] Minting NFT with reserved token ID ${reservedTokenId}...`);
       const licenseTypeMap = { display: 0, commercial: 1, transfer: 2 };
       const licenseTypeNum = licenseType ? licenseTypeMap[licenseType] : 0;
@@ -171,14 +150,19 @@ function createRouter(upload) {
       tokenId = mintResult.tokenId;
       transactionHash = mintResult.transactionHash;
 
-      // Step 8: Store encrypted original reference in Firestore
-      // (Only the storage path and key - all other data is on blockchain/Arweave)
-      console.log(`[${mintId}] Storing encrypted ref in Firestore...`);
-      await firestoreService.storeEncryptedRef(tokenId, {
-        storagePath,  // Firebase Storage path for encrypted original
-        keyId,        // KMS key reference for decryption
-        imageHash,    // For verification
-      });
+      // Step 8: Register perceptual hashes for infringement detection
+      // This allows matching even when watermark doesn't survive (print-camera)
+      console.log(`[${mintId}] Registering perceptual hashes...`);
+      try {
+        await perceptualService.register(String(tokenId), watermarkedBuffer, {
+          wallet: req.wallet,
+          name,
+          imageHash,
+        });
+      } catch (perceptualError) {
+        // Non-fatal - log but don't fail the mint
+        console.warn(`[${mintId}] Perceptual registration failed (non-fatal):`, perceptualError.message);
+      }
 
       console.log(`[${mintId}] Mint complete! Token ID: ${tokenId}`);
 
@@ -187,7 +171,6 @@ function createRouter(upload) {
         tokenId,
         transactionHash,
         watermarkId,
-        storagePath,  // Firebase Storage path (access controlled by service)
         ipfsUri,      // IPFS URI for watermarked image (public)
         metadataUri,
         imageHash,
