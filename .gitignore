@@ -22,6 +22,9 @@ contracts/node_modules/
 .DS_Store
 Thumbs.db
 
+# Rust
+watermark-rs/target/
+
 # Hardhat
 contracts/cache/
 contracts/artifacts/
