@@ -20,7 +20,7 @@ describe('Event types interface contract', () => {
     expect(e.foo).toBe('bar');
   });
 
-  test('all 24 domain event constructors are exported', () => {
+  test('all 23 domain event constructors are exported', () => {
     const expectedExports = [
       'event',
       'tokenReserved', 'tokenMinted', 'tokenListed', 'tokenDelisted',
@@ -28,7 +28,7 @@ describe('Event types interface contract', () => {
       'licenseCreated',
       'watermarkApplied', 'watermarkProgress',
       'ipfsUploaded', 'ipfsCacheHit', 'ipfsUnpinned',
-      'arweaveUploaded', 'storageUploaded',
+      'arweaveUploaded',
       'watermarkDetected',
       'aiGenerated', 'aiCleanup',
       'mintStarted', 'mintStep', 'mintCompleted', 'mintFailed',

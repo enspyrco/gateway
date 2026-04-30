@@ -73,6 +73,9 @@ const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'im
 // Only validated when the corresponding service is NOT in mock mode.
 // This prevents startup failures in dev/test while catching misconfigs in prod.
 if (isProduction) {
+  if (ALLOW_MOCK_SIGNATURES) {
+    throw new Error('ALLOW_MOCK_SIGNATURES must not be set in production');
+  }
   if (!USE_MOCK_BLOCKCHAIN) {
     requireEnv('POLYGON_RPC_URL');
     requireEnv('MINTER_PRIVATE_KEY');

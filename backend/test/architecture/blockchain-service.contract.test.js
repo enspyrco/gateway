@@ -4,7 +4,7 @@
  * Tests the public interface of services/blockchain.js in mock mode.
  * Verifies: token lifecycle, marketplace operations, event generation.
  *
- * mint() signature: (reservedTokenId, to, uri, licenseType, imageHash, licenseHash, ipfsUri)
+ * mint() signature: (reservedTokenId, to, uri, imageHash, ipfsUri)
  * delistToken() signature: (tokenId, licenseType, sellerAddress)
  *
  * If a refactoring breaks these tests, the interface has changed —

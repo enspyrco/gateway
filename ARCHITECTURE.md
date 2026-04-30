@@ -51,7 +51,7 @@ graph TD
     end
 
     subgraph "Events"
-        TYPES["types.js<br/>~220 LOC<br/>32 event constructors"]
+        TYPES["types.js<br/>~210 LOC<br/>23 event constructors"]
         DISP["dispatch.js<br/>75 LOC"]
         STDOUT["sinks/stdout.js"]
     end
@@ -156,7 +156,7 @@ sequenceDiagram
 
 | Module | Interface (exports) | Implementation (LOC) | Depth | Issues |
 |--------|-------------------|---------------------|-------|--------|
-| `events/types.js` | 26 event constructors + `event` | ~220 | **Deep** | None — clean, pure data |
+| `events/types.js` | 23 event constructors + `event` | ~210 | **Deep** | None — clean, pure data |
 | `events/dispatch.js` | 5 functions | 75 | **Deep** | stdout sink registered at startup |
 | `services/blockchain.js` | 36 functions | 1461 | **Deep** | Conflates prod + test exports; EIP-712 types via shared module |
 | `services/ipfs.js` | 6 functions | 247 | **Deep** | Gateway URL configurable via `API_BASE_URL` |
@@ -187,7 +187,7 @@ sequenceDiagram
 |--------|-----------|-----|-------|--------|
 | `services/api_service.dart` | 20+ methods | 550 | **Shallow** | God module — every API call in one class |
 | `services/wallet_service.dart` | 10 methods | 301 | **Deep** | None |
-| `providers/wallet_provider.dart` | 20+ properties/methods | 582 | **Shallow** | Mixed concerns: wallet + fee simulation |
+| `providers/wallet_provider.dart` | 15+ properties/methods | 332 | **Adequate** | Fee simulation extracted to `fee_simulation_provider.dart` |
 | `providers/mint_provider.dart` | 12 properties/methods | 142 | **Deep** | None |
 | `pages/token_detail_page.dart` | 1 widget | 1229 | **Shallow** | 3 transaction flows + UI in one file |
 | `pages/gallery_page.dart` | 1 widget | 973 | **Adequate** | License color duplication |
@@ -270,7 +270,7 @@ graph TD
 
 ## Architectural Strengths
 
-1. **Event system design** — `events/types.js` + `events/dispatch.js` is a textbook comonoid: pure data events, fan-out dispatch, sink isolation. The 30 event constructors cover the full domain.
+1. **Event system design** — `events/types.js` + `events/dispatch.js` is a textbook comonoid: pure data events, fan-out dispatch, sink isolation. The 23 event constructors cover the full domain.
 
 2. **Mock mode consistency** — Every service supports mock mode via environment variables with a uniform pattern. Tests exercise the full stack with mock backends rather than jest.mock, producing realistic coverage.
 

@@ -699,18 +699,18 @@ function startEventListener(callbacks = {}) {
  * Get all tokens from mock storage
  */
 async function getAllTokens() {
-  const supply = await totalSupply();
   const tokens = [];
 
-  for (let i = 0; i < supply; i++) {
+  for (const [tokenId, token] of mockTokens) {
+    if (token.reserved && !token.creator) continue; // Skip unredeemed reservations
     try {
-      const tokenData = await getTokenData(i);
+      const tokenData = await getTokenData(tokenId);
       tokens.push({
-        tokenId: i,
+        tokenId,
         ...tokenData
       });
     } catch (e) {
-      console.warn(`[Blockchain] Could not fetch token ${i}:`, e.message);
+      // Skip tokens that can't be fetched
     }
   }
 

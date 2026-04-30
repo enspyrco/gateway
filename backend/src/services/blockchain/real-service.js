@@ -8,6 +8,7 @@ const { ethers } = require('ethers');
 const fs = require('fs');
 const path = require('path');
 const E = require('../../events/types');
+const { dispatch } = require('../../events/dispatch');
 const { LicenseType, NFTMARKET_ABI, EIP712_TYPES } = require('./interface');
 
 const RPC_URL = process.env.POLYGON_RPC_URL || 'https://polygon-rpc.com';
@@ -555,89 +556,83 @@ function startEventListener(callbacks = {}) {
     // Listen for Minted events (new tokens)
     if (callbacks.onMinted) {
       nftmarket.on('Minted', async (tokenId, creator, imageHash, event) => {
-        console.log(`[Blockchain Event] Minted: Token ${tokenId} by ${creator}`);
+        dispatch(E.tokenMinted({
+          tokenId: Number(tokenId), to: creator, imageHash,
+          transactionHash: event.log?.transactionHash, blockNumber: event.log?.blockNumber,
+          ipfsUri: '', uri: '', licenseType: 0, mock: false
+        }));
         try {
           await callbacks.onMinted({
-            tokenId: Number(tokenId),
-            creator,
-            imageHash,
+            tokenId: Number(tokenId), creator, imageHash,
             transactionHash: event.log?.transactionHash
           });
         } catch (e) {
           console.error('[Blockchain Event] Error handling Minted:', e.message);
         }
       });
-      console.log('[Blockchain] Listening for Minted events');
     }
 
     // Listen for Sold events (ownership transfers via marketplace)
     if (callbacks.onSold) {
       nftmarket.on('Sold', async (tokenId, seller, buyer, price, licenseType, licenseHash, event) => {
-        console.log(`[Blockchain Event] Sold: Token ${tokenId} from ${seller} to ${buyer}`);
+        dispatch(E.tokenSold({
+          tokenId: Number(tokenId), seller, buyer,
+          price: price.toString(), licenseType: Number(licenseType), mock: false
+        }));
         try {
           await callbacks.onSold({
-            tokenId: Number(tokenId),
-            seller,
-            buyer,
-            price: price.toString(),
-            licenseType: Number(licenseType),
+            tokenId: Number(tokenId), seller, buyer,
+            price: price.toString(), licenseType: Number(licenseType),
             transactionHash: event.log?.transactionHash
           });
         } catch (e) {
           console.error('[Blockchain Event] Error handling Sold:', e.message);
         }
       });
-      console.log('[Blockchain] Listening for Sold events');
     }
 
     // Listen for Listed events
     if (callbacks.onListed) {
       nftmarket.on('Listed', async (tokenId, seller, price, licenseType, licenseHash, nonce, expiry, event) => {
-        console.log(`[Blockchain Event] Listed: Token ${tokenId} by ${seller} for ${ethers.formatEther(price)} ETH`);
+        dispatch(E.tokenListed({
+          tokenId: Number(tokenId), price: price.toString(),
+          licenseType: Number(licenseType), transactionHash: '', mock: false
+        }));
         try {
           await callbacks.onListed({
-            tokenId: Number(tokenId),
-            seller,
-            price: price.toString(),
-            licenseType: Number(licenseType),
-            licenseHash,
-            nonce: Number(nonce),
-            expiry: Number(expiry)
+            tokenId: Number(tokenId), seller,
+            price: price.toString(), licenseType: Number(licenseType),
+            licenseHash, nonce: Number(nonce), expiry: Number(expiry)
           });
         } catch (e) {
           console.error('[Blockchain Event] Error handling Listed:', e.message);
         }
       });
-      console.log('[Blockchain] Listening for Listed events');
     }
 
     // Listen for LicenseGranted events (new license tokens minted)
     if (callbacks.onLicenseGranted) {
       nftmarket.on('LicenseGranted', async (newTokenId, parentTokenId, originalTokenId, licensor, licensee, licenseType, licenseHash, event) => {
-        const licenseNames = ['Display', 'Commercial', 'Transfer'];
-        console.log(`[Blockchain Event] LicenseGranted: Token ${newTokenId} (${licenseNames[licenseType]} license from ${parentTokenId}) to ${licensee}`);
+        dispatch(E.licenseGranted({
+          newTokenId: Number(newTokenId), parentTokenId: Number(parentTokenId),
+          buyer: licensee, licenseType: Number(licenseType), mock: false
+        }));
         try {
           await callbacks.onLicenseGranted({
-            newTokenId: Number(newTokenId),
-            parentTokenId: Number(parentTokenId),
-            originalTokenId: Number(originalTokenId),
-            licensor,
-            licensee,
-            licenseType: Number(licenseType),
-            licenseHash,
+            newTokenId: Number(newTokenId), parentTokenId: Number(parentTokenId),
+            originalTokenId: Number(originalTokenId), licensor, licensee,
+            licenseType: Number(licenseType), licenseHash,
             transactionHash: event.log?.transactionHash
           });
         } catch (e) {
           console.error('[Blockchain Event] Error handling LicenseGranted:', e.message);
         }
       });
-      console.log('[Blockchain] Listening for LicenseGranted events');
     }
 
     // Return cleanup function
     return () => {
       nftmarket.removeAllListeners();
-      console.log('[Blockchain] Stopped event listeners');
     };
   } catch (e) {
     console.warn('[Blockchain] Could not start event listener:', e.message);

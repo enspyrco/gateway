@@ -25,8 +25,7 @@
  * @typedef {BaseEvent & { filename: string, uri: string }} IpfsCacheHitEvent
  * @typedef {BaseEvent & { cid: string, existed: boolean, mock: boolean }} IpfsUnpinnedEvent
  * @typedef {BaseEvent & { txId: string, hash: string, contentType: string, mock: boolean }} ArweaveUploadedEvent
- * @typedef {BaseEvent & { storagePath: string, mintId: string, mock: boolean }} StorageUploadedEvent
- * @typedef {BaseEvent & { detected: boolean, message: string, confidence: number, tokenId?: number, wallet?: string }} WatermarkDetectedEvent
+* @typedef {BaseEvent & { detected: boolean, message: string, confidence: number, tokenId?: number, wallet?: string }} WatermarkDetectedEvent
  * @typedef {BaseEvent & { generationId: string, prompt: string, style: string, count: number, mock: boolean }} AiGeneratedEvent
  * @typedef {BaseEvent & { cleaned: number }} AiCleanupEvent
  * @typedef {BaseEvent & { mintId: string, wallet: string }} MintStartedEvent
@@ -37,7 +36,7 @@
  * @typedef {BaseEvent & { detectId: string, detected: boolean, tokenId?: number, wallet?: string }} DetectCompletedEvent
  * @typedef {BaseEvent & { detectId: string, error: string }} DetectFailedEvent
  *
- * @typedef {TokenReservedEvent | TokenMintedEvent | TokenListedEvent | TokenDelistedEvent | TokenDelistedAllEvent | TokenSoldEvent | LicenseGrantedEvent | LicenseCreatedEvent | WatermarkAppliedEvent | WatermarkProgressEvent | IpfsUploadedEvent | IpfsCacheHitEvent | IpfsUnpinnedEvent | ArweaveUploadedEvent | StorageUploadedEvent | WatermarkDetectedEvent | AiGeneratedEvent | AiCleanupEvent | MintStartedEvent | MintStepEvent | MintCompletedEvent | MintFailedEvent | DetectStartedEvent | DetectCompletedEvent | DetectFailedEvent} AppEvent
+ * @typedef {TokenReservedEvent | TokenMintedEvent | TokenListedEvent | TokenDelistedEvent | TokenDelistedAllEvent | TokenSoldEvent | LicenseGrantedEvent | LicenseCreatedEvent | WatermarkAppliedEvent | WatermarkProgressEvent | IpfsUploadedEvent | IpfsCacheHitEvent | IpfsUnpinnedEvent | ArweaveUploadedEvent | WatermarkDetectedEvent | AiGeneratedEvent | AiCleanupEvent | MintStartedEvent | MintStepEvent | MintCompletedEvent | MintFailedEvent | DetectStartedEvent | DetectCompletedEvent | DetectFailedEvent} AppEvent
  */
 
 /**
@@ -112,10 +111,6 @@ function ipfsUnpinned({ cid, existed, mock = false }) {
 
 function arweaveUploaded({ txId, hash, contentType, mock = false }) {
   return event('arweave.uploaded', { txId, hash, contentType, mock });
-}
-
-function storageUploaded({ storagePath, mintId, mock = false }) {
-  return event('storage.uploaded', { storagePath, mintId, mock });
 }
 
 // ── Detection ────────────────────────────────────────────────
@@ -196,7 +191,6 @@ module.exports = {
   ipfsCacheHit,
   ipfsUnpinned,
   arweaveUploaded,
-  storageUploaded,
   // Detection
   watermarkDetected,
   // AI

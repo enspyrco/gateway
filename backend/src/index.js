@@ -4,6 +4,7 @@
  */
 
 require('dotenv').config();
+require('./config'); // Fail-fast validation of env vars
 const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
@@ -30,10 +31,11 @@ const { stdoutSink } = require('./events/sinks/stdout');
 const { jsonLogSink } = require('./events/sinks/json-log');
 const requestId = require('./middleware/request-id');
 
-// Register event sinks
-registerSink(stdoutSink);
+// Register event sinks — mutually exclusive to avoid double logging
 if (process.env.NODE_ENV === 'production') {
   registerSink(jsonLogSink);
+} else {
+  registerSink(stdoutSink);
 }
 
 const app = express();
@@ -51,9 +53,7 @@ const upload = multer({
 });
 
 // Middleware
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',')
-  : [/^http:\/\/localhost(:\d+)?$/];
+const { ALLOWED_ORIGINS } = require('./config');
 app.use(cors({ origin: ALLOWED_ORIGINS }));
 app.use(express.json());
 app.use(requestId);

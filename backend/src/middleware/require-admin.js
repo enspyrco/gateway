@@ -5,9 +5,7 @@
  * Must be used after requireAuth so req.actor is populated.
  */
 
-const ADMIN_WALLETS = new Set(
-  (process.env.ADMIN_WALLETS || '').toLowerCase().split(',').filter(Boolean)
-);
+const { ADMIN_WALLETS } = require('../config');
 
 /**
  * @param {import('express').Request} req
