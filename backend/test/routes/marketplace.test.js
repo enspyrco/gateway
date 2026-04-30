@@ -47,17 +47,15 @@ describe('Marketplace Route', () => {
   });
 
   async function mintToken(owner) {
-    const reservation = await blockchainService.reserveTokenId();
-    return blockchainService.mint(
+    const [reservation] = await blockchainService.reserveTokenId();
+    const [result] = await blockchainService.mint(
       reservation.tokenId,
       owner,
       'ipfs://metadata',
-      0,
       '0x' + crypto.randomBytes(32).toString('hex'),
-      '0x' + 'b'.repeat(64),
-      'ipfs://watermarked',
-      'ipfs://encrypted'
+      'ipfs://watermarked'
     );
+    return result;
   }
 
   describe('GET /api/marketplace', () => {
@@ -71,7 +69,7 @@ describe('Marketplace Route', () => {
 
     it('should return active listings', async () => {
       const { tokenId } = await mintToken(userA);
-      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, 0, null, userA);
 
       const res = await request(app)
         .get('/api/marketplace')
@@ -86,7 +84,7 @@ describe('Marketplace Route', () => {
   describe('GET /api/marketplace/:tokenId', () => {
     it('should return listing details for listed token', async () => {
       const { tokenId } = await mintToken(userA);
-      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, 0, null, userA);
 
       const res = await request(app)
         .get(`/api/marketplace/${tokenId}`)
@@ -139,7 +137,7 @@ describe('Marketplace Route', () => {
   describe('POST /api/marketplace/delist', () => {
     it('should return contract call for delisting', async () => {
       const { tokenId } = await mintToken(userA);
-      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, 0, null, userA);
 
       const res = await request(app)
         .post('/api/marketplace/delist')
@@ -168,7 +166,7 @@ describe('Marketplace Route', () => {
   describe('POST /api/marketplace/buy', () => {
     it('should return typed data for buying', async () => {
       const { tokenId } = await mintToken(userA);
-      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, userA);
+      await blockchainService.listToken(tokenId, '1000000000000000000', 'display', mockLicenseHash, 0, null, userA);
 
       const res = await request(app)
         .post('/api/marketplace/buy')

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import '../models/token.dart';
 import '../services/api_service.dart';
 import '../providers/wallet_provider.dart';
 import '../widgets/wallet_button.dart';
@@ -685,8 +686,7 @@ class _TokenCardState extends State<_TokenCard> {
   @override
   Widget build(BuildContext context) {
     final name = widget.token['name'] ?? 'NFT #${widget.token['tokenId']}';
-    // Use imageUrl from blockchain IPFS URI, fallback to previewUrl for backwards compatibility
-    final imageUrl = widget.token['imageUrl'] ?? widget.token['previewUrl'];
+    final imageUrl = Token.imageUrlFromJson(widget.token);
     // ownerLicense shows the current owner's license level
     final ownerLicense = widget.token['ownerLicense'] ??
         widget.token['licenseType'] ??

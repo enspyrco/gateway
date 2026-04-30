@@ -16,6 +16,8 @@ const licenseService = require('../services/license');
 const arweaveService = require('../services/arweave');
 const blockchainService = require('../services/blockchain');
 const authMiddleware = require('../middleware/auth');
+const { getLicenseTypeName } = require('../utils/license-utils');
+const { enrichTokenData } = require('../utils/token-read-model');
 
 /**
  * POST /api/license/prepare
@@ -27,7 +29,7 @@ const authMiddleware = require('../middleware/auth');
 router.post('/prepare', authMiddleware, async (req, res, next) => {
   try {
     const { tokenId, licenseType, price } = req.body;
-    const sellerAddress = req.walletAddress;
+    const sellerAddress = req.wallet;
 
     if (tokenId === undefined || licenseType === undefined || !price) {
       return res.status(400).json({
@@ -55,21 +57,12 @@ router.post('/prepare', authMiddleware, async (req, res, next) => {
 
     // Get token data from blockchain
     const blockchainData = await blockchainService.getTokenData(tokenId);
-
-    // Get metadata from Arweave (for token name)
-    let metadata = null;
-    if (blockchainData?.uri) {
-      try {
-        metadata = await arweaveService.fetchMetadata(blockchainData.uri);
-      } catch (e) {
-        console.warn(`[License] Could not fetch Arweave metadata for token ${tokenId}`);
-      }
-    }
+    const enriched = await enrichTokenData(tokenId, blockchainData);
 
     // Create license document and upload to Arweave
     const result = await licenseService.createLicense({
       tokenId,
-      tokenName: metadata?.name || `NFTmarket #${tokenId}`,
+      tokenName: enriched.name,
       licenseType,
       creator: blockchainData.creator,
       seller: sellerAddress,
@@ -100,7 +93,7 @@ router.post('/prepare', authMiddleware, async (req, res, next) => {
  *
  * Body: { tokenId, buyer, transactionHash, licenseType }
  */
-router.post('/finalize', async (req, res, next) => {
+router.post('/finalize', authMiddleware, async (req, res, next) => {
   try {
     const { tokenId, buyer, transactionHash, licenseType } = req.body;
 
@@ -110,23 +103,22 @@ router.post('/finalize', async (req, res, next) => {
       });
     }
 
+    // Verify caller is the buyer (or a backend service with no wallet set)
+    if (req.wallet && req.wallet !== buyer.toLowerCase()) {
+      return res.status(403).json({
+        error: 'Caller is not the buyer',
+        code: 'FORBIDDEN'
+      });
+    }
+
     // Get token data from blockchain
     const blockchainData = await blockchainService.getTokenData(tokenId);
-
-    // Get metadata from Arweave (for token name)
-    let metadata = null;
-    if (blockchainData?.uri) {
-      try {
-        metadata = await arweaveService.fetchMetadata(blockchainData.uri);
-      } catch (e) {
-        console.warn(`[License] Could not fetch Arweave metadata for token ${tokenId}`);
-      }
-    }
+    const enriched = await enrichTokenData(tokenId, blockchainData);
 
     // Create the final license document with actual buyer
     const result = await licenseService.createLicense({
       tokenId,
-      tokenName: metadata?.name || `NFTmarket #${tokenId}`,
+      tokenName: enriched.name,
       licenseType,
       creator: blockchainData.creator,
       seller: blockchainData.copyrightOwner, // Previous copyright owner
@@ -149,8 +141,45 @@ router.post('/finalize', async (req, res, next) => {
 });
 
 /**
+ * GET /api/license/types
+ * Get available license types and their descriptions
+ * NOTE: Must be before /:tokenId route
+ */
+router.get('/types', async (req, res) => {
+  res.json({
+    types: [
+      {
+        id: 0,
+        name: 'Display',
+        code: 'CBE-PERSONAL',
+        description: 'Personal, non-commercial display only',
+        rights: ['Display artwork', 'Share on social media', 'Transfer NFT'],
+        restrictions: ['No commercial use', 'No derivatives', 'No sublicensing']
+      },
+      {
+        id: 1,
+        name: 'Commercial',
+        code: 'CBE-COMMERCIAL',
+        description: 'Commercial use rights, creator retains copyright',
+        rights: ['All Display rights', 'Commercial use', 'Create derivatives', 'Merchandise'],
+        restrictions: ['No sublicensing', 'No trademark registration', 'Creator retains copyright']
+      },
+      {
+        id: 2,
+        name: 'Transfer',
+        code: 'CBE-EXCLUSIVE',
+        description: 'Full copyright transfer to buyer',
+        rights: ['Full copyright ownership', 'All commercial rights', 'Sublicensing', 'Trademark registration'],
+        restrictions: ['Seller retains personal display rights', 'Creator retains moral rights']
+      }
+    ]
+  });
+});
+
+/**
  * GET /api/license/:tokenId
  * Get license information for a token from blockchain + Arweave
+ * NOTE: Must be AFTER specific routes like /types
  */
 router.get('/:tokenId', async (req, res, next) => {
   try {
@@ -167,18 +196,15 @@ router.get('/:tokenId', async (req, res, next) => {
     // Get listing if active (has license hash)
     const listing = await blockchainService.getListing(tokenId);
 
-    // License type names
-    const licenseTypeNames = ['Display', 'Commercial', 'Transfer'];
-
     res.json({
       tokenId: Number(tokenId),
       ownerLicense: blockchainData.ownerLicense,
-      ownerLicenseName: licenseTypeNames[blockchainData.ownerLicense] || 'Unknown',
+      ownerLicenseName: getLicenseTypeName(blockchainData.ownerLicense),
       creator: blockchainData.creator,
       copyrightOwner: blockchainData.copyrightOwner,
       listing: listing.active ? {
         licenseType: listing.licenseType,
-        licenseTypeName: licenseTypeNames[listing.licenseType] || 'Unknown',
+        licenseTypeName: getLicenseTypeName(listing.licenseType),
         licenseHash: listing.licenseHash,
         price: listing.price,
         priceEth: (Number(listing.price) / 1e18).toFixed(4),
@@ -254,41 +280,6 @@ router.get('/:tokenId/document', async (req, res, next) => {
   } catch (error) {
     next(error);
   }
-});
-
-/**
- * GET /api/license/types
- * Get available license types and their descriptions
- */
-router.get('/types', async (req, res) => {
-  res.json({
-    types: [
-      {
-        id: 0,
-        name: 'Display',
-        code: 'CBE-PERSONAL',
-        description: 'Personal, non-commercial display only',
-        rights: ['Display artwork', 'Share on social media', 'Transfer NFT'],
-        restrictions: ['No commercial use', 'No derivatives', 'No sublicensing']
-      },
-      {
-        id: 1,
-        name: 'Commercial',
-        code: 'CBE-COMMERCIAL',
-        description: 'Commercial use rights, creator retains copyright',
-        rights: ['All Display rights', 'Commercial use', 'Create derivatives', 'Merchandise'],
-        restrictions: ['No sublicensing', 'No trademark registration', 'Creator retains copyright']
-      },
-      {
-        id: 2,
-        name: 'Transfer',
-        code: 'CBE-EXCLUSIVE',
-        description: 'Full copyright transfer to buyer',
-        rights: ['Full copyright ownership', 'All commercial rights', 'Sublicensing', 'Trademark registration'],
-        restrictions: ['Seller retains personal display rights', 'Creator retains moral rights']
-      }
-    ]
-  });
 });
 
 module.exports = router;

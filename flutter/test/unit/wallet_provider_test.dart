@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nftmarket/providers/wallet_provider.dart';
+import 'package:nftmarket/providers/fee_simulation_provider.dart';
+import 'package:nftmarket/models/test_account.dart';
 
 void main() {
   group('WalletProvider', () {
@@ -200,7 +202,7 @@ void main() {
     });
   });
 
-  group('Fee Simulation', () {
+  group('Fee Simulation (FeeSimulationProvider)', () {
     test('FeeConfig has correct values', () {
       // Subscription: 0.01 ETH
       expect(FeeConfig.subscriptionFee, equals(BigInt.from(10000000000000000)));
@@ -220,23 +222,25 @@ void main() {
     });
 
     test('initializeSimulatedBalances sets starting balances', () {
-      final provider = WalletProvider();
-      provider.initializeSimulatedBalances();
+      final feeProvider = FeeSimulationProvider();
+      final walletProvider = WalletProvider();
+      feeProvider.initializeSimulatedBalances(walletProvider.availableAccounts);
 
       // Each user should have 10 ETH
       final tenEth = BigInt.from(10) * BigInt.from(10).pow(18);
-      for (final account in provider.availableAccounts) {
-        expect(provider.getSimulatedBalance(account.address), equals(tenEth));
+      for (final account in walletProvider.availableAccounts) {
+        expect(
+            feeProvider.getSimulatedBalance(account.address), equals(tenEth));
       }
 
       // Platform starts at 0
-      expect(provider.getSimulatedBalance(platformWallet.address),
+      expect(feeProvider.getSimulatedBalance(platformWallet.address),
           equals(BigInt.zero));
     });
 
     test('fee transactions start empty', () {
-      final provider = WalletProvider();
-      expect(provider.feeTransactions, isEmpty);
+      final feeProvider = FeeSimulationProvider();
+      expect(feeProvider.feeTransactions, isEmpty);
     });
   });
 }

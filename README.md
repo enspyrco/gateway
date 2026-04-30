@@ -48,17 +48,21 @@ Anyone can verify authenticity via watermark detection
 NFTmarket/
 ├── backend/          # Node.js Express API
 │   └── src/
-│       ├── routes/       # mint, detect, verify endpoints
-│       ├── services/     # watermark, encryption, IPFS, blockchain
-│       └── middleware/   # SIWE authentication
+│       ├── commands/     # Command objects (mint)
+│       ├── config/       # Centralized configuration
+│       ├── events/       # Event system (types, dispatch, sinks)
+│       ├── routes/       # mint, detect, verify, marketplace endpoints
+│       ├── services/     # watermark, encryption, IPFS, blockchain/
+│       ├── shared/       # EIP-712 type definitions
+│       └── middleware/   # SIWE auth, request-id, auth-context
 ├── contracts/        # Solidity smart contracts
 │   ├── NFTmarketNFT.sol  # ERC-721 with marketplace
-│   ├── scripts/          # Deployment scripts
+│   ├── scripts/          # Deployment + upgrade scripts
 │   └── test/             # Contract tests
 └── flutter/          # Flutter web frontend
     └── lib/
         ├── pages/        # home, mint, gallery, verify, token detail
-        ├── providers/    # wallet, mint state management
+        ├── providers/    # wallet, mint, fee simulation state
         └── services/     # API client
 ```
 

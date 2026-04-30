@@ -21,7 +21,6 @@ dependencies:
 
   # HTTP & API
   http: ^1.1.0
-  dio: ^5.4.0
 
   # Image handling
   image_picker: ^1.0.7

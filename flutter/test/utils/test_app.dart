@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:nftmarket/providers/wallet_provider.dart';
 import 'package:nftmarket/providers/mint_provider.dart';
+import 'package:nftmarket/models/test_account.dart';
 import 'package:nftmarket/services/wallet_service.dart';
 import 'package:nftmarket/theme.dart';
 
@@ -94,9 +95,6 @@ class TestWalletProvider extends ChangeNotifier implements WalletProvider {
   int _chainId = 31337;
   TestAccount? _testAccount;
   List<TestAccount> _availableAccounts = const [];
-  final Map<String, BigInt> _simulatedBalances = {};
-  final List<FeeTransaction> _feeTransactions = [];
-  final Map<String, DateTime> _subscriptionExpiry = {};
 
   TestWalletProvider({
     bool connected = false,
@@ -251,56 +249,6 @@ class TestWalletProvider extends ChangeNotifier implements WalletProvider {
 
   @override
   bool get canSignTransactions => isConnected;
-
-  // Fee simulation (simplified)
-  @override
-  List<FeeTransaction> get feeTransactions =>
-      List.unmodifiable(_feeTransactions);
-  @override
-  BigInt get platformBalance =>
-      _simulatedBalances[platformWallet.address] ?? BigInt.zero;
-  @override
-  BigInt get currentBalance =>
-      _address != null ? getSimulatedBalance(_address!) : BigInt.zero;
-  @override
-  bool get hasActiveSubscription {
-    if (_address == null) return false;
-    final expiry = _subscriptionExpiry[_address!];
-    return expiry != null && expiry.isAfter(DateTime.now());
-  }
-
-  @override
-  DateTime? get subscriptionExpiry =>
-      _address != null ? _subscriptionExpiry[_address!] : null;
-  @override
-  List<FeeTransaction> get userFeeTransactions => [];
-  @override
-  BigInt get totalFeesPaid => BigInt.zero;
-  @override
-  BigInt get totalPlatformRevenue => BigInt.zero;
-
-  @override
-  void initializeSimulatedBalances() {
-    final startingBalance = BigInt.from(10) * BigInt.from(10).pow(18);
-    for (final account in _availableAccounts) {
-      _simulatedBalances[account.address] = startingBalance;
-    }
-    _simulatedBalances[platformWallet.address] = BigInt.zero;
-    notifyListeners();
-  }
-
-  @override
-  BigInt getSimulatedBalance(String address) =>
-      _simulatedBalances[address] ?? BigInt.zero;
-
-  @override
-  Future<bool> paySubscriptionFee() async => true;
-  @override
-  Future<bool> payMintFee() async => true;
-  @override
-  Future<bool> payAiGenerationFee() async => true;
-  @override
-  void resetFeeSimulation() {}
 
   @override
   TestAccount? getAccountByNickname(String nickname) {

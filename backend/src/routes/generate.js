@@ -10,6 +10,8 @@ const rateLimit = require('express-rate-limit');
 const { v4: uuidv4 } = require('uuid');
 
 const aiService = require('../services/ai-generation');
+const E = require('../events/types');
+const { dispatch } = require('../events/dispatch');
 
 // Rate limit: 10 generations per hour per wallet (Stability AI is expensive)
 // Skip rate limiting in test mode to avoid open handles from MemoryStore timers
@@ -76,8 +78,6 @@ function createRouter() {
       const validCounts = [1, 4];
       const imageCount = validCounts.includes(count) ? count : 4;
 
-      console.log(`[${generationId}] Generating ${imageCount} images for: "${prompt.substring(0, 50)}..."`);
-
       // Generate images
       const results = await aiService.generateImage(prompt, style, imageCount);
 
@@ -95,7 +95,7 @@ function createRouter() {
         images,
       });
 
-      console.log(`[${generationId}] Generation complete`);
+      await dispatch([E.aiGenerated({ generationId, prompt, style, count: imageCount, mock: process.env.USE_MOCK_AI === 'true' })]);
 
       // Return URLs for retrieving images
       res.status(201).json({
@@ -111,7 +111,7 @@ function createRouter() {
       });
 
     } catch (error) {
-      console.error(`[${generationId}] Generation failed:`, error);
+      // Generation failure — let Express error handler deal with it
       next(error);
     }
   });

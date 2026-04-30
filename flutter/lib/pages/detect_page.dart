@@ -170,7 +170,8 @@ class _DetectPageState extends State<DetectPage> {
                   ),
                   const SizedBox(height: 8),
                   _buildUseCase(Icons.search, 'Identify the owner of an image'),
-                  _buildUseCase(Icons.gavel, 'Prove copyright for DMCA takedowns'),
+                  _buildUseCase(
+                      Icons.gavel, 'Prove copyright for DMCA takedowns'),
                   _buildUseCase(Icons.warning, 'Detect unauthorized usage'),
                 ],
               ),
@@ -188,7 +189,8 @@ class _DetectPageState extends State<DetectPage> {
         children: [
           Icon(icon, size: 16, color: Colors.grey.shade600),
           const SizedBox(width: 8),
-          Text(text, style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
+          Text(text,
+              style: TextStyle(color: Colors.grey.shade700, fontSize: 13)),
         ],
       ),
     );
@@ -463,12 +465,15 @@ class _DetectPageState extends State<DetectPage> {
                 children: [
                   _buildInfoRow('Token ID', '#${result.tokenId}'),
                   const SizedBox(height: 8),
-                  _buildInfoRow('Creator', _truncateAddress(result.wallet ?? '')),
+                  _buildInfoRow(
+                      'Creator', _truncateAddress(result.wallet ?? '')),
                   if (result.token != null) ...[
                     const SizedBox(height: 8),
-                    _buildInfoRow('Current Owner', _truncateAddress(result.token!.currentOwner)),
+                    _buildInfoRow('Current Owner',
+                        _truncateAddress(result.token!.currentOwner)),
                     const SizedBox(height: 8),
-                    _buildInfoRow('License', _formatLicense(result.token!.licenseType)),
+                    _buildInfoRow(
+                        'License', _formatLicense(result.token!.licenseType)),
                   ],
                 ],
               ),
@@ -480,7 +485,8 @@ class _DetectPageState extends State<DetectPage> {
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                _buildStatChip('Confidence', result.confidence.toStringAsFixed(1)),
+                _buildStatChip(
+                    'Confidence', result.confidence.toStringAsFixed(1)),
                 const SizedBox(width: 12),
                 _buildStatChip('Sequences', result.sequencesDecoded.toString()),
               ],

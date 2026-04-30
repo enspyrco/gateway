@@ -26,7 +26,10 @@ if (process.env.NODE_ENV !== 'test') {
       }
     }
     if (cleaned > 0) {
-      console.log(`[AI Service] Cleaned up ${cleaned} expired generations`);
+      // Event dispatch happens asynchronously — import lazily to avoid circular deps
+      const { dispatch } = require('../events/dispatch');
+      const E = require('../events/types');
+      dispatch([E.aiCleanup({ cleaned })]);
     }
   }, 10 * 60 * 1000);
 }
@@ -91,7 +94,7 @@ async function generateImage(prompt, style = 'photographic', count = 1) {
  * Mock image generation for testing
  */
 function mockGenerateImage(prompt, style, count) {
-  console.log(`[Mock AI] Generating ${count} images for prompt: "${prompt}" (style: ${style})`);
+  // Mock generation — event emitted by caller
 
   const images = [];
   for (let i = 0; i < count; i++) {

@@ -13,6 +13,7 @@ const router = express.Router();
 
 const ipfsService = require('../services/ipfs');
 const blockchainService = require('../services/blockchain');
+const tokenRepository = require('../services/token-repository');
 const { LICENSE_TYPE_NAMES, buildListingsArray, hasAnyListing } = require('../utils/license-utils');
 
 /**
@@ -22,8 +23,8 @@ const { LICENSE_TYPE_NAMES, buildListingsArray, hasAnyListing } = require('../ut
  */
 router.get('/', async (req, res, next) => {
   try {
-    // Get all tokens from blockchain
-    const allTokens = await blockchainService.getAllTokens();
+    // Get all tokens (cached via token-repository)
+    const allTokens = await tokenRepository.getAllTokens();
 
     // Group by owner to build gallery list
     const ownerMap = new Map();
@@ -67,11 +68,8 @@ router.get('/:address', async (req, res, next) => {
       });
     }
 
-    // Get all tokens from blockchain and filter by owner
-    const allTokens = await blockchainService.getAllTokens();
-    const ownedTokens = allTokens.filter(
-      t => t.currentOwner.toLowerCase() === address.toLowerCase()
-    );
+    // Get tokens owned by address (cached via token-repository)
+    const ownedTokens = await tokenRepository.getTokensByOwner(address);
 
     // Build response from blockchain data, including multi-license listing info
     const tokens = await Promise.all(ownedTokens.map(async (token) => {

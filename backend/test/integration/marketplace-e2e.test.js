@@ -44,7 +44,7 @@ const RUN_E2E = process.env.RUN_E2E_TESTS === 'true';
   describe('Minting', () => {
     it('should mint a token on real blockchain', async () => {
       const imageHash = '0x' + crypto.randomBytes(32).toString('hex');
-      const result = await blockchainService.mint(
+      const [result] = await blockchainService.mint(
         ALICE.address,
         'ar://test-metadata-' + Date.now(),
         0,
@@ -85,7 +85,7 @@ const RUN_E2E = process.env.RUN_E2E_TESTS === 'true';
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const imageHash = '0x' + crypto.randomBytes(32).toString('hex');
-      const result = await blockchainService.mint(
+      const [result] = await blockchainService.mint(
         ALICE.address,
         'ar://read-test',
         0,
@@ -131,7 +131,7 @@ const RUN_E2E = process.env.RUN_E2E_TESTS === 'true';
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const imageHash = '0x' + crypto.randomBytes(32).toString('hex');
-      const result = await blockchainService.mint(
+      const [result] = await blockchainService.mint(
         ALICE.address,
         'ar://listing-test',
         0,
