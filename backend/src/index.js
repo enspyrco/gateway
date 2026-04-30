@@ -306,25 +306,20 @@ if (process.env.NODE_ENV !== 'test') {
 
     // Start blockchain event listener for logging + cache invalidation
     try {
+      // Callbacks handle cache invalidation only — logging is handled by
+      // the event-sink system (dispatch in real-service.js)
       blockchainService.startEventListener({
         onMinted: async ({ tokenId, creator }) => {
-          console.log(`[Event] Token ${tokenId} minted by ${creator}`);
           tokenRepository.onTokenMinted({ tokenId, creator });
         },
-        onSold: async ({ tokenId, seller, buyer, price }) => {
-          console.log(`[Event] Token ${tokenId} sold from ${seller} to ${buyer}`);
+        onSold: async ({ tokenId, seller, buyer }) => {
           tokenRepository.onTokenSold({ tokenId, seller, buyer });
         },
-        onListed: async ({ tokenId, seller, price }) => {
-          console.log(`[Event] Token ${tokenId} listed by ${seller}`);
+        onListed: async () => {
           tokenRepository.onListingChanged();
         },
-        onLicenseGranted: async ({ newTokenId, parentTokenId, licensee, licenseType }) => {
-          const name = getLicenseTypeName(licenseType);
-          console.log(`[Event] License token ${newTokenId} (${name}) granted from ${parentTokenId} to ${licensee}`);
-        }
+        onLicenseGranted: async () => {}
       });
-      console.log('[Startup] Blockchain event listener started');
     } catch (err) {
       console.warn('[Startup] Could not start event listener:', err.message);
     }
