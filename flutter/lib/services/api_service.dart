@@ -506,9 +506,8 @@ class BlindDetectionResult {
       confidence: (json['confidence'] ?? 0).toDouble(),
       message: json['message'] as String?,
       sequencesDecoded: json['sequencesDecoded'] ?? 0,
-      token: json['token'] != null
-          ? DetectedToken.fromJson(json['token'])
-          : null,
+      token:
+          json['token'] != null ? DetectedToken.fromJson(json['token']) : null,
       error: json['error'] as String?,
     );
   }

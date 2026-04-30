@@ -346,7 +346,8 @@ void main() {
         );
         final feeProvider = FeeSimulationProvider();
         feeProvider.updateAddress(walletProvider.address);
-        feeProvider.initializeSimulatedBalances(walletProvider.availableAccounts);
+        feeProvider
+            .initializeSimulatedBalances(walletProvider.availableAccounts);
 
         final expected = BigInt.from(10) * BigInt.from(10).pow(18);
         expect(feeProvider.currentBalance, equals(expected));
@@ -355,7 +356,8 @@ void main() {
       test('platform balance starts at zero', () {
         final walletProvider = TestWalletProvider();
         final feeProvider = FeeSimulationProvider();
-        feeProvider.initializeSimulatedBalances(walletProvider.availableAccounts);
+        feeProvider
+            .initializeSimulatedBalances(walletProvider.availableAccounts);
 
         expect(feeProvider.platformBalance, equals(BigInt.zero));
       });

@@ -229,7 +229,8 @@ void main() {
       // Each user should have 10 ETH
       final tenEth = BigInt.from(10) * BigInt.from(10).pow(18);
       for (final account in walletProvider.availableAccounts) {
-        expect(feeProvider.getSimulatedBalance(account.address), equals(tenEth));
+        expect(
+            feeProvider.getSimulatedBalance(account.address), equals(tenEth));
       }
 
       // Platform starts at 0
