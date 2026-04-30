@@ -115,11 +115,132 @@ function hasAnyListing(allListings) {
   );
 }
 
+// ── License Semilattice Operations ──────────────────────────
+//
+// License types form a bounded join-semilattice (total order):
+//   Display (0) < Commercial (1) < Transfer (2)
+//
+// These operations centralize the lattice comparisons that appear
+// across blockchain.js, marketplace.js, and the Solidity contract.
+
+/**
+ * Can the owner sell (list) at the requested license level?
+ * Equivalent to: requestedLevel <= ownerLevel in the semilattice.
+ * @param {number} ownerLevel - The owner's current license level
+ * @param {number} requestedLevel - The license level being sold
+ * @returns {boolean}
+ */
+function canSell(ownerLevel, requestedLevel) {
+  return requestedLevel <= ownerLevel;
+}
+
+/**
+ * Is the requested license an upgrade over the existing one?
+ * Equivalent to: existingLevel < requestedLevel in the semilattice.
+ * @param {number} existingLevel - The current license level
+ * @param {number} requestedLevel - The license level to upgrade to
+ * @returns {boolean}
+ */
+function canUpgrade(existingLevel, requestedLevel) {
+  return requestedLevel > existingLevel;
+}
+
+/**
+ * Join (least upper bound) of two license levels.
+ * @param {number} a
+ * @param {number} b
+ * @returns {number}
+ */
+function licenseJoin(a, b) {
+  return Math.max(a, b);
+}
+
+/**
+ * Meet (greatest lower bound) of two license levels.
+ * @param {number} a
+ * @param {number} b
+ * @returns {number}
+ */
+function licenseMeet(a, b) {
+  return Math.min(a, b);
+}
+
+// ── License Templates ────────────────────────────────────────
+// Single source of truth for license agreement text.
+
+const LICENSE_TEMPLATES = {
+  display: `NFTMARKET LICENSE AGREEMENT - DISPLAY
+
+This license grants personal, non-commercial display rights only.
+
+You MAY:
+- Display the artwork for personal enjoyment
+- Resell or transfer the NFT
+
+You MAY NOT:
+- Use the artwork commercially
+- Create derivative works
+- Sublicense the artwork
+
+Copyright remains with the creator.`,
+
+  commercial: `NFTMARKET LICENSE AGREEMENT - COMMERCIAL
+
+This license grants commercial usage rights.
+
+You MAY:
+- Display the artwork publicly or privately
+- Use the artwork in commercial projects
+- Create and sell merchandise
+- Create derivative works
+- Resell or transfer the NFT (license transfers with it)
+
+You MAY NOT:
+- Claim original authorship
+- Sublicense independently of the NFT
+
+Copyright remains with the creator. Commercial rights transfer with the NFT.`,
+
+  transfer: `NFTMARKET LICENSE AGREEMENT - COPYRIGHT TRANSFER
+
+This agreement transfers full copyright ownership to you.
+
+You receive:
+- Full copyright ownership
+- All reproduction rights
+- All derivative work rights
+- All commercial rights
+- Right to sublicense
+
+The creator retains:
+- Moral rights (where applicable by law)
+- Right to be credited as original author
+
+This is a complete and irrevocable transfer of copyright.`
+};
+
+/**
+ * Get license template text by type
+ * @param {string} type - 'display', 'commercial', or 'transfer'
+ * @returns {string|undefined}
+ */
+function getLicenseTemplate(type) {
+  return LICENSE_TEMPLATES[type];
+}
+
 module.exports = {
   LICENSE_TYPE_MAP,
   LICENSE_TYPE_NAMES,
   parseLicenseType,
   getLicenseTypeName,
   buildListingsArray,
-  hasAnyListing
+  hasAnyListing,
+  // Semilattice operations
+  canSell,
+  canUpgrade,
+  licenseJoin,
+  licenseMeet,
+  // Templates
+  LICENSE_TEMPLATES,
+  getLicenseTemplate,
 };

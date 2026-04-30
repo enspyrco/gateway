@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'providers/wallet_provider.dart';
 import 'providers/mint_provider.dart';
+import 'providers/fee_simulation_provider.dart';
 import 'router.dart';
 import 'theme.dart';
 
@@ -19,6 +20,7 @@ class NFTmarketApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => WalletProvider()),
+        ChangeNotifierProvider(create: (_) => FeeSimulationProvider()),
         ChangeNotifierProxyProvider<WalletProvider, MintProvider>(
           create: (_) => MintProvider(),
           update: (_, wallet, mint) => mint!..updateWallet(wallet),

@@ -4,19 +4,19 @@
 
 const blockchainService = require('../../src/services/blockchain');
 
-// Helper to reserve and mint (mirrors the new contract pattern)
-async function reserveAndMint(to, uri, licenseType, imageHash, licenseHash, ipfsUri, encryptedBlobUri) {
-  const reservation = await blockchainService.reserveTokenId();
-  return blockchainService.mint(
+// Helper to reserve and mint (mirrors the contract pattern)
+// Contract signature: mint(reservedTokenId, to, uri, imageHash, ipfsUri)
+// Returns just the result (not events) for test convenience
+async function reserveAndMint(to, uri, imageHash, ipfsUri) {
+  const [reservation] = await blockchainService.reserveTokenId();
+  const [result] = await blockchainService.mint(
     reservation.tokenId,
     to,
     uri,
-    licenseType,
     imageHash,
-    licenseHash,
-    ipfsUri,
-    encryptedBlobUri
+    ipfsUri
   );
+  return result;
 }
 
 describe('Blockchain Service (Mock Mode)', () => {
@@ -26,18 +26,20 @@ describe('Blockchain Service (Mock Mode)', () => {
 
   describe('reserveTokenId', () => {
     it('should reserve a token ID', async () => {
-      const result = await blockchainService.reserveTokenId();
+      const [result, events] = await blockchainService.reserveTokenId();
 
       expect(result).toHaveProperty('tokenId');
       expect(result).toHaveProperty('expiry');
       expect(result).toHaveProperty('transactionHash');
       expect(result.tokenId).toBe(0);
       expect(result.transactionHash).toMatch(/^0x[a-f0-9]{64}$/);
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('token.reserved');
     });
 
     it('should increment token IDs for multiple reservations', async () => {
-      const result1 = await blockchainService.reserveTokenId();
-      const result2 = await blockchainService.reserveTokenId();
+      const [result1] = await blockchainService.reserveTokenId();
+      const [result2] = await blockchainService.reserveTokenId();
 
       expect(result1.tokenId).toBe(0);
       expect(result2.tokenId).toBe(1);
@@ -48,22 +50,16 @@ describe('Blockchain Service (Mock Mode)', () => {
     const mockMintParams = {
       to: '0x1234567890123456789012345678901234567890',
       uri: 'ipfs://QmTestMetadata',
-      licenseType: 0,
       imageHash: '0x' + 'a'.repeat(64),
-      licenseHash: '0x' + 'b'.repeat(64),
       ipfsUri: 'ipfs://QmWatermarked',
-      encryptedBlobUri: 'ipfs://QmTestEncrypted'
     };
 
     it('should mint an NFT with reserved token ID', async () => {
       const result = await reserveAndMint(
         mockMintParams.to,
         mockMintParams.uri,
-        mockMintParams.licenseType,
         mockMintParams.imageHash,
-        mockMintParams.licenseHash,
-        mockMintParams.ipfsUri,
-        mockMintParams.encryptedBlobUri
+        mockMintParams.ipfsUri
       );
 
       expect(result).toHaveProperty('tokenId');
@@ -77,21 +73,15 @@ describe('Blockchain Service (Mock Mode)', () => {
       const result1 = await reserveAndMint(
         mockMintParams.to,
         mockMintParams.uri,
-        mockMintParams.licenseType,
         '0x' + '1'.repeat(64),
-        mockMintParams.licenseHash,
-        mockMintParams.ipfsUri,
-        mockMintParams.encryptedBlobUri
+        mockMintParams.ipfsUri
       );
 
       const result2 = await reserveAndMint(
         mockMintParams.to,
         mockMintParams.uri,
-        mockMintParams.licenseType,
         '0x' + '2'.repeat(64),
-        mockMintParams.licenseHash,
-        mockMintParams.ipfsUri,
-        mockMintParams.encryptedBlobUri
+        mockMintParams.ipfsUri
       );
 
       expect(result1.tokenId).toBe(0);
@@ -104,11 +94,8 @@ describe('Blockchain Service (Mock Mode)', () => {
           999, // Non-existent reservation
           mockMintParams.to,
           mockMintParams.uri,
-          mockMintParams.licenseType,
           mockMintParams.imageHash,
-          mockMintParams.licenseHash,
-          mockMintParams.ipfsUri,
-          mockMintParams.encryptedBlobUri
+          mockMintParams.ipfsUri
         )
       ).rejects.toThrow('No valid reservation');
     });
@@ -117,22 +104,16 @@ describe('Blockchain Service (Mock Mode)', () => {
       await reserveAndMint(
         mockMintParams.to,
         mockMintParams.uri,
-        mockMintParams.licenseType,
         mockMintParams.imageHash,
-        mockMintParams.licenseHash,
-        mockMintParams.ipfsUri,
-        mockMintParams.encryptedBlobUri
+        mockMintParams.ipfsUri
       );
 
       await expect(
         reserveAndMint(
           mockMintParams.to,
           mockMintParams.uri,
-          mockMintParams.licenseType,
           mockMintParams.imageHash, // Same hash
-          mockMintParams.licenseHash,
-          mockMintParams.ipfsUri,
-          mockMintParams.encryptedBlobUri
+          mockMintParams.ipfsUri
         )
       ).rejects.toThrow('Image already registered');
     });
@@ -141,11 +122,8 @@ describe('Blockchain Service (Mock Mode)', () => {
       const { tokenId } = await reserveAndMint(
         mockMintParams.to,
         mockMintParams.uri,
-        mockMintParams.licenseType,
         mockMintParams.imageHash,
-        mockMintParams.licenseHash,
-        mockMintParams.ipfsUri,
-        mockMintParams.encryptedBlobUri
+        mockMintParams.ipfsUri
       );
 
       const tokens = blockchainService.getMockTokens();
@@ -153,7 +131,8 @@ describe('Blockchain Service (Mock Mode)', () => {
 
       expect(token.creator).toBe(mockMintParams.to);
       expect(token.currentOwner).toBe(mockMintParams.to);
-      expect(token.licenseType).toBe(mockMintParams.licenseType);
+      // Creator always gets Transfer (full) rights — matches on-chain contract
+      expect(token.ownerLicense).toBe(2); // Transfer
       expect(token.imageHash).toBe(mockMintParams.imageHash);
       expect(token.uri).toBe(mockMintParams.uri);
     });
@@ -163,13 +142,7 @@ describe('Blockchain Service (Mock Mode)', () => {
     it('should return true for token owner', async () => {
       const wallet = '0x1234567890123456789012345678901234567890';
       const { tokenId } = await reserveAndMint(
-        wallet,
-        'ipfs://test',
-        0,
-        '0x' + 'a'.repeat(64),
-        '0x' + 'b'.repeat(64),
-        'ipfs://watermarked',
-        'ipfs://encrypted'
+        wallet, 'ipfs://test', '0x' + 'a'.repeat(64), 'ipfs://watermarked'
       );
 
       const isOwner = await blockchainService.isOwner(tokenId, wallet);
@@ -181,13 +154,7 @@ describe('Blockchain Service (Mock Mode)', () => {
       const otherWallet = '0x0987654321098765432109876543210987654321';
 
       const { tokenId } = await reserveAndMint(
-        wallet,
-        'ipfs://test',
-        0,
-        '0x' + 'a'.repeat(64),
-        '0x' + 'b'.repeat(64),
-        'ipfs://watermarked',
-        'ipfs://encrypted'
+        wallet, 'ipfs://test', '0x' + 'a'.repeat(64), 'ipfs://watermarked'
       );
 
       const isOwner = await blockchainService.isOwner(tokenId, otherWallet);
@@ -202,13 +169,7 @@ describe('Blockchain Service (Mock Mode)', () => {
     it('should be case-insensitive for addresses', async () => {
       const wallet = '0xABCDef1234567890123456789012345678901234';
       const { tokenId } = await reserveAndMint(
-        wallet,
-        'ipfs://test',
-        0,
-        '0x' + 'a'.repeat(64),
-        '0x' + 'b'.repeat(64),
-        'ipfs://watermarked',
-        'ipfs://encrypted'
+        wallet, 'ipfs://test', '0x' + 'a'.repeat(64), 'ipfs://watermarked'
       );
 
       const isOwner = await blockchainService.isOwner(tokenId, wallet.toLowerCase());
@@ -220,20 +181,15 @@ describe('Blockchain Service (Mock Mode)', () => {
     it('should return token data', async () => {
       const wallet = '0x1234567890123456789012345678901234567890';
       const { tokenId } = await reserveAndMint(
-        wallet,
-        'ipfs://metadata',
-        1, // commercial
-        '0x' + 'a'.repeat(64),
-        '0x' + 'b'.repeat(64),
-        'ipfs://watermarked',
-        'ipfs://encrypted'
+        wallet, 'ipfs://metadata', '0x' + 'a'.repeat(64), 'ipfs://watermarked'
       );
 
       const data = await blockchainService.getTokenData(tokenId);
 
       expect(data.creator).toBe(wallet);
       expect(data.currentOwner).toBe(wallet);
-      expect(data.licenseType).toBe(1);
+      // Creator always gets Transfer rights
+      expect(data.ownerLicense).toBe(2);
       expect(data.uri).toBe('ipfs://metadata');
       expect(data.mintedAt).toBeInstanceOf(Date);
     });
@@ -253,12 +209,7 @@ describe('Blockchain Service (Mock Mode)', () => {
       const imageHash = '0x' + 'a'.repeat(64);
       await reserveAndMint(
         '0x1234567890123456789012345678901234567890',
-        'ipfs://test',
-        0,
-        imageHash,
-        '0x' + 'b'.repeat(64),
-        'ipfs://watermarked',
-        'ipfs://encrypted'
+        'ipfs://test', imageHash, 'ipfs://watermarked'
       );
 
       const result = await blockchainService.isImageRegistered(imageHash);
@@ -276,12 +227,7 @@ describe('Blockchain Service (Mock Mode)', () => {
       for (let i = 0; i < 3; i++) {
         await reserveAndMint(
           '0x1234567890123456789012345678901234567890',
-          'ipfs://test',
-          0,
-          '0x' + i.toString().repeat(64),
-          '0x' + 'b'.repeat(64),
-          'ipfs://watermarked',
-          'ipfs://encrypted'
+          'ipfs://test', '0x' + i.toString().repeat(64), 'ipfs://watermarked'
         );
       }
 
@@ -294,12 +240,7 @@ describe('Blockchain Service (Mock Mode)', () => {
     it('should clear all tokens and reset counter', async () => {
       await reserveAndMint(
         '0x1234567890123456789012345678901234567890',
-        'ipfs://test',
-        0,
-        '0x' + 'a'.repeat(64),
-        '0x' + 'b'.repeat(64),
-        'ipfs://watermarked',
-        'ipfs://encrypted'
+        'ipfs://test', '0x' + 'a'.repeat(64), 'ipfs://watermarked'
       );
 
       expect(await blockchainService.totalSupply()).toBe(1);
@@ -311,12 +252,7 @@ describe('Blockchain Service (Mock Mode)', () => {
       // Next mint should get tokenId 0 again (after reset)
       const { tokenId } = await reserveAndMint(
         '0x1234567890123456789012345678901234567890',
-        'ipfs://test',
-        0,
-        '0x' + 'b'.repeat(64),
-        '0x' + 'c'.repeat(64),
-        'ipfs://watermarked',
-        'ipfs://encrypted'
+        'ipfs://test', '0x' + 'b'.repeat(64), 'ipfs://watermarked'
       );
       expect(tokenId).toBe(0);
     });

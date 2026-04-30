@@ -10,6 +10,8 @@ const os = require("os");
 const sharp = require("sharp");
 const { v4: uuidv4 } = require("uuid");
 
+const E = require('../events/types');
+
 const WATERMARK_API_URL = process.env.WATERMARK_API_URL;
 const WATERMARK_API_KEY = process.env.WATERMARK_API_KEY;
 const WATERMARK_BINARY = process.env.WATERMARK_BINARY || "./mark-image";
@@ -26,21 +28,24 @@ const USE_MOCK_WATERMARK = process.env.USE_MOCK_WATERMARK === "true";
 async function applyWatermark(imageBuffer, walletAddress, tokenId) {
   // Combine wallet and token ID into watermark message
   const message = `${walletAddress}:${tokenId}`;
+  const events = [];
+
   // In development mode without the C++ binary, return the image as-is
   if (USE_MOCK_WATERMARK) {
-    console.log(`MOCK WATERMARK: Would embed message "${message}" into image`);
-    // Just convert to PNG and return (simulating watermark process)
     const pngBuffer = await sharp(imageBuffer).png().toBuffer();
-    return pngBuffer;
+    events.push(E.watermarkApplied({ message, method: 'mock' }));
+    return [pngBuffer, events];
   }
 
   // Use API if configured
   if (WATERMARK_API_URL && WATERMARK_API_KEY) {
-    return applyWatermarkViaAPI(imageBuffer, message);
+    const [buffer, apiEvents] = await applyWatermarkViaAPI(imageBuffer, message);
+    return [buffer, [...events, ...apiEvents]];
   }
 
   // Fall back to local binary
-  return applyWatermarkViaBinary(imageBuffer, message);
+  const [buffer, binaryEvents] = await applyWatermarkViaBinary(imageBuffer, message);
+  return [buffer, [...events, ...binaryEvents]];
 }
 
 /**
@@ -48,7 +53,7 @@ async function applyWatermark(imageBuffer, walletAddress, tokenId) {
  * Uses multipart/form-data upload with SSE progress streaming
  */
 async function applyWatermarkViaAPI(imageBuffer, message) {
-  console.log(`Calling watermark API for message "${message}"`);
+  const events = [];
 
   // Convert to PNG
   const pngBuffer = await sharp(imageBuffer).png().toBuffer();
@@ -106,7 +111,7 @@ async function applyWatermarkViaAPI(imageBuffer, message) {
       try {
         const data = JSON.parse(line.slice(6));
         if (data.progress) {
-          console.log(`Watermark progress: ${data.progress} (${data.percent}%)`);
+          events.push(E.watermarkProgress({ progress: data.progress, percent: data.percent }));
         }
         if (data.complete && data.downloadUrl) {
           downloadUrl = data.downloadUrl;
@@ -122,7 +127,6 @@ async function applyWatermarkViaAPI(imageBuffer, message) {
   }
 
   // Download the watermarked image
-  console.log(`Downloading watermarked image from ${downloadUrl}`);
   const downloadResponse = await fetch(`${WATERMARK_API_URL}${downloadUrl}`, {
     headers: {
       "X-API-Key": WATERMARK_API_KEY,
@@ -135,7 +139,8 @@ async function applyWatermarkViaAPI(imageBuffer, message) {
   }
 
   const arrayBuffer = await downloadResponse.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  events.push(E.watermarkApplied({ message, method: 'api' }));
+  return [Buffer.from(arrayBuffer), events];
 }
 
 /**
@@ -159,8 +164,9 @@ async function applyWatermarkViaBinary(imageBuffer, message) {
 
     // Read result
     const watermarkedBuffer = await fs.readFile(outputPath);
+    const events = [E.watermarkApplied({ message, method: 'binary' })];
 
-    return watermarkedBuffer;
+    return [watermarkedBuffer, events];
   } finally {
     // Cleanup temp files
     await cleanup(inputPath, outputPath);
@@ -180,8 +186,6 @@ function runWatermarkBinary(inputPath, outputPath, message) {
       '--strength', WATERMARK_STRENGTH,
     ];
 
-    console.log(`Running: ${WATERMARK_BINARY} ${args.join(" ")}`);
-
     const proc = spawn(WATERMARK_BINARY, args);
 
     let stdout = "";
@@ -193,7 +197,7 @@ function runWatermarkBinary(inputPath, outputPath, message) {
       const lines = data.toString().split("\n");
       for (const line of lines) {
         if (line.startsWith("PROGRESS:")) {
-          console.log(`Watermark: ${line.replace("PROGRESS:", "")}`);
+          // Progress info captured in stdout; events emitted by caller
         }
       }
     });

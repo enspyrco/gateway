@@ -13,6 +13,8 @@ const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 
 const blockchainService = require('../services/blockchain');
+const E = require('../events/types');
+const { dispatch } = require('../events/dispatch');
 
 const BLIND_DETECT_BINARY = process.env.BLIND_DETECT_BINARY || './detect';
 const USE_MOCK_WATERMARK = process.env.USE_MOCK_WATERMARK === 'true';
@@ -39,9 +41,10 @@ function createRouter(upload) {
    */
   router.post('/blind', upload.single('image'), async (req, res, next) => {
     const detectId = uuidv4();
+    const allEvents = [];
 
     try {
-      console.log(`[${detectId}] Starting blind detection for wallet: ${req.wallet}`);
+      allEvents.push(E.detectStarted({ detectId, wallet: req.wallet }));
 
       const imageBuffer = req.file?.buffer;
 
@@ -53,11 +56,11 @@ function createRouter(upload) {
       }
 
       // Run blind detection
-      console.log(`[${detectId}] Running blind detection...`);
       const result = await runBlindDetection(detectId, imageBuffer);
 
       if (!result.detected) {
-        console.log(`[${detectId}] No watermark detected`);
+        allEvents.push(E.detectCompleted({ detectId, detected: false }));
+        await dispatch(allEvents);
         return res.json({
           detected: false,
           message: 'No watermark detected in this image',
@@ -70,7 +73,8 @@ function createRouter(upload) {
       const tokenId = parseInt(tokenIdStr, 10);
 
       if (!wallet || isNaN(tokenId)) {
-        console.log(`[${detectId}] Invalid watermark format: ${result.message}`);
+        allEvents.push(E.detectCompleted({ detectId, detected: true }));
+        await dispatch(allEvents);
         return res.json({
           detected: true,
           message: result.message,
@@ -91,10 +95,11 @@ function createRouter(upload) {
           licenseType: ['display', 'commercial', 'transfer'][tokenData.ownerLicense] || 'unknown'
         };
       } catch (e) {
-        console.log(`[${detectId}] Token ${tokenId} not found on blockchain`);
+        // Token not found on blockchain — not an error, just no match
       }
 
-      console.log(`[${detectId}] Blind detection complete: wallet=${wallet}, tokenId=${tokenId}`);
+      allEvents.push(E.detectCompleted({ detectId, detected: true, tokenId, wallet }));
+      await dispatch(allEvents);
 
       res.json({
         detected: true,
@@ -107,7 +112,8 @@ function createRouter(upload) {
       });
 
     } catch (error) {
-      console.error(`[${detectId}] Blind detection failed:`, error);
+      allEvents.push(E.detectFailed({ detectId, error: error.message }));
+      await dispatch(allEvents);
       next(error);
     }
   });
@@ -121,7 +127,6 @@ function createRouter(upload) {
 async function runBlindDetection(detectId, imageBuffer) {
   // Mock mode for development
   if (USE_MOCK_WATERMARK) {
-    console.log(`[${detectId}] MOCK: Blind detection - simulating no watermark found`);
     return {
       detected: false,
       message: '',

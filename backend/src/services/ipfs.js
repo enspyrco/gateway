@@ -6,6 +6,9 @@
 const { PinataSDK } = require("pinata");
 const crypto = require("crypto");
 
+const E = require('../events/types');
+const { retry } = require('../utils/retry');
+
 const PINATA_JWT = process.env.PINATA_JWT;
 const PINATA_GATEWAY = process.env.PINATA_GATEWAY || "gateway.pinata.cloud";
 const USE_MOCK_IPFS = process.env.USE_MOCK_IPFS === "true";
@@ -48,20 +51,22 @@ function getPinata() {
 async function upload(data, filename) {
   // Compute content hash for caching
   const contentHash = crypto.createHash("sha256").update(data).digest("hex");
+  const events = [];
 
   if (USE_MOCK_IPFS) {
     const hash = "Qm" + contentHash.slice(0, 44);
     mockStore.set(hash, data);
     saveMockStore();
-    console.log(`[MOCK IPFS] Stored ${filename} as ${hash}`);
-    return `ipfs://${hash}`;
+    const uri = `ipfs://${hash}`;
+    events.push(E.ipfsUploaded({ filename, cid: hash, uri, mock: true }));
+    return [uri, events];
   }
 
   // Check cache first - same content = same CID
   const cached = uploadCache.get(contentHash);
   if (cached) {
-    console.log(`[IPFS] Cache hit for ${filename}`);
-    return cached;
+    events.push(E.ipfsCacheHit({ filename, uri: cached }));
+    return [cached, events];
   }
 
   const client = getPinata();
@@ -71,15 +76,15 @@ async function upload(data, filename) {
     type: getMimeType(filename),
   });
 
-  const result = await client.upload.public.file(file);
+  const result = await retry(() => client.upload.public.file(file));
   const uri = `ipfs://${result.cid}`;
 
   // Cache the result
   uploadCache.set(contentHash, uri);
   persistence.saveMap('ipfs-cache', uploadCache);
-  console.log(`[IPFS] Uploaded ${filename} -> ${result.cid}`);
+  events.push(E.ipfsUploaded({ filename, cid: result.cid, uri, mock: false }));
 
-  return uri;
+  return [uri, events];
 }
 
 /**
@@ -94,15 +99,15 @@ async function uploadJson(json, filename) {
     const hash = "Qm" + crypto.createHash("sha256").update(data).digest("hex").slice(0, 44);
     mockStore.set(hash, data);
     saveMockStore();
-    console.log(`[MOCK IPFS] Stored ${filename} as ${hash}`);
-    return `ipfs://${hash}`;
+    const uri = `ipfs://${hash}`;
+    return [uri, [E.ipfsUploaded({ filename, cid: hash, uri, mock: true })]];
   }
 
   const client = getPinata();
+  const result = await retry(() => client.upload.public.json(json));
+  const uri = `ipfs://${result.cid}`;
 
-  const result = await client.upload.public.json(json);
-
-  return `ipfs://${result.cid}`;
+  return [uri, [E.ipfsUploaded({ filename, cid: result.cid, uri, mock: false })]];
 }
 
 /**
@@ -110,15 +115,21 @@ async function uploadJson(json, filename) {
  * @param {string} ipfsUri - IPFS URI (ipfs://...)
  * @returns {string} - HTTP gateway URL
  */
+/**
+ * Base URL for the IPFS proxy. Configurable via API_BASE_URL env var.
+ * Defaults to http://localhost:3000 for local development.
+ */
+const API_BASE_URL = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+
 function getGatewayUrl(ipfsUri) {
   if (!ipfsUri.startsWith("ipfs://")) {
     return ipfsUri;
   }
   const hash = ipfsUri.replace("ipfs://", "");
 
-  // Always serve through local backend proxy to avoid CORS issues
+  // Serve through backend proxy to avoid CORS issues
   // The /ipfs/:hash route fetches from Pinata (or mock) and serves to client
-  return `http://localhost:3000/ipfs/${hash}`;
+  return `${API_BASE_URL}/ipfs/${hash}`;
 }
 
 /**
@@ -157,8 +168,7 @@ async function unpin(ipfsUri) {
     const existed = mockStore.has(cid);
     mockStore.delete(cid);
     saveMockStore();
-    console.log(`[MOCK IPFS] Unpinned ${cid} (existed: ${existed})`);
-    return existed;
+    return [existed, [E.ipfsUnpinned({ cid, existed, mock: true })]];
   }
 
   const client = getPinata();
@@ -176,13 +186,11 @@ async function unpin(ipfsUri) {
       }
     }
 
-    console.log(`[IPFS] Unpinned ${cid}`);
-    return true;
+    return [true, [E.ipfsUnpinned({ cid, existed: true, mock: false })]];
   } catch (error) {
     // Handle case where file wasn't pinned or already unpinned
     if (error.message?.includes('not found') || error.status === 404) {
-      console.log(`[IPFS] ${cid} was not pinned or already unpinned`);
-      return false;
+      return [false, [E.ipfsUnpinned({ cid, existed: false, mock: false })]];
     }
     throw error;
   }
@@ -204,7 +212,6 @@ async function listPins(options = {}) {
       size: mockStore.get(cid)?.length || 0,
       created: new Date().toISOString(),
     }));
-    console.log(`[MOCK IPFS] Listed ${pins.length} pins`);
     return pins.slice(0, limit);
   }
 

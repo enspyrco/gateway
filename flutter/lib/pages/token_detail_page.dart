@@ -1069,9 +1069,6 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
       debugPrint('Buy transaction hash: ${txResult.hash}');
 
-      // Sync backend with blockchain state so galleries reflect new ownership
-      await ApiService().syncGallery();
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

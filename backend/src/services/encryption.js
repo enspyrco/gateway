@@ -127,9 +127,18 @@ async function decrypt(encryptedBuffer) {
  * For development/testing without KMS
  * Uses a local key (NOT SECURE FOR PRODUCTION)
  */
-const DEV_KEY = process.env.DEV_ENCRYPTION_KEY
-  ? Buffer.from(process.env.DEV_ENCRYPTION_KEY, 'hex')
-  : crypto.randomBytes(32);
+const DEV_KEY = (() => {
+  if (process.env.DEV_ENCRYPTION_KEY) {
+    return Buffer.from(process.env.DEV_ENCRYPTION_KEY, 'hex');
+  }
+  if (process.env.USE_KMS !== 'true' && process.env.NODE_ENV !== 'test') {
+    throw new Error(
+      'DEV_ENCRYPTION_KEY is required when USE_KMS is not true. ' +
+      'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+    );
+  }
+  return crypto.randomBytes(32); // Only for test environment
+})();
 
 async function encryptDev(data, keyId) {
   const iv = crypto.randomBytes(16);

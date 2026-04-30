@@ -7,12 +7,12 @@
  * data needed for signing.
  */
 
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 
 const blockchainService = require('../services/blockchain');
-const ipfsService = require('../services/ipfs');
-const arweaveService = require('../services/arweave');
+const tokenRepository = require('../services/token-repository');
 const authMiddleware = require('../middleware/auth');
 const {
   LICENSE_TYPE_NAMES,
@@ -27,6 +27,11 @@ const {
   encodeDelist,
   encodeDelistAll
 } = require('../utils/abi-encoder');
+const {
+  buildListingTypedData,
+  buildPurchaseTypedData,
+} = require('../shared/eip712-types');
+const { enrichTokenData } = require('../utils/token-read-model');
 
 /**
  * Validate signature format (hex string, 65 bytes = 130 hex chars + 0x prefix)
@@ -56,35 +61,21 @@ function validateSignature(signature) {
  */
 router.get('/', async (req, res, next) => {
   try {
-    const listings = await blockchainService.getActiveListings();
+    const listings = await tokenRepository.getActiveListings();
 
     // Enrich with data from blockchain + Arweave (metadata)
     const enrichedListings = await Promise.all(
       listings.map(async (listing) => {
         try {
-          // Get token data from blockchain (source of truth)
-          const blockchainData = await blockchainService.getTokenData(listing.tokenId);
-
-          // Fetch metadata from Arweave (name, description)
-          let metadata = null;
-          if (blockchainData?.uri) {
-            try {
-              metadata = await arweaveService.fetchMetadata(blockchainData.uri);
-            } catch (e) {
-              console.warn(`[Marketplace] Could not fetch Arweave metadata for token ${listing.tokenId}`);
-            }
-          }
-
-          // Use IPFS URI from blockchain
-          const imageUrl = blockchainData?.ipfsUri
-            ? ipfsService.getGatewayUrl(blockchainData.ipfsUri)
-            : null;
+          // Get token data (cached via token-repository)
+          const blockchainData = await tokenRepository.getTokenData(listing.tokenId);
+          const enriched = await enrichTokenData(listing.tokenId, blockchainData);
 
           return {
             tokenId: listing.tokenId,
-            name: metadata?.name || `NFTmarket #${listing.tokenId}`,
-            description: metadata?.description || '',
-            imageUrl,
+            name: enriched.name,
+            description: enriched.description,
+            imageUrl: enriched.imageUrl,
             ipfsUri: blockchainData?.ipfsUri,
             price: listing.price,
             priceEth: (Number(listing.price) / 1e18).toFixed(4),
@@ -177,23 +168,9 @@ router.get('/:tokenId', async (req, res, next) => {
       return res.json({ listed: false, tokenId: Number(tokenId) });
     }
 
-    // Get full token data from blockchain
-    const blockchainData = await blockchainService.getTokenData(tokenId);
-
-    // Fetch metadata from Arweave (name, description)
-    let metadata = null;
-    if (blockchainData?.uri) {
-      try {
-        metadata = await arweaveService.fetchMetadata(blockchainData.uri);
-      } catch (e) {
-        console.warn(`[Marketplace] Could not fetch Arweave metadata for token ${tokenId}`);
-      }
-    }
-
-    // Image URL from blockchain IPFS URI
-    const imageUrl = blockchainData?.ipfsUri
-      ? ipfsService.getGatewayUrl(blockchainData.ipfsUri)
-      : null;
+    // Get full token data (cached via token-repository)
+    const blockchainData = await tokenRepository.getTokenData(tokenId);
+    const enriched = await enrichTokenData(tokenId, blockchainData);
 
     // Build listings array with full details
     const listings = buildListingsArray(allListings, true); // true = include details
@@ -201,9 +178,9 @@ router.get('/:tokenId', async (req, res, next) => {
     res.json({
       listed: true,
       tokenId: Number(tokenId),
-      name: metadata?.name || `NFTmarket #${tokenId}`,
-      description: metadata?.description || '',
-      imageUrl,
+      name: enriched.name,
+      description: enriched.description,
+      imageUrl: enriched.imageUrl,
       ipfsUri: blockchainData?.ipfsUri,
       // Multi-license listings
       listings,
@@ -234,7 +211,7 @@ router.get('/:tokenId', async (req, res, next) => {
 router.post('/list/typed-data', authMiddleware, async (req, res, next) => {
   try {
     const { tokenId, price, licenseType, licenseHash, expiry } = req.body;
-    const signerAddress = req.walletAddress;
+    const signerAddress = req.wallet;
 
     if (tokenId === undefined || !price || licenseType === undefined || !licenseHash) {
       return res.status(400).json({
@@ -286,14 +263,13 @@ router.get('/:tokenId/license-status', authMiddleware, async (req, res, next) =>
     }
 
     // Get the original token ID for this listing
-    const tokenData = await blockchainService.getTokenData(tokenId);
+    const tokenData = await tokenRepository.getTokenData(tokenId);
     const originalTokenId = tokenData.isOriginal ? tokenId : tokenData.originalToken;
 
-    // Check buyer's existing license level for this image
-    const existingLevel = await blockchainService.getBuyerExistingLicenseLevel(buyerAddress, originalTokenId);
+    // Check buyer's existing license level for this image (cached)
+    const existingLevel = await tokenRepository.getBuyerExistingLicenseLevel(buyerAddress, originalTokenId);
 
-    const LICENSE_NAMES = ['display', 'commercial', 'transfer'];
-    const existingLicense = existingLevel !== null ? LICENSE_NAMES[existingLevel] : null;
+    const existingLicense = existingLevel !== null ? getLicenseTypeName(existingLevel) : null;
 
     // Determine what the buyer can purchase (upgrades only)
     const canBuy = {
@@ -387,7 +363,6 @@ router.post('/list', authMiddleware, async (req, res, next) => {
     const priceWei = BigInt(Math.floor(parseFloat(priceEth) * 1e18)).toString();
 
     // Generate license hash (hash of license terms)
-    const crypto = require('crypto');
     const licenseTerms = `NFTmarket License - Token ${tokenId} - Type ${licenseTypeNum} - Seller ${sellerAddress}`;
     const licenseHash = '0x' + crypto.createHash('sha256').update(licenseTerms).digest('hex');
 
@@ -401,39 +376,14 @@ router.post('/list', authMiddleware, async (req, res, next) => {
     const domain = await blockchainService.getEIP712Domain();
 
     // Build the typed data for signing
-    const typedData = {
-      types: {
-        EIP712Domain: [
-          { name: 'name', type: 'string' },
-          { name: 'version', type: 'string' },
-          { name: 'chainId', type: 'uint256' },
-          { name: 'verifyingContract', type: 'address' }
-        ],
-        ListingOffer: [
-          { name: 'tokenId', type: 'uint256' },
-          { name: 'price', type: 'uint256' },
-          { name: 'licenseType', type: 'uint8' },
-          { name: 'licenseHash', type: 'bytes32' },
-          { name: 'nonce', type: 'uint256' },
-          { name: 'expiry', type: 'uint256' }
-        ]
-      },
-      primaryType: 'ListingOffer',
-      domain: {
-        name: domain.name,
-        version: domain.version,
-        chainId: domain.chainId,
-        verifyingContract: domain.verifyingContract
-      },
-      message: {
-        tokenId: tokenId.toString(),
-        price: priceWei,
-        licenseType: licenseTypeNum,
-        licenseHash: licenseHash,
-        nonce: nonce.toString(),
-        expiry: expiry.toString()
-      }
-    };
+    const typedData = buildListingTypedData(domain, {
+      tokenId: tokenId.toString(),
+      price: priceWei,
+      licenseType: licenseTypeNum,
+      licenseHash: licenseHash,
+      nonce: nonce.toString(),
+      expiry: expiry.toString(),
+    });
 
     // Build contract call parameters
     const contractCall = {
@@ -571,17 +521,16 @@ router.post('/buy', authMiddleware, async (req, res, next) => {
 
     // License upgrade validation: can upgrade (display→commercial→transfer), cannot downgrade
     // Get the original token ID for this listing
-    const tokenData = await blockchainService.getTokenData(tokenId);
+    const tokenData = await tokenRepository.getTokenData(tokenId);
     const originalTokenId = tokenData.isOriginal ? tokenId : tokenData.originalToken;
 
-    // Check if buyer already owns a license for this image
-    const existingLevel = await blockchainService.getBuyerExistingLicenseLevel(buyerAddress, originalTokenId);
+    // Check if buyer already owns a license for this image (cached)
+    const existingLevel = await tokenRepository.getBuyerExistingLicenseLevel(buyerAddress, originalTokenId);
     if (existingLevel !== null) {
-      const LICENSE_NAMES = ['display', 'commercial', 'transfer'];
       if (licenseTypeNum <= existingLevel) {
         // Trying to buy same level or downgrade
-        const existingName = LICENSE_NAMES[existingLevel] || 'unknown';
-        const requestedName = LICENSE_NAMES[licenseTypeNum] || 'unknown';
+        const existingName = getLicenseTypeName(existingLevel);
+        const requestedName = getLicenseTypeName(licenseTypeNum);
         if (licenseTypeNum === existingLevel) {
           return res.status(400).json({
             error: `You already own a ${existingName} license for this image`,
@@ -604,39 +553,14 @@ router.post('/buy', authMiddleware, async (req, res, next) => {
     const nonce = listing.nonce;
 
     // Build the typed data for signing
-    const typedData = {
-      types: {
-        EIP712Domain: [
-          { name: 'name', type: 'string' },
-          { name: 'version', type: 'string' },
-          { name: 'chainId', type: 'uint256' },
-          { name: 'verifyingContract', type: 'address' }
-        ],
-        PurchaseAcceptance: [
-          { name: 'tokenId', type: 'uint256' },
-          { name: 'price', type: 'uint256' },
-          { name: 'licenseType', type: 'uint8' },
-          { name: 'licenseHash', type: 'bytes32' },
-          { name: 'seller', type: 'address' },
-          { name: 'nonce', type: 'uint256' }
-        ]
-      },
-      primaryType: 'PurchaseAcceptance',
-      domain: {
-        name: domain.name,
-        version: domain.version,
-        chainId: domain.chainId,
-        verifyingContract: domain.verifyingContract
-      },
-      message: {
-        tokenId: tokenId.toString(),
-        price: listing.price,
-        licenseType: licenseTypeNum,
-        licenseHash: listing.licenseHash,
-        seller: listing.seller,
-        nonce: nonce.toString()
-      }
-    };
+    const typedData = buildPurchaseTypedData(domain, {
+      tokenId: tokenId.toString(),
+      price: listing.price,
+      licenseType: licenseTypeNum,
+      licenseHash: listing.licenseHash,
+      seller: listing.seller,
+      nonce: nonce.toString(),
+    });
 
     // Build contract call parameters (includes licenseType for multi-license support)
     const contractCall = {

@@ -10,12 +10,14 @@ const { v4: uuidv4 } = require('uuid');
 const watermarkService = require('../services/watermark');
 const ipfsService = require('../services/ipfs');
 const arweaveService = require('../services/arweave');
+const { stampSchemaVersion } = arweaveService;
 const blockchainService = require('../services/blockchain');
 const perceptualService = require('../services/perceptual');
-
-// Note: Token ID reservation is now handled by the smart contract
-// The old mutex approach was flawed - it only protected this single backend instance
-// The contract's reserveTokenId() guarantees the token ID atomically on-chain
+const E = require('../events/types');
+const { dispatch } = require('../events/dispatch');
+const { unit, bind, tell } = require('../utils/writer');
+const { getLicenseTemplate } = require('../utils/license-utils');
+const { getCachedResult, cacheResult, isInProgress, markInProgress, clearInProgress } = require('../commands/mint-command');
 
 
 function createRouter(upload) {
@@ -29,6 +31,8 @@ function createRouter(upload) {
    * - name: string (required)
    * - description: string (optional)
    * - licenseType: 'display' | 'commercial' | 'transfer' (optional)
+   * - mintId: string (optional idempotency key — if provided, duplicate
+   *   submissions return the cached result instead of minting twice)
    *
    * Returns:
    * - tokenId: number
@@ -38,11 +42,26 @@ function createRouter(upload) {
    * - imageHash: string (SHA-256 of watermarked image)
    */
   router.post('/', upload.single('image'), async (req, res, next) => {
-    const mintId = uuidv4();
+    const mintId = req.body.mintId || uuidv4();
+
+    // Idempotency: if this mintId was already processed, return cached result
+    const cached = getCachedResult(mintId);
+    if (cached) {
+      return res.status(200).json(cached);
+    }
+    if (isInProgress(mintId)) {
+      return res.status(409).json({
+        error: 'Mint already in progress for this mintId',
+        code: 'MINT_IN_PROGRESS',
+        mintId
+      });
+    }
+    markInProgress(mintId);
+    // Writer accumulator — starts with the mint.started event
+    let w = unit(null);
+    w = tell(w, E.mintStarted({ mintId, wallet: req.wallet }));
 
     try {
-      console.log(`[${mintId}] Starting mint for wallet: ${req.wallet}`);
-
       // Validate request
       const { name, description, licenseType, licenseSignature } = req.body;
       const imageBuffer = req.file?.buffer;
@@ -70,49 +89,40 @@ function createRouter(upload) {
         });
       }
 
-      // All mint variables declared here
-      let reservedTokenId, tokenId, transactionHash, watermarkId, imageHash;
-      let ipfsUri, metadataUri, licenseHash;
-
       // Step 1: Reserve token ID on-chain (guarantees this ID is ours)
-      // This is atomic - no one else can get this ID
-      console.log(`[${mintId}] Reserving token ID on-chain...`);
-      const reservation = await blockchainService.reserveTokenId();
-      reservedTokenId = reservation.tokenId;
-      console.log(`[${mintId}] Reserved token ID: ${reservedTokenId} (expires: ${new Date(reservation.expiry * 1000).toISOString()})`);
+      w = tell(w, E.mintStep({ mintId, step: 'reserve', detail: 'Reserving token ID on-chain' }));
+      w = await bind(w, () => blockchainService.reserveTokenId());
+      const reservedTokenId = w[0].tokenId;
 
       // Step 2: Apply watermark with wallet + reserved tokenId
-      console.log(`[${mintId}] Applying watermark...`);
-      watermarkId = `${req.wallet}:${reservedTokenId}`;
-      const watermarkedBuffer = await watermarkService.applyWatermark(
-        imageBuffer,
-        req.wallet,
-        reservedTokenId
-      );
+      w = tell(w, E.mintStep({ mintId, step: 'watermark', detail: `Applying watermark for token ${reservedTokenId}` }));
+      const watermarkId = `${req.wallet}:${reservedTokenId}`;
+      w = await bind(w, () => watermarkService.applyWatermark(imageBuffer, req.wallet, reservedTokenId));
+      const watermarkedBuffer = w[0];
 
       // Step 3: Calculate image hash of watermarked image (for integrity verification)
-      imageHash = crypto.createHash('sha256').update(watermarkedBuffer).digest('hex');
+      const imageHash = crypto.createHash('sha256').update(watermarkedBuffer).digest('hex');
 
       // Step 4: Upload watermarked image to IPFS
-      console.log(`[${mintId}] Uploading to IPFS...`);
-      ipfsUri = await ipfsService.upload(watermarkedBuffer, `${mintId}-watermarked.png`);
-      console.log(`[${mintId}] Watermarked image uploaded to IPFS: ${ipfsUri}`);
+      w = tell(w, E.mintStep({ mintId, step: 'ipfs', detail: 'Uploading to IPFS' }));
+      w = await bind(w, () => ipfsService.upload(watermarkedBuffer, `${mintId}-watermarked.png`));
+      const ipfsUri = w[0];
 
       // Step 5: Generate license hash
-      licenseHash = null;
+      let licenseHash = null;
       if (licenseType) {
-        const licenseText = generateLicenseTemplate(licenseType);
+        const licenseText = getLicenseTemplate(licenseType);
         const licenseData = `${licenseText}|${licenseSignature || ''}|${req.wallet}|${mintId}`;
         licenseHash = crypto.createHash('sha256').update(licenseData).digest('hex');
-        console.log(`[${mintId}] Generated license hash for ${licenseType} license`);
+        w = tell(w, E.mintStep({ mintId, step: 'license_hash', detail: `Generated ${licenseType} license hash` }));
       }
 
       // Step 6: Create and upload metadata to Arweave (permanent storage)
-      console.log(`[${mintId}] Creating metadata...`);
-      const metadata = {
+      w = tell(w, E.mintStep({ mintId, step: 'metadata', detail: 'Uploading metadata to Arweave' }));
+      const metadata = stampSchemaVersion({
         name,
         description: description || '',
-        image: ipfsUri,  // Full watermarked image on IPFS
+        image: ipfsUri,
         attributes: [
           { trait_type: 'Watermark ID', value: watermarkId },
           { trait_type: 'Creator', value: req.wallet },
@@ -124,61 +134,62 @@ function createRouter(upload) {
           created_at: new Date().toISOString(),
           ...(licenseHash ? { license_hash: licenseHash, license_type: licenseType } : {})
         }
-      };
+      });
 
-      console.log(`[${mintId}] Uploading metadata to Arweave...`);
-      const { txId: metadataTxId } = await arweaveService.uploadJson(metadata, {
+      w = await bind(w, () => arweaveService.uploadJson(metadata, {
         'Token-ID': String(reservedTokenId),
         'Creator': req.wallet,
         'Content-Type': 'application/json'
-      });
-      metadataUri = `ar://${metadataTxId}`;
+      }));
+      const metadataUri = `ar://${w[0].txId}`;
 
       // Step 7: Mint NFT on-chain with reserved token ID
-      console.log(`[${mintId}] Minting NFT with reserved token ID ${reservedTokenId}...`);
-      const licenseTypeMap = { display: 0, commercial: 1, transfer: 2 };
-      const licenseTypeNum = licenseType ? licenseTypeMap[licenseType] : 0;
-      const mintResult = await blockchainService.mint(
-        reservedTokenId,
-        req.wallet,
-        metadataUri,
-        licenseTypeNum,
-        `0x${imageHash}`,
-        licenseHash ? `0x${licenseHash}` : '0x' + '0'.repeat(64),
-        ipfsUri
-      );
-      tokenId = mintResult.tokenId;
-      transactionHash = mintResult.transactionHash;
+      // Contract signature: mint(reservedTokenId, to, uri, imageHash, ipfsUri)
+      // Creator always receives Transfer (full) rights on-chain.
+      // License type is stored in Arweave metadata (step 6), not on-chain at mint time.
+      w = tell(w, E.mintStep({ mintId, step: 'mint', detail: `Minting NFT with token ID ${reservedTokenId}` }));
+      w = await bind(w, () => blockchainService.mint(
+        reservedTokenId, req.wallet, metadataUri, `0x${imageHash}`, ipfsUri
+      ));
+      const { tokenId, transactionHash } = w[0];
 
       // Step 8: Register perceptual hashes for infringement detection
-      // This allows matching even when watermark doesn't survive (print-camera)
-      console.log(`[${mintId}] Registering perceptual hashes...`);
+      w = tell(w, E.mintStep({ mintId, step: 'perceptual', detail: 'Registering perceptual hashes' }));
       try {
         await perceptualService.register(String(tokenId), watermarkedBuffer, {
-          wallet: req.wallet,
-          name,
-          imageHash,
+          wallet: req.wallet, name, imageHash,
         });
       } catch (perceptualError) {
-        // Non-fatal - log but don't fail the mint
-        console.warn(`[${mintId}] Perceptual registration failed (non-fatal):`, perceptualError.message);
+        // Non-fatal — emit event but don't fail the mint
+        w = tell(w, E.mintStep({ mintId, step: 'perceptual_warning', detail: `Perceptual registration failed (non-fatal): ${perceptualError.message}` }));
       }
 
-      console.log(`[${mintId}] Mint complete! Token ID: ${tokenId}`);
+      w = tell(w, E.mintCompleted({ mintId, tokenId, transactionHash }));
 
-      res.status(201).json({
+      // Dispatch all collected events to registered sinks
+      await dispatch(w[1]);
+
+      const result = {
         success: true,
+        mintId,
         tokenId,
         transactionHash,
         watermarkId,
-        ipfsUri,      // IPFS URI for watermarked image (public)
+        ipfsUri,
         metadataUri,
         imageHash,
         ...(licenseHash ? { licenseHash } : {})
-      });
+      };
+
+      // Cache for idempotency
+      cacheResult(mintId, result);
+
+      res.status(201).json(result);
 
     } catch (error) {
-      console.error(`[${mintId}] Mint failed:`, error);
+      clearInProgress(mintId);
+      w = tell(w, E.mintFailed({ mintId, error: error.message }));
+      await dispatch(w[1]);
       next(error);
     }
   });
@@ -198,75 +209,11 @@ function createRouter(upload) {
       });
     }
 
-    const licenseText = generateLicenseTemplate(type);
+    const licenseText = getLicenseTemplate(type);
     res.json({ licenseType: type, text: licenseText });
   });
 
   return router;
-}
-
-/**
- * Generate license template (without specific details)
- */
-function generateLicenseTemplate(type) {
-  const templates = {
-    display: `
-NFTMARKET LICENSE AGREEMENT - DISPLAY
-
-This license grants personal, non-commercial display rights only.
-
-You MAY:
-- Display the artwork for personal enjoyment
-- Resell or transfer the NFT
-
-You MAY NOT:
-- Use the artwork commercially
-- Create derivative works
-- Sublicense the artwork
-
-Copyright remains with the creator.
-    `.trim(),
-
-    commercial: `
-NFTMARKET LICENSE AGREEMENT - COMMERCIAL
-
-This license grants commercial usage rights.
-
-You MAY:
-- Display the artwork publicly or privately
-- Use the artwork in commercial projects
-- Create and sell merchandise
-- Create derivative works
-- Resell or transfer the NFT (license transfers with it)
-
-You MAY NOT:
-- Claim original authorship
-- Sublicense independently of the NFT
-
-Copyright remains with the creator. Commercial rights transfer with the NFT.
-    `.trim(),
-
-    transfer: `
-NFTMARKET LICENSE AGREEMENT - COPYRIGHT TRANSFER
-
-This agreement transfers full copyright ownership to you.
-
-You receive:
-- Full copyright ownership
-- All reproduction rights
-- All derivative work rights
-- All commercial rights
-- Right to sublicense
-
-The creator retains:
-- Moral rights (where applicable by law)
-- Right to be credited as original author
-
-This is a complete and irrevocable transfer of copyright.
-    `.trim()
-  };
-
-  return templates[type];
 }
 
 module.exports = createRouter;

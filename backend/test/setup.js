@@ -12,6 +12,10 @@ process.env.USE_MOCK_BLOCKCHAIN = 'true';
 process.env.USE_MOCK_AI = 'true';
 process.env.USE_KMS = 'false';
 process.env.NODE_ENV = 'test';
+process.env.MOCK_PERSISTENCE = 'false';
+
+// Auth: allow mock SIWE signatures in tests
+process.env.ALLOW_MOCK_SIGNATURES = 'true';
 
 // Dev encryption key (32 bytes hex)
 process.env.DEV_ENCRYPTION_KEY = 'a'.repeat(64);
