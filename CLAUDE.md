@@ -54,10 +54,19 @@ wallet-service/src/     # Wallet microservice (port 3001)
 └── services/           # Signing, transactions
 
 backend/src/
-├── index.js            # Express app setup
-├── middleware/         # Auth, validation
+├── index.js            # Express app setup, route registration, sink setup
+├── commands/           # Command objects (mint-command.js)
+├── config/             # Centralized configuration (index.js)
+├── events/             # Event system
+│   ├── types.js        # 30 pure data event constructors
+│   ├── dispatch.js     # Fan-out dispatch to registered sinks
+│   └── sinks/          # stdout.js (structured logging)
+├── middleware/         # Auth (SIWE), auth-context, request-id, require-admin
 ├── routes/             # API endpoints
-└── services/           # Business logic
+├── services/           # Business logic (returns [result, events] tuples)
+│   └── blockchain/     # Split: interface.js, real-service.js, mock-service.js
+├── shared/             # Cross-cutting: eip712-types.js (single source of truth)
+└── utils/              # license-utils, abi-encoder, response, retry, writer
 
 contracts/
 ├── NFTmarketNFT.sol    # Main ERC-721 contract
@@ -158,7 +167,7 @@ Client flow: Get typed data from API → Sign with wallet → Call contract dire
 - `watermark.js`: Cloud API or local C++ binary for invisible watermarking
 - `encryption.js`: AES-256 encryption, supports Google Cloud KMS or dev key
 - `ipfs.js`: Pinata uploads for encrypted blobs and metadata
-- `blockchain.js`: Ethers.js contract interactions, marketplace functions, mock mode support
+- `blockchain/`: Split into `interface.js` (shared API), `real-service.js` (ethers.js), `mock-service.js` (in-memory). Selected via `USE_MOCK_BLOCKCHAIN` env var
 - `ai-generation.js`: Stability AI integration for image generation, 10 style presets
 
 ### Watermark Service (backend/src/services/watermark.js)

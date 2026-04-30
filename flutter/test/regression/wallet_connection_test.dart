@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 
 import 'package:nftmarket/providers/wallet_provider.dart';
+import 'package:nftmarket/providers/fee_simulation_provider.dart';
+import 'package:nftmarket/models/test_account.dart';
 import 'package:nftmarket/theme.dart';
 
 import '../fixtures/api_responses.dart';
@@ -338,23 +340,24 @@ void main() {
 
     group('Fee Simulation', () {
       test('initializeSimulatedBalances gives 10 ETH to each account', () {
-        final provider = TestWalletProvider(
+        final walletProvider = TestWalletProvider(
           connected: true,
           address: TestAddresses.alice,
         );
-
-        provider.initializeSimulatedBalances();
+        final feeProvider = FeeSimulationProvider();
+        feeProvider.updateAddress(walletProvider.address);
+        feeProvider.initializeSimulatedBalances(walletProvider.availableAccounts);
 
         final expected = BigInt.from(10) * BigInt.from(10).pow(18);
-        expect(provider.currentBalance, equals(expected));
+        expect(feeProvider.currentBalance, equals(expected));
       });
 
       test('platform balance starts at zero', () {
-        final provider = TestWalletProvider();
+        final walletProvider = TestWalletProvider();
+        final feeProvider = FeeSimulationProvider();
+        feeProvider.initializeSimulatedBalances(walletProvider.availableAccounts);
 
-        provider.initializeSimulatedBalances();
-
-        expect(provider.platformBalance, equals(BigInt.zero));
+        expect(feeProvider.platformBalance, equals(BigInt.zero));
       });
     });
   });

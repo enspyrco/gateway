@@ -75,12 +75,17 @@ class Token {
     this.metadataUri,
   });
 
+  /// Extract image URL from a raw JSON map, handling the imageUrl/previewUrl
+  /// dual-field pattern. Use this for raw maps that haven't been parsed into Token.
+  static String? imageUrlFromJson(Map<String, dynamic> json) =>
+      json['imageUrl'] as String? ?? json['previewUrl'] as String?;
+
   factory Token.fromJson(Map<String, dynamic> json) {
     return Token(
       tokenId: json['tokenId'] as int,
       name: json['name'] as String? ?? 'Untitled',
       description: json['description'] as String? ?? '',
-      previewUrl: json['imageUrl'] as String? ?? json['previewUrl'] as String?,
+      previewUrl: imageUrlFromJson(json),
       creator: json['creator'] as String,
       currentOwner: json['currentOwner'] as String,
       mintedAt: DateTime.parse(json['mintedAt'] as String),

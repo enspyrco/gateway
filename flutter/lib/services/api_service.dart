@@ -218,14 +218,6 @@ class ApiService {
     return List<Map<String, dynamic>>.from(data['tokens'] ?? []);
   }
 
-  /// Sync gallery with blockchain state
-  /// Call this after buy/sell transactions to update ownership in backend
-  Future<void> syncGallery() async {
-    await http.post(
-      Uri.parse('$baseUrl/api/gallery/sync'),
-    );
-  }
-
   // ============ Marketplace ============
   //
   // Backend handles all marketplace logic. Client just signs and submits.

@@ -8,7 +8,8 @@ const express = require('express');
 const cors = require('cors');
 const multer = require('multer');
 
-const authMiddleware = require('./middleware/auth');
+const authMiddleware = require("./middleware/auth");
+const requireAdmin = require("./middleware/require-admin");
 const mintRouter = require('./routes/mint');
 const detectRouter = require('./routes/detect');
 const verifyRouter = require('./routes/verify');
@@ -18,20 +19,58 @@ const galleryRouter = require('./routes/gallery');
 const licenseRouter = require('./routes/license');
 const perceptualRouter = require('./routes/perceptual');
 const blockchainService = require('./services/blockchain');
+const ipfsService = require('./services/ipfs');
+const arweaveService = require('./services/arweave');
+const tokenRepository = require('./services/token-repository');
+const aiService = require('./services/ai-generation');
+const perceptualService = require('./services/perceptual');
+const { getLicenseTemplate, getLicenseTypeName } = require('./utils/license-utils');
+const { registerSink } = require('./events/dispatch');
+const { stdoutSink } = require('./events/sinks/stdout');
+const { jsonLogSink } = require('./events/sinks/json-log');
+const requestId = require('./middleware/request-id');
+
+// Register event sinks
+registerSink(stdoutSink);
+if (process.env.NODE_ENV === 'production') {
+  registerSink(jsonLogSink);
+}
 
 const app = express();
+const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 } // 50MB max
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_IMAGE_TYPES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPEG, PNG, GIF, and WEBP images are allowed'));
+    }
+  }
 });
 
 // Middleware
-app.use(cors());
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : [/^http:\/\/localhost(:\d+)?$/];
+app.use(cors({ origin: ALLOWED_ORIGINS }));
 app.use(express.json());
+app.use(requestId);
 
-// Request logging
+// Global rate limiting — 100 requests per 15 minutes per IP
+const rateLimit = require('express-rate-limit');
+app.use(rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests', code: 'RATE_LIMITED' }
+}));
+
+// Request logging (with request ID for correlation)
 app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  console.log(`[${new Date().toISOString()}] [${req.id}] ${req.method} ${req.path}`);
   next();
 });
 
@@ -44,8 +83,38 @@ app.get('/', (req, res) => {
   });
 });
 
-app.get('/health', (req, res) => {
-  res.json({ status: 'ok' });
+const startTime = Date.now();
+
+app.get('/health', async (req, res) => {
+  const checks = { blockchain: 'unknown' };
+
+  // Probe blockchain connectivity (3s timeout)
+  try {
+    const supplyPromise = blockchainService.totalSupply();
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('timeout')), 3000)
+    );
+    const supply = await Promise.race([supplyPromise, timeoutPromise]);
+    checks.blockchain = { status: 'ok', tokenCount: supply };
+  } catch (err) {
+    checks.blockchain = { status: 'error', message: err.message };
+  }
+
+  const mockServices = [];
+  if (process.env.USE_MOCK_BLOCKCHAIN === 'true') mockServices.push('blockchain');
+  if (process.env.USE_MOCK_IPFS === 'true') mockServices.push('ipfs');
+  if (process.env.USE_MOCK_ARWEAVE === 'true') mockServices.push('arweave');
+  if (process.env.USE_MOCK_WATERMARK === 'true') mockServices.push('watermark');
+  if (process.env.USE_MOCK_AI === 'true') mockServices.push('ai');
+
+  const allOk = checks.blockchain?.status === 'ok';
+
+  res.status(allOk ? 200 : 503).json({
+    status: allOk ? 'ok' : 'degraded',
+    uptime: Math.floor((Date.now() - startTime) / 1000),
+    checks,
+    mockServices: mockServices.length > 0 ? mockServices : undefined,
+  });
 });
 
 // Public routes
@@ -53,12 +122,10 @@ app.use('/api/verify', verifyRouter);
 
 // Public generation styles endpoint
 app.get('/api/generate/styles', (req, res) => {
-  const aiService = require('./services/ai-generation');
   res.json({ styles: aiService.getStylePresets() });
 });
 
 // Mock IPFS gateway (for development only)
-const ipfsService = require('./services/ipfs');
 app.get('/ipfs/:hash', async (req, res) => {
   try {
     const data = await ipfsService.fetch(`ipfs://${req.params.hash}`);
@@ -79,18 +146,18 @@ app.get('/ipfs/:hash', async (req, res) => {
     res.set('Cross-Origin-Resource-Policy', 'cross-origin');
     res.set('Access-Control-Allow-Origin', '*');
     res.type('image/svg+xml');
-    const hash = req.params.hash.slice(-8);
+    const hash = req.params.hash.replace(/[^a-zA-Z0-9]/g, '').slice(-8);
     const hue = parseInt(hash, 16) % 360;
+    const safeLabel = req.params.hash.replace(/[^a-zA-Z0-9]/g, '').slice(0, 16);
     res.send(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">
       <rect width="400" height="400" fill="hsl(${hue}, 60%, 80%)"/>
       <text x="200" y="180" text-anchor="middle" font-family="system-ui" font-size="24" fill="hsl(${hue}, 60%, 30%)">NFT Image</text>
-      <text x="200" y="220" text-anchor="middle" font-family="monospace" font-size="14" fill="hsl(${hue}, 60%, 40%)">${req.params.hash.slice(0, 16)}...</text>
+      <text x="200" y="220" text-anchor="middle" font-family="monospace" font-size="14" fill="hsl(${hue}, 60%, 40%)">${safeLabel}...</text>
     </svg>`);
   }
 });
 
 // Mock Arweave gateway (for development only)
-const arweaveService = require('./services/arweave');
 app.get('/arweave/:txId', async (req, res) => {
   try {
     const data = await arweaveService.fetchData(req.params.txId);
@@ -112,22 +179,17 @@ app.get('/api/mint/price', (req, res) => {
 
 app.get('/api/mint/license/:type', (req, res) => {
   const { type } = req.params;
-  const templates = {
-    display: `NFTMARKET LICENSE AGREEMENT - DISPLAY\n\nThis license grants personal, non-commercial display rights only.\n\nYou MAY:\n- Display the artwork for personal enjoyment\n- Resell or transfer the NFT\n\nYou MAY NOT:\n- Use the artwork commercially\n- Create derivative works\n- Sublicense the artwork\n\nCopyright remains with the creator.`,
-    commercial: `NFTMARKET LICENSE AGREEMENT - COMMERCIAL\n\nThis license grants commercial usage rights.\n\nYou MAY:\n- Display the artwork publicly or privately\n- Use the artwork in commercial projects\n- Create and sell merchandise\n- Create derivative works\n- Resell or transfer the NFT (license transfers with it)\n\nYou MAY NOT:\n- Claim original authorship\n- Sublicense independently of the NFT\n\nCopyright remains with the creator. Commercial rights transfer with the NFT.`,
-    transfer: `NFTMARKET LICENSE AGREEMENT - COPYRIGHT TRANSFER\n\nThis agreement transfers full copyright ownership to you.\n\nYou receive:\n- Full copyright ownership\n- All reproduction rights\n- All derivative work rights\n- All commercial rights\n- Right to sublicense\n\nThe creator retains:\n- Moral rights (where applicable by law)\n- Right to be credited as original author\n\nThis is a complete and irrevocable transfer of copyright.`
-  };
+  const text = getLicenseTemplate(type);
 
-  if (!templates[type]) {
+  if (!text) {
     return res.status(400).json({ error: 'Invalid license type', code: 'INVALID_LICENSE_TYPE' });
   }
 
-  res.json({ licenseType: type, text: templates[type] });
+  res.json({ licenseType: type, text });
 });
 
 // Public generated image retrieval (no auth needed for viewing)
 app.get('/api/generate/:id/image/:index', (req, res) => {
-  const aiService = require('./services/ai-generation');
   const generation = aiService.getGeneration(req.params.id);
 
   if (!generation) {
@@ -150,87 +212,6 @@ app.get('/api/generate/:id/image/:index', (req, res) => {
 // Public gallery viewing (no auth needed)
 app.use('/api/gallery', galleryRouter);
 
-// Public marketplace browsing (must be before authenticated marketplace routes)
-const licenseTypeNames = ['display', 'commercial', 'transfer'];
-app.get('/api/marketplace', async (req, res, next) => {
-  try {
-    const blockchainService = require('./services/blockchain');
-    const ipfsService = require('./services/ipfs');
-
-    const listings = await blockchainService.getActiveListings();
-    const enrichedListings = await Promise.all(
-      listings.map(async (listing) => {
-        try {
-          // Get token data from blockchain (source of truth)
-          const blockchainData = await blockchainService.getTokenData(listing.tokenId);
-
-          // Use IPFS URI from blockchain
-          const imageUrl = blockchainData?.ipfsUri
-            ? ipfsService.getGatewayUrl(blockchainData.ipfsUri)
-            : null;
-
-          return {
-            tokenId: listing.tokenId,
-            name: `NFTmarket #${listing.tokenId}`,
-            imageUrl,
-            previewUrl: imageUrl, // backwards compatibility
-            price: listing.price,
-            priceEth: (Number(listing.price) / 1e18).toFixed(4),
-            seller: listing.seller,
-            licenseType: licenseTypeNames[listing.licenseType] || 'unknown'
-          };
-        } catch (e) {
-          return {
-            tokenId: listing.tokenId,
-            name: `NFTmarket #${listing.tokenId}`,
-            imageUrl: null,
-            price: listing.price,
-            priceEth: (Number(listing.price) / 1e18).toFixed(4),
-            seller: listing.seller,
-            licenseType: licenseTypeNames[listing.licenseType] || 'unknown'
-          };
-        }
-      })
-    );
-    // Get contract info
-    const domain = await blockchainService.getEIP712Domain();
-
-    res.json({
-      contract: {
-        name: domain.name,
-        address: domain.verifyingContract,
-        chainId: domain.chainId
-      },
-      listings: enrichedListings
-    });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Public EIP-712 domain endpoint (needed for signing)
-app.get('/api/marketplace/eip712/domain', async (req, res, next) => {
-  try {
-    const blockchainService = require('./services/blockchain');
-    const domain = await blockchainService.getEIP712Domain();
-    res.json({ domain });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Public nonce endpoint (needed for signing)
-app.get('/api/marketplace/nonce/:address', async (req, res, next) => {
-  try {
-    const blockchainService = require('./services/blockchain');
-    const { address } = req.params;
-    const nonce = await blockchainService.getNonce(address);
-    res.json({ address, nonce });
-  } catch (error) {
-    next(error);
-  }
-});
-
 // Authenticated routes
 app.use('/api/mint', authMiddleware, mintRouter(upload));
 app.use('/api/detect', authMiddleware, detectRouter(upload));
@@ -241,13 +222,12 @@ app.use('/api/license', licenseRouter);
 // Perceptual matching for infringement detection (print-camera, merchandise)
 // Stats endpoint is public for transparency
 app.get('/api/perceptual/stats', (req, res) => {
-  const perceptualService = require('./services/perceptual');
   res.json(perceptualService.getStats());
 });
 app.use('/api/perceptual', authMiddleware, perceptualRouter(upload));
 
 // Admin IPFS management endpoints (authenticated)
-app.get('/api/admin/ipfs/pins', authMiddleware, async (req, res, next) => {
+app.get('/api/admin/ipfs/pins', authMiddleware, requireAdmin, async (req, res, next) => {
   try {
     const limit = parseInt(req.query.limit, 10) || 100;
     const pins = await ipfsService.listPins({ limit });
@@ -257,10 +237,10 @@ app.get('/api/admin/ipfs/pins', authMiddleware, async (req, res, next) => {
   }
 });
 
-app.delete('/api/admin/ipfs/unpin/:cid', authMiddleware, async (req, res, next) => {
+app.delete('/api/admin/ipfs/unpin/:cid', authMiddleware, requireAdmin, async (req, res, next) => {
   try {
     const { cid } = req.params;
-    const success = await ipfsService.unpin(cid);
+    const [success] = await ipfsService.unpin(cid);
     res.json({
       cid,
       unpinned: success,
@@ -271,7 +251,7 @@ app.delete('/api/admin/ipfs/unpin/:cid', authMiddleware, async (req, res, next) 
   }
 });
 
-app.post('/api/admin/ipfs/unpin', authMiddleware, async (req, res, next) => {
+app.post('/api/admin/ipfs/unpin', authMiddleware, requireAdmin, async (req, res, next) => {
   try {
     const { cids } = req.body;
     if (!Array.isArray(cids) || cids.length === 0) {
@@ -279,10 +259,10 @@ app.post('/api/admin/ipfs/unpin', authMiddleware, async (req, res, next) => {
     }
 
     const results = await Promise.all(
-      cids.map(async (cid) => ({
-        cid,
-        unpinned: await ipfsService.unpin(cid)
-      }))
+      cids.map(async (cid) => {
+        const [unpinned] = await ipfsService.unpin(cid);
+        return { cid, unpinned };
+      })
     );
 
     const unpinnedCount = results.filter(r => r.unpinned).length;
@@ -299,8 +279,12 @@ app.post('/api/admin/ipfs/unpin', authMiddleware, async (req, res, next) => {
 // Error handler
 app.use((err, req, res, next) => {
   console.error('Error:', err);
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal server error',
+  const status = err.status || 500;
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.status(status).json({
+    error: status >= 500 && isProduction
+      ? 'Internal server error'
+      : err.message || 'Internal server error',
     code: err.code || 'INTERNAL_ERROR'
   });
 });
@@ -320,21 +304,24 @@ if (process.env.NODE_ENV !== 'test') {
       console.warn('[Startup] Could not connect to blockchain:', err.message);
     }
 
-    // Start blockchain event listener for logging
+    // Start blockchain event listener for logging + cache invalidation
     try {
       blockchainService.startEventListener({
         onMinted: async ({ tokenId, creator }) => {
           console.log(`[Event] Token ${tokenId} minted by ${creator}`);
+          tokenRepository.onTokenMinted({ tokenId, creator });
         },
         onSold: async ({ tokenId, seller, buyer, price }) => {
           console.log(`[Event] Token ${tokenId} sold from ${seller} to ${buyer}`);
+          tokenRepository.onTokenSold({ tokenId, seller, buyer });
         },
         onListed: async ({ tokenId, seller, price }) => {
           console.log(`[Event] Token ${tokenId} listed by ${seller}`);
+          tokenRepository.onListingChanged();
         },
         onLicenseGranted: async ({ newTokenId, parentTokenId, licensee, licenseType }) => {
-          const licenseNames = ['Display', 'Commercial', 'Transfer'];
-          console.log(`[Event] License token ${newTokenId} (${licenseNames[licenseType]}) granted from ${parentTokenId} to ${licensee}`);
+          const name = getLicenseTypeName(licenseType);
+          console.log(`[Event] License token ${newTokenId} (${name}) granted from ${parentTokenId} to ${licensee}`);
         }
       });
       console.log('[Startup] Blockchain event listener started');

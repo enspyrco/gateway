@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../models/token.dart';
 import '../services/api_service.dart';
 import '../widgets/wallet_button.dart';
 import '../theme.dart';
@@ -249,8 +250,7 @@ class _ListingCardState extends State<_ListingCard> {
   Widget build(BuildContext context) {
     final name = widget.listing['name'] ?? 'NFT #${widget.listing['tokenId']}';
     final price = widget.listing['priceEth'] ?? '?';
-    // Use imageUrl from blockchain IPFS URI, fallback to previewUrl for backwards compatibility
-    final imageUrl = widget.listing['imageUrl'] ?? widget.listing['previewUrl'];
+    final imageUrl = Token.imageUrlFromJson(widget.listing);
     final seller = widget.listing['seller'] ?? '';
     final shortSeller = seller.length > 10
         ? '${seller.substring(0, 6)}...${seller.substring(seller.length - 4)}'

@@ -13,6 +13,7 @@
 
 const crypto = require('crypto');
 const arweaveService = require('./arweave');
+const E = require('../events/types');
 
 // License type enum (matches smart contract)
 const LicenseType = {
@@ -383,7 +384,7 @@ async function createLicense({
   const licenseHash = '0x' + crypto.createHash('sha256').update(licenseJson).digest('hex');
 
   // Upload to Arweave
-  const { txId } = await arweaveService.uploadJson(license, {
+  const [{ txId }, arweaveEvents] = await arweaveService.uploadJson(license, {
     'License-Type': LicenseNames[licenseType],
     'Token-ID': String(tokenId),
     'Creator': creator,
@@ -391,11 +392,7 @@ async function createLicense({
     'Image-Hash': imageHash
   });
 
-  console.log(`[License] Created ${LicenseNames[licenseType]} license for token ${tokenId}`);
-  console.log(`[License] Arweave TX: ${txId}`);
-  console.log(`[License] Hash: ${licenseHash}`);
-
-  return {
+  const result = {
     arweaveTxId: txId,
     arweaveUrl: arweaveService.getGatewayUrl(txId),
     licenseHash,
@@ -403,6 +400,13 @@ async function createLicense({
     licenseTypeName: LicenseNames[licenseType],
     license
   };
+
+  const events = [
+    ...arweaveEvents,
+    E.licenseCreated({ tokenId, licenseType, licenseTypeName: LicenseNames[licenseType], arweaveTxId: txId, licenseHash })
+  ];
+
+  return [result, events];
 }
 
 /**

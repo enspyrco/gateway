@@ -10,8 +10,6 @@ const zlib = require('zlib');
 
 const app = require('../../src/index');
 const blockchainService = require('../../src/services/blockchain');
-const firestoreService = require('../../src/services/firestore');
-const storageService = require('../../src/services/storage');
 
 // Helper to create a mock auth token (SIWE format, dev mode)
 function createMockAuthToken(walletAddress) {
@@ -122,10 +120,8 @@ describe('Mint Route', () => {
   });
 
   beforeEach(() => {
-    // Reset all mock services between tests
+    // Reset mock services between tests
     blockchainService.resetMock();
-    firestoreService.resetMock();
-    storageService.resetMock();
   });
 
   describe('POST /api/mint', () => {
@@ -193,7 +189,6 @@ describe('Mint Route', () => {
       expect(res.body).toHaveProperty('tokenId');
       expect(res.body).toHaveProperty('transactionHash');
       expect(res.body).toHaveProperty('watermarkId');
-      expect(res.body).toHaveProperty('storagePath');
       expect(res.body).toHaveProperty('ipfsUri');
       expect(res.body).toHaveProperty('metadataUri');
       expect(res.body).toHaveProperty('imageHash');

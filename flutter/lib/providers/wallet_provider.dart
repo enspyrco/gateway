@@ -2,7 +2,11 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/test_account.dart';
 import '../services/wallet_service.dart';
+
+// Re-export for consumers that imported TestAccount from here
+export '../models/test_account.dart';
 
 /// Wallet connection states
 enum WalletState {
@@ -10,85 +14,6 @@ enum WalletState {
   connecting,
   connected,
   error,
-}
-
-/// Simplified test account (no private key - that's in wallet service now)
-class TestAccount {
-  final String name;
-  final String nickname;
-  final String address;
-  final bool isPlatform;
-
-  const TestAccount(
-    this.name,
-    this.nickname,
-    this.address, {
-    this.isPlatform = false,
-  });
-
-  String get displayName => nickname.isNotEmpty ? nickname : name;
-
-  factory TestAccount.fromWalletAccount(WalletAccount account) {
-    return TestAccount(
-      account.name,
-      account.nickname,
-      account.address,
-    );
-  }
-}
-
-/// Platform wallet for collecting fees
-const platformWallet = TestAccount(
-  'Account #1',
-  'Platform',
-  '0x70997970C51812dc3A010C7d01b50e44D9c4F5Ee',
-  isPlatform: true,
-);
-
-/// Fee types for simulation
-enum FeeType {
-  subscription, // Monthly subscription fee
-  mint, // Per-mint fee
-  aiGeneration, // Per AI generation fee
-}
-
-/// Simulated fee transaction
-class FeeTransaction {
-  final String id;
-  final FeeType type;
-  final String fromAddress;
-  final BigInt amount;
-  final DateTime timestamp;
-  final String description;
-
-  FeeTransaction({
-    required this.id,
-    required this.type,
-    required this.fromAddress,
-    required this.amount,
-    required this.timestamp,
-    required this.description,
-  });
-}
-
-/// Fee configuration (in wei)
-class FeeConfig {
-  // Monthly subscription: 0.01 ETH
-  static final BigInt subscriptionFee = BigInt.from(10000000000000000);
-
-  // Per mint: 0.001 ETH
-  static final BigInt mintFee = BigInt.from(1000000000000000);
-
-  // Per AI generation: 0.0005 ETH
-  static final BigInt aiGenerationFee = BigInt.from(500000000000000);
-
-  // Format wei to ETH string
-  static String formatEth(BigInt wei) {
-    final eth = wei / BigInt.from(10).pow(18);
-    final remainder = wei % BigInt.from(10).pow(18);
-    final decimal = (remainder / BigInt.from(10).pow(14)).toInt();
-    return '${eth.toInt()}.${decimal.toString().padLeft(4, '0')} ETH';
-  }
 }
 
 /// EIP-712 typed data for signing
@@ -106,7 +31,9 @@ class TypedData {
   });
 }
 
-/// Manages wallet connection and signing
+/// Manages wallet connection, authentication, and signing.
+///
+/// Fee simulation has been extracted to [FeeSimulationProvider].
 class WalletProvider extends ChangeNotifier {
   WalletState _state = WalletState.disconnected;
   String? _address;
@@ -121,11 +48,6 @@ class WalletProvider extends ChangeNotifier {
   // Cached list of available accounts from wallet service
   List<TestAccount> _availableAccounts = [];
 
-  // Fee simulation state
-  final Map<String, BigInt> _simulatedBalances = {};
-  final List<FeeTransaction> _feeTransactions = [];
-  final Map<String, DateTime> _subscriptionExpiry = {};
-
   WalletState get state => _state;
   String? get address => _address;
   String? get error => _error;
@@ -138,12 +60,6 @@ class WalletProvider extends ChangeNotifier {
 
   // Available accounts from wallet service
   List<TestAccount> get availableAccounts => _availableAccounts;
-
-  // Fee simulation getters
-  List<FeeTransaction> get feeTransactions =>
-      List.unmodifiable(_feeTransactions);
-  BigInt get platformBalance =>
-      _simulatedBalances[platformWallet.address] ?? BigInt.zero;
 
   bool get isConnected => _state == WalletState.connected && _address != null;
   bool get isConnecting => _state == WalletState.connecting;
@@ -397,172 +313,6 @@ class WalletProvider extends ChangeNotifier {
       _error = e.toString();
     }
     notifyListeners();
-  }
-
-  // ============================================================
-  // Fee Simulation Methods (for local development testing)
-  // ============================================================
-
-  /// Initialize simulated balances for all test accounts
-  void initializeSimulatedBalances() {
-    // Give each user 10 ETH starting balance
-    final startingBalance = BigInt.from(10) * BigInt.from(10).pow(18);
-    for (final account in _availableAccounts) {
-      _simulatedBalances[account.address] = startingBalance;
-    }
-    // Platform wallet starts at 0
-    _simulatedBalances[platformWallet.address] = BigInt.zero;
-    notifyListeners();
-  }
-
-  /// Get simulated balance for an address
-  BigInt getSimulatedBalance(String address) {
-    return _simulatedBalances[address] ?? BigInt.zero;
-  }
-
-  /// Get current user's simulated balance
-  BigInt get currentBalance {
-    if (_address == null) return BigInt.zero;
-    return getSimulatedBalance(_address!);
-  }
-
-  /// Check if current user has an active subscription
-  bool get hasActiveSubscription {
-    if (_address == null) return false;
-    final expiry = _subscriptionExpiry[_address!];
-    if (expiry == null) return false;
-    return expiry.isAfter(DateTime.now());
-  }
-
-  /// Get subscription expiry date for current user
-  DateTime? get subscriptionExpiry {
-    if (_address == null) return null;
-    return _subscriptionExpiry[_address!];
-  }
-
-  /// Pay monthly subscription fee
-  Future<bool> paySubscriptionFee() async {
-    if (!isConnected || _address == null) return false;
-
-    final balance = getSimulatedBalance(_address!);
-    if (balance < FeeConfig.subscriptionFee) {
-      _error = 'Insufficient balance for subscription';
-      notifyListeners();
-      return false;
-    }
-
-    // Deduct from user, add to platform
-    _simulatedBalances[_address!] = balance - FeeConfig.subscriptionFee;
-    _simulatedBalances[platformWallet.address] =
-        (_simulatedBalances[platformWallet.address] ?? BigInt.zero) +
-            FeeConfig.subscriptionFee;
-
-    // Set subscription expiry to 30 days from now
-    _subscriptionExpiry[_address!] =
-        DateTime.now().add(const Duration(days: 30));
-
-    // Record transaction
-    _feeTransactions.add(FeeTransaction(
-      id: 'sub_${DateTime.now().millisecondsSinceEpoch}',
-      type: FeeType.subscription,
-      fromAddress: _address!,
-      amount: FeeConfig.subscriptionFee,
-      timestamp: DateTime.now(),
-      description: 'Monthly subscription fee',
-    ));
-
-    notifyListeners();
-    return true;
-  }
-
-  /// Pay mint fee
-  Future<bool> payMintFee() async {
-    if (!isConnected || _address == null) return false;
-
-    final balance = getSimulatedBalance(_address!);
-    if (balance < FeeConfig.mintFee) {
-      _error = 'Insufficient balance for minting';
-      notifyListeners();
-      return false;
-    }
-
-    // Deduct from user, add to platform
-    _simulatedBalances[_address!] = balance - FeeConfig.mintFee;
-    _simulatedBalances[platformWallet.address] =
-        (_simulatedBalances[platformWallet.address] ?? BigInt.zero) +
-            FeeConfig.mintFee;
-
-    // Record transaction
-    _feeTransactions.add(FeeTransaction(
-      id: 'mint_${DateTime.now().millisecondsSinceEpoch}',
-      type: FeeType.mint,
-      fromAddress: _address!,
-      amount: FeeConfig.mintFee,
-      timestamp: DateTime.now(),
-      description: 'NFT minting fee',
-    ));
-
-    notifyListeners();
-    return true;
-  }
-
-  /// Pay AI generation fee
-  Future<bool> payAiGenerationFee() async {
-    if (!isConnected || _address == null) return false;
-
-    final balance = getSimulatedBalance(_address!);
-    if (balance < FeeConfig.aiGenerationFee) {
-      _error = 'Insufficient balance for AI generation';
-      notifyListeners();
-      return false;
-    }
-
-    // Deduct from user, add to platform
-    _simulatedBalances[_address!] = balance - FeeConfig.aiGenerationFee;
-    _simulatedBalances[platformWallet.address] =
-        (_simulatedBalances[platformWallet.address] ?? BigInt.zero) +
-            FeeConfig.aiGenerationFee;
-
-    // Record transaction
-    _feeTransactions.add(FeeTransaction(
-      id: 'ai_${DateTime.now().millisecondsSinceEpoch}',
-      type: FeeType.aiGeneration,
-      fromAddress: _address!,
-      amount: FeeConfig.aiGenerationFee,
-      timestamp: DateTime.now(),
-      description: 'AI image generation fee',
-    ));
-
-    notifyListeners();
-    return true;
-  }
-
-  /// Get fee transactions for current user
-  List<FeeTransaction> get userFeeTransactions {
-    if (_address == null) return [];
-    return _feeTransactions.where((t) => t.fromAddress == _address).toList()
-      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
-  }
-
-  /// Get total fees paid by current user
-  BigInt get totalFeesPaid {
-    if (_address == null) return BigInt.zero;
-    return _feeTransactions
-        .where((t) => t.fromAddress == _address)
-        .fold(BigInt.zero, (sum, t) => sum + t.amount);
-  }
-
-  /// Get total platform revenue
-  BigInt get totalPlatformRevenue {
-    return _feeTransactions.fold(BigInt.zero, (sum, t) => sum + t.amount);
-  }
-
-  /// Reset fee simulation state
-  void resetFeeSimulation() {
-    _simulatedBalances.clear();
-    _feeTransactions.clear();
-    _subscriptionExpiry.clear();
-    initializeSimulatedBalances();
   }
 
   /// Get account by nickname
