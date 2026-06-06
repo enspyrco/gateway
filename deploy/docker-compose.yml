@@ -37,6 +37,9 @@ services:
       PORT: 3001
       RPC_URL: http://hardhat:8545
       CHAIN_ID: 31337
+      # SIWE token domain/URI must match the backend's SIWE_DOMAIN
+      SIWE_DOMAIN: ${SITE_HOST:-gateway.imagineering.cc}
+      SIWE_URI: https://${SITE_HOST:-gateway.imagineering.cc}
     networks: [gateway-net]
     restart: unless-stopped
     depends_on:

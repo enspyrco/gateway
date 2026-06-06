@@ -43,10 +43,17 @@ function clearSinks() {
 
 /**
  * Dispatch events to all registered sinks.
- * @param {AppEvent[]} events
+ *
+ * Accepts an array of events (the Writer-monad case) OR a single event — the
+ * blockchain event listeners (real-service startEventListener) call this with a
+ * single AppEvent. Normalizing here keeps a stray single-event call from
+ * throwing "events is not iterable" inside an async ethers callback, which would
+ * surface as an unhandled rejection and crash the process.
+ * @param {AppEvent[] | AppEvent} events
  */
 async function dispatch(events) {
-  for (const event of events) {
+  const list = Array.isArray(events) ? events : (events == null ? [] : [events]);
+  for (const event of list) {
     for (const sink of sinks) {
       try {
         await sink(event);

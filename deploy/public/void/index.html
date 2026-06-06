@@ -78,25 +78,53 @@ composer.addPass(new OutputPass());
   floor.rotation.x=-Math.PI/2; floor.position.y=0.001; scene.add(floor);
 }
 
-// placeholder empty frames (art is script-loaded later) — give the camera things to react to
+// art is script-loaded from the gateway API — real minted, watermarked NFTs
+// hung in the void, facing the centre, dim until the ghost draws near.
 const frames=[];
-function makeFrame(w,h,pos){
+const S=2.4; // base frame size (square; scaled to image aspect on load)
+function makeArtFrame(pos, url, token){
   const grp=new THREE.Group();
+  const h=S, w=S;
   const pts=[[-w/2,-h/2,0],[w/2,-h/2,0],[w/2,h/2,0],[-w/2,h/2,0],[-w/2,-h/2,0]].map(p=>new THREE.Vector3(...p));
   const line=new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),
-    new THREE.LineBasicMaterial({color:0xbfe6ff,transparent:true,opacity:0.5,blending:THREE.AdditiveBlending,depthWrite:false}));
+    new THREE.LineBasicMaterial({color:0xbfe6ff,transparent:true,opacity:0.35,blending:THREE.AdditiveBlending,depthWrite:false}));
   grp.add(line);
-  const panel=new THREE.Mesh(new THREE.PlaneGeometry(w,h),
-    new THREE.MeshBasicMaterial({color:0x0a1820,transparent:true,opacity:0.35,depthWrite:false}));
+  const panelMat=new THREE.MeshBasicMaterial({color:0x222a33,transparent:true,opacity:0.12,depthWrite:false});
+  const panel=new THREE.Mesh(new THREE.PlaneGeometry(w,h),panelMat);
   grp.add(panel);
-  grp.position.copy(pos); grp.userData={line,panel};
+  if(url){
+    new THREE.TextureLoader().load(url, tex=>{
+      tex.colorSpace=THREE.SRGBColorSpace;
+      panelMat.map=tex; panelMat.color.setScalar(1); panelMat.needsUpdate=true;
+      const img=tex.image;
+      if(img&&img.width&&img.height){ const a=img.width/img.height; panel.scale.x=a; line.scale.x=a; }
+    }, undefined, ()=>{/* leave dark panel on error */});
+  }
+  grp.position.copy(pos);
+  grp.lookAt(0, pos.y, 0);            // face the centre where the ghost roams
+  grp.userData={line,panel,panelMat,token};
   scene.add(grp); frames.push(grp);
 }
-const ringN=8;
-for(let i=0;i<ringN;i++){
-  const a=i/ringN*Math.PI*2, R=8+ (i%2?2:0);
-  makeFrame(1.8,2.3,new THREE.Vector3(Math.cos(a)*R,1.7,Math.sin(a)*R));
+async function loadArt(){
+  try{
+    const g=await (await fetch('/api/gallery')).json();
+    const addrs=(g.galleries||[]).map(x=>x.address);
+    const toks=[];
+    for(const a of addrs){
+      const r=await (await fetch('/api/gallery/'+encodeURIComponent(a))).json();
+      (r.tokens||[]).forEach(t=>toks.push(t));
+    }
+    const n=Math.max(toks.length,1);
+    toks.forEach((t,i)=>{
+      const ang=i/n*Math.PI*2, R=8;
+      const pos=new THREE.Vector3(Math.cos(ang)*R, 1.7, Math.sin(ang)*R);
+      const url=(t.imageUrl||'').replace(/^https?:\/\/[^/]+/, ''); // -> same-origin /ipfs/...
+      makeArtFrame(pos, url, t);
+    });
+    console.log('void: hung', toks.length, 'artworks');
+  }catch(e){ console.warn('void: loadArt failed', e); }
 }
+loadArt();
 
 // ---------- character: swarm of little white squiggle-strands (unchanged, loved) ----------
 const figure = new THREE.Group(); scene.add(figure);
@@ -248,9 +276,10 @@ function tick(){
   camera.position.lerp(desired,Math.min(1,dt*posLerp));
   camera.lookAt(lookT);
 
-  // frames: glow brighter as you approach (and they read as constellation when far)
-  for(const f of frames){ const d=f.position.distanceTo(charPos); const g=Math.max(0,Math.min(1,(6-d)/6));
-    f.userData.line.material.opacity=0.4+g*0.6; f.userData.panel.material.opacity=0.3+g*0.25; }
+  // frames: art emerges from the dark as the ghost approaches (the "reveal")
+  for(const f of frames){ const d=f.position.distanceTo(charPos); const g=Math.max(0,Math.min(1,(7-d)/7));
+    f.userData.line.material.opacity=0.25+g*0.75;
+    f.userData.panelMat.opacity=0.12+g*0.88; }
 
   composer.render();
   requestAnimationFrame(tick);

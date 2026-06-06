@@ -25,14 +25,15 @@ router.post('/token', requireSession, async (req, res) => {
   try {
     const chainId = parseInt(process.env.CHAIN_ID || '31337');
     const now = new Date();
-    const expiry = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    const expiry = new Date(now.getTime() + 12 * 60 * 60 * 1000); // 12h (backend caps at 24h)
 
-    // Build SIWE message
+    // Build SIWE message. Domain/URI must match what the backend's verifier
+    // enforces (SIWE_DOMAIN), so these are env-driven for non-localhost deploys.
     const siweMessage = new SiweMessage({
-      domain: 'localhost',
+      domain: process.env.SIWE_DOMAIN || 'localhost',
       address: req.session.address,
       statement: 'Sign in to NFTmarket',
-      uri: 'http://localhost:3000',
+      uri: process.env.SIWE_URI || 'http://localhost:3000',
       version: '1',
       chainId,
       nonce: generateNonce(),

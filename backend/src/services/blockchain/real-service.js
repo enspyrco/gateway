@@ -494,7 +494,7 @@ async function getAllListingsForToken(tokenId) {
 async function getActiveListings() {
   // NOTE: For production scale, consider using an event indexer (e.g., The Graph) instead.
   const nftmarket = getContract();
-  const supply = await nftmarket.totalSupply();
+  const supply = Number(await nftmarket.totalSupply()); // ethers v6 returns BigInt; Math.min needs Number
   const listings = [];
   const BATCH_SIZE = 10;
 

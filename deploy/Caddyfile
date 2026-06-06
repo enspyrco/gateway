@@ -13,6 +13,11 @@
 		reverse_proxy backend:3000
 	}
 
+	# IPFS image proxy (backend serves watermarked previews at /ipfs/:hash)
+	handle /ipfs/* {
+		reverse_proxy backend:3000
+	}
+
 	# Wallet service (signing). Strip the /wallet prefix before forwarding.
 	handle_path /wallet/* {
 		reverse_proxy wallet-service:3001
