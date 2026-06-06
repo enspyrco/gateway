@@ -18,6 +18,13 @@
 		reverse_proxy wallet-service:3001
 	}
 
+	# Void Gallery — static WebGL prototype (camera shootout). Served from a
+	# mounted host dir so we can iterate without rebuilding a container.
+	handle /void* {
+		root * /srv/public
+		file_server
+	}
+
 	# Flutter web app (SPA) — everything else.
 	handle {
 		reverse_proxy flutter-web:80
