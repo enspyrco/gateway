@@ -556,11 +556,11 @@ function startEventListener(callbacks = {}) {
     // Listen for Minted events (new tokens)
     if (callbacks.onMinted) {
       nftmarket.on('Minted', async (tokenId, creator, imageHash, event) => {
-        dispatch(E.tokenMinted({
+        dispatch([E.tokenMinted({
           tokenId: Number(tokenId), to: creator, imageHash,
           transactionHash: event.log?.transactionHash, blockNumber: event.log?.blockNumber,
           ipfsUri: '', uri: '', licenseType: 0, mock: false
-        }));
+        })]);
         try {
           await callbacks.onMinted({
             tokenId: Number(tokenId), creator, imageHash,
@@ -575,10 +575,10 @@ function startEventListener(callbacks = {}) {
     // Listen for Sold events (ownership transfers via marketplace)
     if (callbacks.onSold) {
       nftmarket.on('Sold', async (tokenId, seller, buyer, price, licenseType, licenseHash, event) => {
-        dispatch(E.tokenSold({
+        dispatch([E.tokenSold({
           tokenId: Number(tokenId), seller, buyer,
           price: price.toString(), licenseType: Number(licenseType), mock: false
-        }));
+        })]);
         try {
           await callbacks.onSold({
             tokenId: Number(tokenId), seller, buyer,
@@ -594,10 +594,10 @@ function startEventListener(callbacks = {}) {
     // Listen for Listed events
     if (callbacks.onListed) {
       nftmarket.on('Listed', async (tokenId, seller, price, licenseType, licenseHash, nonce, expiry, event) => {
-        dispatch(E.tokenListed({
+        dispatch([E.tokenListed({
           tokenId: Number(tokenId), price: price.toString(),
           licenseType: Number(licenseType), transactionHash: '', mock: false
-        }));
+        })]);
         try {
           await callbacks.onListed({
             tokenId: Number(tokenId), seller,
@@ -613,10 +613,10 @@ function startEventListener(callbacks = {}) {
     // Listen for LicenseGranted events (new license tokens minted)
     if (callbacks.onLicenseGranted) {
       nftmarket.on('LicenseGranted', async (newTokenId, parentTokenId, originalTokenId, licensor, licensee, licenseType, licenseHash, event) => {
-        dispatch(E.licenseGranted({
+        dispatch([E.licenseGranted({
           newTokenId: Number(newTokenId), parentTokenId: Number(parentTokenId),
           buyer: licensee, licenseType: Number(licenseType), mock: false
-        }));
+        })]);
         try {
           await callbacks.onLicenseGranted({
             newTokenId: Number(newTokenId), parentTokenId: Number(parentTokenId),
