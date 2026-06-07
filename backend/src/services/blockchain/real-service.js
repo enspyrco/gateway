@@ -679,7 +679,10 @@ async function getAllTokens() {
 async function getBuyerExistingLicenseLevel(buyerAddress, originalTokenId) {
   const normalizedBuyer = buyerAddress.toLowerCase();
   const nftmarket = getContract();
-  const supply = await nftmarket.totalSupply();
+  // Use the totalSupply() wrapper, which coerces ethers v6's BigInt to Number —
+  // otherwise Math.min(start + BATCH_SIZE, supply) below mixes Number + BigInt
+  // and throws "Cannot convert a BigInt value to a number".
+  const supply = await totalSupply();
   const BATCH_SIZE = 10;
   let highestLevel = null;
 
