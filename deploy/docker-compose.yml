@@ -18,8 +18,14 @@ services:
       context: ../contracts
     environment:
       SHARED_DIR: /shared
+      STATE_FILE: /state/anvil-state.json
     volumes:
       - deployment:/shared
+      # Persistent Anvil chain state — survives `docker compose restart` so the
+      # contract + minter + all minted NFTs reload intact. Wipe this volume
+      # (docker compose down -v, or rm the volume) to force a fresh chain, e.g.
+      # after a contract code change.
+      - chain:/state
     networks: [gateway-net]
     restart: unless-stopped
     healthcheck:
@@ -114,5 +120,6 @@ networks:
 
 volumes:
   deployment:
+  chain:
   caddy_data:
   caddy_config:

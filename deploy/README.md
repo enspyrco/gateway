@@ -76,12 +76,32 @@ it, rebuild the web image — a restart won't pick up a new value:
 docker compose build flutter-web && docker compose up -d flutter-web
 ```
 
-## Resetting the chain
+## Chain persistence & resetting
 
-The Hardhat chain is in-memory; `docker compose restart hardhat` redeploys a
-fresh contract and republishes the address. Restart the backend afterwards so
-it re-reads the new address:
+The chain runs on **Anvil with a state file** (named volume `chain`, at
+`/state/anvil-state.json`). Chain state — the deployed contract, the registered
+minter, and every minted NFT — survives restarts:
 
 ```bash
-docker compose restart hardhat && docker compose restart backend
+# Safe: reloads the existing chain, contract + NFTs intact.
+docker compose restart hardhat
 ```
+
+The contract is deployed (and the minter registered) only on the **first** boot,
+when no state file exists. Subsequent boots reload the persisted state and reuse
+the already-published `deployment.json`, so the backend address never changes.
+
+To force a **fresh** chain — e.g. after changing contract code — wipe the chain
+volume so first-boot deploy runs again, then re-publish + restart the backend:
+
+```bash
+docker compose down
+docker volume rm gateway_chain gateway_deployment   # drop persisted chain + address
+docker compose up -d --build                         # fresh deploy on first boot
+# re-seed once the full stack is healthy:
+docker compose exec backend node populate.js
+```
+
+> The proxy address is deterministic (`0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512`)
+> because Anvil uses the same default mnemonic as Hardhat — so a fresh deploy
+> lands at the same address every time.

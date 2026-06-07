@@ -1,38 +1,66 @@
 #!/usr/bin/env sh
-# Boot Hardhat, deploy the contract, register the minter, then publish the
-# deployed proxy address for the backend (via a shared volume).
+# Boot a persistent Anvil chain, deploy the contract + register the minter on
+# first boot only, then publish the proxy address for the backend (shared volume).
+#
+# Reproducibility (Gate 0): the chain state lives in a named volume at
+# $STATE_FILE. On first boot the file is absent -> we deploy + register the
+# minter, and Anvil persists the resulting state. On every subsequent boot the
+# state file is reloaded, so the contract, the minter, AND every minted NFT come
+# back intact -- `docker compose restart` no longer empties the gallery.
+#
+# Why Anvil over `hardhat node`: Hardhat's node is in-memory only; Anvil's
+# --state file gives deterministic persistence with the same default mnemonic
+# (so account addresses and the deployed proxy address are identical to the old
+# Hardhat setup: 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512).
 set -e
 
 SHARED_DIR="${SHARED_DIR:-/shared}"
+STATE_FILE="${STATE_FILE:-/state/anvil-state.json}"
 RPC="http://127.0.0.1:8545"
 
-# Bind to 0.0.0.0 so sibling containers (wallet-service, backend) can reach
-# the chain at http://hardhat:8545 — the default 127.0.0.1 bind would not.
-echo "[hardhat] starting node..."
-npx hardhat node --hostname 0.0.0.0 >/tmp/hardhat.log 2>&1 &
-HH_PID=$!
+mkdir -p "$(dirname "$STATE_FILE")" "$SHARED_DIR"
 
-echo "[hardhat] waiting for JSON-RPC at $RPC ..."
+# Bind to 0.0.0.0 so sibling containers (wallet-service, backend) reach the
+# chain at http://hardhat:8545. --state-interval checkpoints periodically so an
+# ungraceful kill loses at most 30s of chain state (the SIGTERM trap below
+# handles the graceful case with a final dump).
+echo "[chain] starting anvil (state: $STATE_FILE)..."
+anvil --host 0.0.0.0 --chain-id 31337 \
+      --state "$STATE_FILE" --state-interval 30 \
+      >/tmp/anvil.log 2>&1 &
+ANVIL_PID=$!
+
+# Forward termination to anvil so it writes a final state dump on
+# `docker compose stop/restart` (sh does not forward signals to children).
+trap 'echo "[chain] stopping anvil (final state dump)..."; kill -TERM "$ANVIL_PID" 2>/dev/null; wait "$ANVIL_PID"' TERM INT
+
+echo "[chain] waiting for JSON-RPC at $RPC ..."
 until curl -s -X POST -H 'Content-Type: application/json' \
       --data '{"jsonrpc":"2.0","method":"eth_chainId","params":[],"id":1}' \
       "$RPC" >/dev/null 2>&1; do
-  # Bail early if the node died on startup.
-  if ! kill -0 "$HH_PID" 2>/dev/null; then
-    echo "[hardhat] node exited during startup:"; cat /tmp/hardhat.log; exit 1
+  if ! kill -0 "$ANVIL_PID" 2>/dev/null; then
+    echo "[chain] anvil exited during startup:"; cat /tmp/anvil.log; exit 1
   fi
   sleep 1
 done
 
-echo "[hardhat] deploying NFTmarketNFT..."
-npx hardhat run scripts/deploy.js --network localhost
+# Decide first-boot vs reload by whether the contract address was ever
+# published. deployment.json is written only after a successful deploy and lives
+# in the persistent $SHARED_DIR volume, so its presence means we have already
+# deployed onto this (now reloaded) chain.
+if [ -f "$SHARED_DIR/deployment.json" ]; then
+  echo "[chain] persisted chain reloaded — contract already deployed:"
+  echo "        $(tr -d '\n' < "$SHARED_DIR/deployment.json")"
+else
+  echo "[chain] fresh chain — deploying NFTmarketNFT..."
+  npx hardhat run scripts/deploy.js --network localhost
 
-echo "[hardhat] registering minter..."
-npx hardhat run scripts/setup-minter.js --network localhost
+  echo "[chain] registering minter..."
+  npx hardhat run scripts/setup-minter.js --network localhost
 
-# Publish the deployment for the backend to consume.
-mkdir -p "$SHARED_DIR"
-cp deployment.json "$SHARED_DIR/deployment.json"
-echo "[hardhat] published $(cat deployment.json | tr -d '\n') -> $SHARED_DIR/deployment.json"
+  cp deployment.json "$SHARED_DIR/deployment.json"
+  echo "[chain] published $(tr -d '\n' < deployment.json) -> $SHARED_DIR/deployment.json"
+fi
 
-echo "[hardhat] ready — chain running in foreground."
-wait "$HH_PID"
+echo "[chain] ready — anvil running in foreground."
+wait "$ANVIL_PID"
