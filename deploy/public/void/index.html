@@ -220,8 +220,8 @@ function tick(){
   // movement
   fwd.set(Math.sin(azimuth),0,Math.cos(azimuth)).normalize(); right.set(fwd.z,0,-fwd.x);
   move.set(0,0,0);
-  if(keys.ArrowUp||keys.KeyW)move.add(fwd);
-  if(keys.ArrowDown||keys.KeyS)move.sub(fwd);
+  if(keys.ArrowUp||keys.KeyW)move.sub(fwd);   // forward = away from the camera (-fwd)
+  if(keys.ArrowDown||keys.KeyS)move.add(fwd);
   if(keys.ArrowRight||keys.KeyD)move.add(right);
   if(keys.ArrowLeft||keys.KeyA)move.sub(right);
   const moving=move.lengthSq()>0;
