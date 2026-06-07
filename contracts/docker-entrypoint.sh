@@ -44,15 +44,28 @@ until curl -s -X POST -H 'Content-Type: application/json' \
   sleep 1
 done
 
-# Decide first-boot vs reload by whether the contract address was ever
-# published. deployment.json is written only after a successful deploy and lives
-# in the persistent $SHARED_DIR volume, so its presence means we have already
-# deployed onto this (now reloaded) chain.
+# Decide first-boot vs reload by whether the contract actually has code on the
+# (reloaded) chain — not merely whether deployment.json exists. The published
+# address survives in the persistent $SHARED_DIR volume independently of the
+# chain state volume, so checking the file alone is unsafe: after a fresh chain
+# volume but a stale deployment.json, the file would lie. `cast code` is the
+# source of truth (Foundry is installed for anvil anyway).
+NEEDS_DEPLOY=1
 if [ -f "$SHARED_DIR/deployment.json" ]; then
-  echo "[chain] persisted chain reloaded — contract already deployed:"
+  ADDR=$(grep -o '0x[0-9a-fA-F]\{40\}' "$SHARED_DIR/deployment.json" | head -1)
+  if [ -n "$ADDR" ]; then
+    CODE=$(cast code "$ADDR" --rpc-url "$RPC" 2>/dev/null || echo "0x")
+    if [ "$CODE" != "0x" ] && [ -n "$CODE" ]; then
+      NEEDS_DEPLOY=0
+    fi
+  fi
+fi
+
+if [ "$NEEDS_DEPLOY" = "0" ]; then
+  echo "[chain] persisted chain reloaded — contract live at $ADDR:"
   echo "        $(tr -d '\n' < "$SHARED_DIR/deployment.json")"
 else
-  echo "[chain] fresh chain — deploying NFTmarketNFT..."
+  echo "[chain] fresh chain (no contract code on-chain) — deploying NFTmarketNFT..."
   npx hardhat run scripts/deploy.js --network localhost
 
   echo "[chain] registering minter..."
