@@ -239,7 +239,7 @@ function tick(){
 
   if(mode===1){ // Curious Eye
     let tEl, tRad; const tgt=new THREE.Vector3();
-    if(moving){ azimuth=lerpAngle(azimuth,charYaw,Math.min(1,dt*1.6)); tEl=0.16; tRad=4.2; tgt.copy(up1); }
+    if(moving){ const ta=Math.atan2(-move.x,-move.z); azimuth=lerpAngle(azimuth,ta,Math.min(1,dt*1.6)); tEl=0.16; tRad=4.2; tgt.copy(up1); }
     else if(near.d<5){ const k=1-near.d/5; tgt.copy(up1).lerp(near.f.position,0.4*k); tEl=0.34; tRad=2.8; }
     else { tEl=1.2; tRad=15; tgt.copy(up1); }
     camEl+=(tEl-camEl)*Math.min(1,dt*2); camRad+=(tRad-camRad)*Math.min(1,dt*2);
