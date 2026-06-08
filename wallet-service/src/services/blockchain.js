@@ -43,13 +43,27 @@ function getWallet(privateKey) {
 // Confirmation (.wait()) is deliberately awaited OUTSIDE the lock — the lock only
 // guards allocation + submission, so concurrent sends queue for the brief submit
 // window rather than blocking on block mining.
+//
+// SCOPE — this is a PROCESS-LOCAL serializer. It assumes exactly one
+// wallet-service process signs for a given account (true today: one container,
+// one node process). Horizontal scaling (multiple replicas/workers) or any
+// external signer using the same account is OUTSIDE this boundary and would
+// reintroduce the race — that needs a shared nonce source (Redis/DB) or sticky
+// per-account routing. See the follow-up robustness task for the distributed
+// case + ambiguous-broadcast / dropped-pending reconciliation.
 // ---------------------------------------------------------------------------
 const sendChains = new Map(); // address(lowercase) -> Promise (tail of the queue)
+// nextNonce holds primitive numbers keyed by distinct signer address — bounded by
+// the (small, fixed) account set this service signs for, so it is intentionally
+// retained across idle periods (re-reading 'pending' would reintroduce the
+// pending-lag race the counter exists to defeat).
 const nextNonce = new Map(); // address(lowercase) -> next nonce to use, or undefined
 
 /**
  * Run `task` serialized against all other sends for `address`. Prior failures in
  * the chain are swallowed so one failed send doesn't reject every queued send.
+ * The per-account chain entry is evicted once the queue drains, so idle accounts
+ * don't accumulate promise references forever.
  * @param {string} address
  * @param {() => Promise<T>} task
  * @returns {Promise<T>}
@@ -60,7 +74,17 @@ function runSerialized(address, task) {
   const prev = sendChains.get(key) || Promise.resolve();
   const next = prev.then(task, task); // run task regardless of prior outcome
   // Keep the chain alive without leaking an unhandled rejection from `next`.
-  sendChains.set(key, next.then(() => {}, () => {}));
+  const tail = next.then(() => {}, () => {});
+  sendChains.set(key, tail);
+  // Evict when this tail drains, UNLESS a newer send has already chained on (in
+  // which case the stored tail is no longer ours). Single-threaded JS guarantees
+  // this check and any concurrent runSerialized() call can't interleave mid-statement,
+  // so neither ordering can drop a live chain.
+  tail.then(() => {
+    if (sendChains.get(key) === tail) {
+      sendChains.delete(key);
+    }
+  });
   return next;
 }
 
@@ -76,6 +100,10 @@ async function sendTransaction(privateKey, to, data, value = '0') {
   const wallet = getWallet(privateKey);
   const key = wallet.address.toLowerCase();
 
+  // Validate/convert the value BEFORE entering the lock — a malformed value should
+  // fail fast as a plain error and never occupy the per-account critical section.
+  const valueWei = BigInt(value);
+
   // Serialize nonce allocation + submission per account. Returns once the tx is
   // accepted by the node (hash known); we await confirmation below, outside the lock.
   const txResponse = await runSerialized(wallet.address, async () => {
@@ -89,7 +117,7 @@ async function sendTransaction(privateKey, to, data, value = '0') {
     const tx = {
       to,
       data,
-      value: BigInt(value),
+      value: valueWei,
       nonce,
     };
 
