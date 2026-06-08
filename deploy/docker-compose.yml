@@ -78,8 +78,14 @@ services:
       # On-box watermark engine
       WATERMARK_API_URL: http://watermark-engine:8080
       USE_MOCK_WATERMARK: "false"
+      # Persist the in-memory mock stores (IPFS images + Arweave metadata) to a
+      # volume so token art/names survive a backend rebuild or reboot — the
+      # off-chain twin of the persistent Anvil chain. Without this, the chain
+      # keeps the tokens but their image/metadata bytes vanish on restart.
+      MOCK_PERSISTENCE: "true"
     volumes:
       - deployment:/shared:ro
+      - mockdata:/app/.mock-data
     networks: [gateway-net]
     restart: unless-stopped
     depends_on:
@@ -121,5 +127,6 @@ networks:
 volumes:
   deployment:
   chain:
+  mockdata:
   caddy_data:
   caddy_config:
