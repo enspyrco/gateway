@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Void Gallery — Camera Shootout</title>
+<title>The Void Gallery</title>
 <style>
   html,body{margin:0;height:100%;background:#000;overflow:hidden;cursor:grab;
     font:13px/1.5 -apple-system,BlinkMacSystemFont,"SF Mono",ui-monospace,monospace}
@@ -13,23 +13,43 @@
   #hint{position:fixed;left:22px;bottom:20px;color:#9fb6c8;opacity:.8;letter-spacing:.04em;
     pointer-events:none;text-shadow:0 0 12px #1a3a4a}
   #hint b{color:#fff}
-  #panel{position:fixed;right:18px;top:50%;transform:translateY(-50%);width:236px;
-    display:flex;flex-direction:column;gap:8px}
-  .mode{border:1px solid #16161c;border-radius:10px;padding:11px 13px;background:#06060a;
-    color:#6a7a88;cursor:pointer;transition:.18s}
-  .mode:hover{border-color:#27323c}
-  .mode .k{color:#3a4a55;font-size:11px;float:right}
-  .mode .n{color:#aeb8c4;font-weight:600;font-size:13.5px}
-  .mode .d{font-size:11.5px;line-height:1.45;margin-top:3px;color:#5a6a78}
-  .mode.on{border-color:#7fd0ff;background:#0a131b;box-shadow:0 0 24px rgba(127,208,255,.18)}
-  .mode.on .n{color:#dff2ff}
-  .mode.on .d{color:#9fc0d4}
-  .mode.on .k{color:#7fd0ff}
+  /* provenance card — fades in during CONTEMPLATE as the hidden history surfaces */
+  #prov{position:fixed;right:26px;top:50%;width:272px;padding:18px 20px;border-radius:14px;
+    transform:translateY(-50%) translateX(16px);
+    background:rgba(6,10,14,0.72);border:1px solid rgba(127,208,255,0.14);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+    box-shadow:0 0 44px rgba(127,208,255,0.10);color:#9fb6c8;
+    opacity:0;pointer-events:none;transition:opacity .9s ease,transform .9s ease}
+  #prov.show{opacity:1;transform:translateY(-50%) translateX(0)}
+  #prov .pname{color:#dff2ff;font-size:16px;font-weight:600;margin-bottom:13px;
+    text-shadow:0 0 18px rgba(127,208,255,.35)}
+  #prov .prow{display:flex;justify-content:space-between;gap:12px;padding:6px 0;
+    border-top:1px solid rgba(127,208,255,0.07);font-size:12px}
+  #prov .pk{color:#4a5a68;text-transform:uppercase;letter-spacing:.16em;font-size:10px;
+    align-self:center}
+  #prov .pv{color:#bcd4e4;text-align:right}
+  #prov .pv.lic{color:#7fd0ff;font-weight:600;text-transform:capitalize}
+  #prov .pmark{margin-top:14px;padding-top:12px;border-top:1px solid rgba(127,208,255,0.12);
+    font-size:11px;color:#5fb0d0;letter-spacing:.02em;font-family:ui-monospace,monospace;
+    min-height:1.4em}
+  #prov .pmark.decoding{color:#3a5a68;animation:flick 1.1s steps(2) infinite}
+  #prov .pmark b{color:#7fd0ff}
+  @keyframes flick{0%,100%{opacity:.35}50%{opacity:.85}}
 </style>
 </head>
 <body>
 <div id="title">The Void Gallery</div>
 <div id="hint"><b>arrow keys</b>/wasd — wander &nbsp;·&nbsp; <b>drag</b> — look &nbsp;·&nbsp; walk up to a piece and <b>let go</b> — it draws you in</div>
+
+<!-- provenance card: the hidden history that surfaces when the ghost contemplates a piece -->
+<div id="prov">
+  <div class="pname" id="p-name">—</div>
+  <div class="prow"><span class="pk">artist</span><span class="pv" id="p-artist">—</span></div>
+  <div class="prow"><span class="pk">minted</span><span class="pv" id="p-minted">—</span></div>
+  <div class="prow"><span class="pk">license</span><span class="pv lic" id="p-license">—</span></div>
+  <div class="prow"><span class="pk">market</span><span class="pv" id="p-market">—</span></div>
+  <div class="pmark" id="p-mark">—</div>
+</div>
 
 <script type="importmap">
 { "imports": {
@@ -124,6 +144,40 @@ async function loadArt(){
   }catch(e){ console.warn('void: loadArt failed', e); }
 }
 loadArt();
+
+// ---------- provenance card: the hidden history surfaces on CONTEMPLATE ----------
+// The watermark is invisible, so the ghost you pilot is see-through; the art is
+// solid because it HAS provenance. Drawing near makes that hidden history legible
+// — the mark decoding from noise is the whole thesis, given a moment of UI.
+const prov=document.getElementById('prov');
+const $=id=>document.getElementById(id);
+const shortAddr=a=>a?a.slice(0,6)+'…'+a.slice(-4):'—';
+function fmtDate(iso){ try{ return new Date(iso).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'}); }catch(e){ return '—'; } }
+let provToken=null, decodeTimer=null;
+function showProvenance(t){
+  if(!t || t===provToken) return;          // already showing this piece
+  provToken=t;
+  $('p-name').textContent   = t.name || ('NFTmarket #'+t.tokenId);
+  $('p-artist').textContent = shortAddr(t.creator);
+  $('p-minted').textContent = fmtDate(t.mintedAt);
+  $('p-license').textContent= t.ownerLicense || '—';
+  if(t.isListed){
+    const first=(t.listings&&t.listings[0])||{};
+    const eth=first.priceEth || (t.listingPrice?(Number(t.listingPrice)/1e18).toFixed(2):'?');
+    const more=(t.listings&&t.listings.length>1)?' +'+(t.listings.length-1):'';
+    $('p-market').textContent = eth+' ETH · '+(first.licenseType||t.listingLicenseType||'')+more;
+  } else { $('p-market').textContent='not for sale'; }
+  // the invisible mark becoming legible: noise -> the hidden wallet:tokenId resolves
+  const mark=$('p-mark'); mark.classList.add('decoding'); mark.textContent='decoding watermark…';
+  clearTimeout(decodeTimer); const captured=t;
+  decodeTimer=setTimeout(()=>{
+    if(provToken!==captured) return;
+    mark.classList.remove('decoding');
+    mark.innerHTML='◈ <b>'+shortAddr(captured.creator)+':'+captured.tokenId+'</b> · verified';
+  }, 1100);
+  prov.classList.add('show');
+}
+function hideProvenance(){ provToken=null; clearTimeout(decodeTimer); prov.classList.remove('show'); }
 
 // ---------- character: swarm of little white squiggle-strands (unchanged, loved) ----------
 const figure = new THREE.Group(); scene.add(figure);
@@ -261,6 +315,10 @@ function tick(){
   for(const f of frames){ const d=f.position.distanceTo(charPos); const g=Math.max(0,Math.min(1,(7-d)/7));
     f.userData.line.material.opacity=0.25+g*0.75;
     f.userData.panelMat.opacity=0.12+g*0.88; }
+
+  // provenance surfaces only once you're contemplating a piece; any key dismisses it
+  if(state==='CONTEMPLATE' && target) showProvenance(target.userData.token);
+  else if(state==='ROAM') hideProvenance();
 
   composer.render();
   requestAnimationFrame(tick);
