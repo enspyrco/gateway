@@ -54,7 +54,15 @@ class TransactionResult {
 
 /// Service for communicating with the wallet microservice
 class WalletService {
-  static const String _baseUrl = 'http://localhost:3001';
+  // Baked at build time (Flutter web freezes String.fromEnvironment into the JS),
+  // same as ApiService.baseUrl. In production this is the Caddy edge route
+  // (https://gateway.imagineering.cc/wallet → wallet-service:3001); dev defaults
+  // to the local wallet service. A bare localhost default shipped to prod means
+  // every visitor's browser hits THEIR own machine — the connect-wallet failure.
+  static const String _baseUrl = String.fromEnvironment(
+    'WALLET_URL',
+    defaultValue: 'http://localhost:3001',
+  );
 
   String? _sessionId;
 

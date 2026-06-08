@@ -9,12 +9,17 @@
 FROM ghcr.io/cirruslabs/flutter:stable AS build
 
 ARG API_URL=https://gateway.imagineering.cc
+# Wallet service is reached via the Caddy edge (/wallet/* → wallet-service:3001),
+# NOT localhost — otherwise the browser hits the visitor's own machine.
+ARG WALLET_URL=https://gateway.imagineering.cc/wallet
 
 WORKDIR /app
 COPY pubspec.* ./
 RUN flutter pub get
 COPY . .
-RUN flutter build web --release --dart-define=API_URL="$API_URL"
+RUN flutter build web --release \
+    --dart-define=API_URL="$API_URL" \
+    --dart-define=WALLET_URL="$WALLET_URL"
 
 FROM nginx:alpine
 COPY --from=build /app/build/web /usr/share/nginx/html

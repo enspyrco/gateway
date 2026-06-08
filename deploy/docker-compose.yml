@@ -99,6 +99,7 @@ services:
       context: ../flutter
       args:
         API_URL: ${PUBLIC_URL:-https://gateway.imagineering.cc}
+        WALLET_URL: ${WALLET_PUBLIC_URL:-https://gateway.imagineering.cc/wallet}
     networks: [gateway-net]
     restart: unless-stopped
 
