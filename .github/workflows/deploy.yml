@@ -1,0 +1,193 @@
+# Continuous deployment — build the gateway ON Robin's OCI box over SSH.
+#
+# Why build-on-box (not build-here-push-image): the box is an arm64 Ampere A1.
+# Building on the box itself means native arm64 compiles with zero QEMU/amd64
+# cross-build pain (the Flutter + C++ watermark toolchains are slow enough under
+# emulation to dominate wall-clock). The runner does almost nothing but rsync the
+# source up and invoke `docker compose --build` over SSH.
+#
+# Flow:
+#   1. rsync the working tree to /home/ubuntu/gateway   (excludes secrets + junk)
+#   2. (re)build the watermark engine image if it's missing
+#   3. cd deploy && docker compose up -d --build
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# PERSISTENT VOLUMES — DO NOT WIPE ON A NORMAL DEPLOY.
+#   The live gallery's state lives in three Docker named volumes:
+#     • chain       — Anvil EVM state (deployed contract, minter, every NFT)
+#     • deployment  — published contract address (deployment.json)
+#     • mockdata    — mock IPFS images + Arweave metadata (token art/names)
+#   The live site has 29 NFTs + 15 listings persisted across these. A normal
+#   `docker compose up -d --build` PRESERVES named volumes — that's the whole
+#   point. NEVER add `down -v`, `docker volume rm`, or `docker volume prune` to
+#   this job. A volume reset (fresh chain after a contract code change) must be a
+#   SEPARATE, deliberate, manually-triggered workflow — see the commented-out
+#   `reset-chain` job stub at the bottom of this file. Keep the two apart so a
+#   routine push can never nuke production state.
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# REQUIRED REPO SECRETS (Settings → Secrets and variables → Actions):
+#   OCI_SSH_KEY   — private deploy key (PEM). Its public half must be in
+#                   /home/ubuntu/.ssh/authorized_keys on the box. Generate a
+#                   dedicated keypair for CI; do NOT reuse a personal key.
+#   OCI_HOST      — box address, e.g. 207.211.145.30 (or ubuntu@207.211.145.30
+#                   — we default the user to `ubuntu` below if none is given).
+#
+# NOT touched by this workflow (lives only on the box, never in the repo or CI):
+#   deploy/.env   — generated secrets (WATERMARK_API_KEY, DEV_ENCRYPTION_KEY,
+#                   any real-service creds). rsync EXCLUDES it so a deploy can
+#                   never overwrite or delete it.
+
+name: deploy
+
+on:
+  push:
+    # Release branch. Swap/extend this list when a dedicated `release` or
+    # `production` branch is adopted; for now feat/oci-deploy is the release line.
+    branches: [feat/oci-deploy]
+  workflow_dispatch: {}
+
+# Never let two deploys race onto the same box. Queue them; don't cancel an
+# in-flight deploy mid-`docker compose up` (that could leave a half-built stack).
+concurrency:
+  group: oci-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # Remote paths/user, in one place. REMOTE_USER defaults to `ubuntu`.
+      REMOTE_USER: ubuntu
+      REMOTE_DIR: /home/ubuntu/gateway
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Watermark build clones a submodule-style repo itself; we only need
+          # the gateway tree here, no submodules, shallow is fine.
+          submodules: false
+
+      - name: Configure SSH
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "${{ secrets.OCI_SSH_KEY }}" > ~/.ssh/oci_deploy
+          chmod 600 ~/.ssh/oci_deploy
+          # Pin the host key on first contact. ssh-keyscan over the wire is
+          # trust-on-first-use; acceptable for a single known box. For stronger
+          # guarantees, pre-seed a known OCI_HOST_KEY secret instead.
+          HOST_ONLY="${{ secrets.OCI_HOST }}"
+          HOST_ONLY="${HOST_ONLY##*@}"   # strip any user@ prefix
+          ssh-keyscan -H "$HOST_ONLY" >> ~/.ssh/known_hosts 2>/dev/null
+          echo "HOST_ONLY=$HOST_ONLY" >> "$GITHUB_ENV"
+
+      - name: Sync source to the box (preserving secrets + volumes)
+        run: |
+          set -euo pipefail
+          # rsync the working tree up. --delete keeps the box tree in lockstep
+          # with the repo (removes files deleted in git) WITHOUT touching the
+          # excluded paths.
+          #
+          # CRITICAL EXCLUDES:
+          #   deploy/.env       — generated secrets on the box; must NOT be
+          #                       overwritten or deleted. (--delete would remove
+          #                       it without this exclude, since it's not in git.)
+          #   .git              — no point shipping VCS metadata.
+          #   node_modules      — rebuilt inside Docker; huge; arch-specific.
+          #   **/.mock-data     — local mock stores (the box's real ones live in
+          #                       the `mockdata` Docker volume, not on the host FS).
+          rsync -az --delete \
+            --exclude 'deploy/.env' \
+            --exclude '.git' \
+            --exclude 'node_modules' \
+            --exclude '**/node_modules' \
+            --exclude '**/.mock-data' \
+            -e "ssh -i ~/.ssh/oci_deploy -o IdentitiesOnly=yes" \
+            ./ "${REMOTE_USER}@${HOST_ONLY}:${REMOTE_DIR}/"
+
+      - name: Build watermark engine if missing, then bring up the stack
+        # The remote script is a single-quoted argument to ssh, so $HOME /
+        # backticks / && expand on the BOX, not on the runner. Single-quoting
+        # the whole block (rather than a heredoc) sidesteps the YAML-vs-bash
+        # heredoc-terminator-indentation conflict.
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/oci_deploy -o IdentitiesOnly=yes \
+            "${REMOTE_USER}@${HOST_ONLY}" '
+            set -euo pipefail
+            cd "$HOME/gateway/deploy"
+
+            # The watermark engine is built SEPARATELY (it pulls arm64 sources
+            # from enspyrco/watermarking, which needs the box own SSH access to
+            # that repo). It rarely changes, so only build it when the image is
+            # absent — a routine code deploy should not depend on watermark-repo
+            # reachability. To force a rebuild: docker image rm
+            # watermark-engine:local on the box, then re-run this workflow.
+            if ! docker image inspect watermark-engine:local >/dev/null 2>&1; then
+              echo "[deploy] watermark-engine:local missing — building it"
+              ./build-watermark.sh
+            else
+              echo "[deploy] watermark-engine:local present — skipping watermark build"
+            fi
+
+            # Bring up / rebuild the stack. up -d --build rebuilds changed
+            # service images and recreates only changed containers; named volumes
+            # (chain, deployment, mockdata, caddy_*) are PRESERVED. No -v, ever.
+            echo "[deploy] docker compose up -d --build"
+            docker compose up -d --build
+
+            # PERFORMANCE: the Flutter image builds FROM cirruslabs/flutter
+            # (~794 MB) and that pull/layer dominates build wall-clock. We do NOT
+            # prune images between deploys precisely so this base layer stays
+            # warm in the local cache. Do not add docker system prune here. (If
+            # disk pressure ever forces a cleanup, prune dangling layers only —
+            # docker image prune — never the tagged base images.)
+
+            echo "[deploy] current stack:"
+            docker compose ps
+          '
+
+      - name: Smoke-check the public endpoint
+        run: |
+          set -euo pipefail
+          # Non-fatal sanity ping of the running stack via the box's Caddy edge.
+          # Use /api/marketplace: it's public (no auth), proves backend + chain
+          # are up (it reads on-chain listings), and Caddy routes /api -> backend.
+          # NB the backend health route is bare /health, NOT /api/health, and is
+          # not exposed at the edge — so do not smoke-check /api/health (404).
+          ssh -i ~/.ssh/oci_deploy -o IdentitiesOnly=yes \
+            "${REMOTE_USER}@${HOST_ONLY}" \
+            'curl -fsS -o /dev/null -w "marketplace endpoint: %{http_code}\n" http://localhost/api/marketplace || echo "smoke check non-200 (stack may still be warming up)"'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DANGER ZONE — chain/volume reset. INTENTIONALLY a separate, manual-only job,
+# commented out so it can NEVER fire on a push. Uncomment + run via
+# workflow_dispatch ONLY when you deliberately want a fresh chain (e.g. after a
+# contract code change). This WIPES the 29 NFTs + listings. Re-seed after with
+# `docker compose exec backend node populate.js`.
+#
+#  reset-chain:
+#    if: github.event_name == 'workflow_dispatch'
+#    runs-on: ubuntu-latest
+#    environment: production-reset   # add a protected env to require approval
+#    steps:
+#      - name: Configure SSH
+#        run: |
+#          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+#          printf '%s\n' "${{ secrets.OCI_SSH_KEY }}" > ~/.ssh/oci_deploy
+#          chmod 600 ~/.ssh/oci_deploy
+#          HOST_ONLY="${{ secrets.OCI_HOST }}"; HOST_ONLY="${HOST_ONLY##*@}"
+#          ssh-keyscan -H "$HOST_ONLY" >> ~/.ssh/known_hosts 2>/dev/null
+#          echo "HOST_ONLY=$HOST_ONLY" >> "$GITHUB_ENV"
+#      - name: Wipe chain + deployment volumes and redeploy fresh
+#        run: |
+#          ssh -i ~/.ssh/oci_deploy -o IdentitiesOnly=yes ubuntu@"$HOST_ONLY" bash -seuo pipefail <<'REMOTE'
+#            cd "$HOME/gateway/deploy"
+#            docker compose down
+#            docker volume rm gateway_chain gateway_deployment   # NOTE: mockdata intentionally NOT listed; drop it too only if you want art gone
+#            docker compose up -d --build
+#            sleep 30
+#            docker compose exec -T backend node populate.js
+#          REMOTE
