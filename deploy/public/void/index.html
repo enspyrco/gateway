@@ -23,11 +23,11 @@
   #prov.show{opacity:1;transform:translateY(-50%) translateX(0)}
   #prov .pname{color:#dff2ff;font-size:16px;font-weight:600;margin-bottom:13px;
     text-shadow:0 0 18px rgba(127,208,255,.35)}
-  #prov .prow{display:flex;justify-content:space-between;gap:12px;padding:6px 0;
-    border-top:1px solid rgba(127,208,255,0.07);font-size:12px}
-  #prov .pk{color:#4a5a68;text-transform:uppercase;letter-spacing:.16em;font-size:10px;
-    align-self:center}
-  #prov .pv{color:#bcd4e4;text-align:right}
+  #prov .prow{display:flex;justify-content:space-between;gap:12px;padding:7px 0;
+    border-top:1px solid rgba(127,208,255,0.12);font-size:12.5px}
+  #prov .pk{color:#8aa0b2;text-transform:uppercase;letter-spacing:.16em;font-size:10px;
+    font-weight:600;align-self:center}
+  #prov .pv{color:#eaf4fc;text-align:right;font-weight:500}
   #prov .pv.lic{color:#7fd0ff;font-weight:600;text-transform:capitalize}
   #prov .pmark{margin-top:14px;padding-top:12px;border-top:1px solid rgba(127,208,255,0.12);
     font-size:11px;color:#5fb0d0;letter-spacing:.02em;font-family:ui-monospace,monospace;
@@ -76,7 +76,9 @@ document.body.appendChild(renderer.domElement);
 
 const composer = new EffectComposer(renderer);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.95, 0.7, 0.0);
+// threshold > 0 so only the bright ghost-strands + frame lines bloom — the art
+// itself (midtones) stays legible instead of blowing out to white.
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.6, 0.6, 0.72);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
@@ -134,9 +136,13 @@ async function loadArt(){
       (r.tokens||[]).forEach(t=>toks.push(t));
     }
     const n=Math.max(toks.length,1);
+    // Radius scales with count so frames never overlap into a wall: keep ~3.4
+    // units of arc between neighbours (a frame is ~2.4 wide).
+    const R=Math.max(8, n*3.4/(2*Math.PI));
     toks.forEach((t,i)=>{
-      const ang=i/n*Math.PI*2, R=8;
-      const pos=new THREE.Vector3(Math.cos(ang)*R, 1.7, Math.sin(ang)*R);
+      const ang=i/n*Math.PI*2;
+      // gentle height stagger breaks any residual "flat wall" read
+      const pos=new THREE.Vector3(Math.cos(ang)*R, 1.7+(i%3-1)*0.5, Math.sin(ang)*R);
       const url=(t.imageUrl||'').replace(/^https?:\/\/[^/]+/, ''); // -> same-origin /ipfs/...
       makeArtFrame(pos, url, t);
     });
