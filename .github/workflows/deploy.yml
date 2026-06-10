@@ -33,12 +33,23 @@
 #   OCI_HOST      — box address, e.g. 207.211.145.30 (or ubuntu@207.211.145.30
 #                   — we default the user to `ubuntu` below if none is given).
 #
+# BOX PRE-REQUISITE (one-time, NOT a repo secret): the watermark build step runs
+#   ON the box and clones git@github.com:enspyrco/watermarking.git — so
+#   /home/ubuntu/.ssh/ on the box must hold a key authorized for that repo.
+#   Without it the FIRST deploy (or any deploy after the watermark-engine:local
+#   image is removed) fails at build-watermark.sh with a git clone error.
+#
 # NOT touched by this workflow (lives only on the box, never in the repo or CI):
 #   deploy/.env   — generated secrets (WATERMARK_API_KEY, DEV_ENCRYPTION_KEY,
 #                   any real-service creds). rsync EXCLUDES it so a deploy can
 #                   never overwrite or delete it.
 
 name: deploy
+
+# Least privilege: this workflow only checks out source. The deploy itself is
+# authenticated by OCI_SSH_KEY, not by the GitHub token.
+permissions:
+  contents: read
 
 on:
   push:
@@ -152,14 +163,17 @@ jobs:
       - name: Smoke-check the public endpoint
         run: |
           set -euo pipefail
-          # Non-fatal sanity ping of the running stack via the box's Caddy edge.
+          # Sanity ping of the running stack via the box's Caddy edge. FAILS THE
+          # JOB if the endpoint never comes up — a broken deploy must not show
+          # green. Retries cover the backend warm-up window (it waits for
+          # deployment.json before listening, usually seconds).
           # Use /api/marketplace: it's public (no auth), proves backend + chain
           # are up (it reads on-chain listings), and Caddy routes /api -> backend.
           # NB the backend health route is bare /health, NOT /api/health, and is
           # not exposed at the edge — so do not smoke-check /api/health (404).
           ssh -i ~/.ssh/oci_deploy -o IdentitiesOnly=yes \
             "${REMOTE_USER}@${HOST_ONLY}" \
-            'curl -fsS -o /dev/null -w "marketplace endpoint: %{http_code}\n" http://localhost/api/marketplace || echo "smoke check non-200 (stack may still be warming up)"'
+            'curl -fsS --retry 6 --retry-delay 10 --retry-all-errors -o /dev/null -w "marketplace endpoint: %{http_code}\n" http://localhost/api/marketplace'
 
 # ─────────────────────────────────────────────────────────────────────────────
 # DANGER ZONE — chain/volume reset. INTENTIONALLY a separate, manual-only job,
@@ -175,6 +189,7 @@ jobs:
 #    steps:
 #      - name: Configure SSH
 #        run: |
+#          set -euo pipefail
 #          mkdir -p ~/.ssh && chmod 700 ~/.ssh
 #          printf '%s\n' "${{ secrets.OCI_SSH_KEY }}" > ~/.ssh/oci_deploy
 #          chmod 600 ~/.ssh/oci_deploy
@@ -183,6 +198,8 @@ jobs:
 #          echo "HOST_ONLY=$HOST_ONLY" >> "$GITHUB_ENV"
 #      - name: Wipe chain + deployment volumes and redeploy fresh
 #        run: |
+#          # NB: user is hardcoded here — this is a separate job, so it does NOT
+#          # inherit the deploy job's REMOTE_USER env. Keep in sync manually.
 #          ssh -i ~/.ssh/oci_deploy -o IdentitiesOnly=yes ubuntu@"$HOST_ONLY" bash -seuo pipefail <<'REMOTE'
 #            cd "$HOME/gateway/deploy"
 #            docker compose down
