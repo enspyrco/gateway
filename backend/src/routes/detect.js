@@ -1,8 +1,9 @@
 /**
  * Detection API routes
- * POST /api/detect/blind - Blind detection (extract watermark without reference)
+ * POST /api/detect/blind     - Blind detection on an uploaded image (auth required)
+ * GET  /api/detect/token/:id - Blind detection on a minted token's stored image (public)
  *
- * Uses the Rust Legendre detector to find embedded wallet:tokenId.
+ * Uses the Legendre blind detector to find the embedded wallet:tokenId.
  */
 
 const express = require('express');
@@ -13,6 +14,8 @@ const os = require('os');
 const { v4: uuidv4 } = require('uuid');
 
 const blockchainService = require('../services/blockchain');
+const tokenRepository = require('../services/token-repository');
+const ipfsService = require('../services/ipfs');
 const E = require('../events/types');
 const { dispatch } = require('../events/dispatch');
 
@@ -121,6 +124,97 @@ function createRouter(upload) {
   return router;
 }
 
+// ── Public per-token decode ────────────────────────────────────────────────
+// The server already holds every token's watermarked image, so it can decode
+// its own store without accepting uploads. Results are immutable per stored
+// image, so they're cached forever; decodes are CPU-heavy (~8s, up to ~60s on
+// a miss), so they run strictly one at a time.
+
+const tokenDecodeCache = new Map(); // tokenId -> Promise<result>
+let decodeQueue = Promise.resolve(); // global serializer for the C++ detector
+
+async function decodeTokenImage(tokenId) {
+  const detectId = `token-${tokenId}`;
+  const allEvents = [E.detectStarted({ detectId })];
+
+  const token = await tokenRepository.getTokenData(tokenId);
+  if (!token.ipfsUri) {
+    throw Object.assign(new Error('Token has no stored image'), { status: 404 });
+  }
+
+  const imageBuffer = await ipfsService.fetch(token.ipfsUri);
+  const result = await runBlindDetection(detectId, imageBuffer);
+
+  // The engine null-pads short messages to a fixed length; strip for compare.
+  const message = (result.message || '').replace(/[\u0000\s]+$/, "");
+  const expected = `${(token.creator || '').toLowerCase()}:${tokenId}`;
+  const verified = result.detected && message.toLowerCase() === expected;
+
+  allEvents.push(E.detectCompleted({ detectId, detected: result.detected, tokenId }));
+  await dispatch(allEvents);
+
+  return {
+    tokenId,
+    detected: result.detected,
+    message,
+    confidence: result.confidence,
+    sequencesDecoded: result.sequencesDecoded,
+    verified,
+    creator: token.creator,
+  };
+}
+
+function createPublicRouter() {
+  const router = express.Router();
+
+  /**
+   * GET /api/detect/token/:tokenId
+   *
+   * Blind-decode the watermark from a minted token's stored image. Public:
+   * it only ever reads images the platform already serves at /ipfs/:hash.
+   *
+   * Returns:
+   * - detected: boolean
+   * - message: string (decoded watermark, null-padding stripped)
+   * - confidence: number (peak/RMS of the weakest decoded sequence)
+   * - verified: boolean (message matches the on-chain creator:tokenId)
+   * - cached: boolean
+   */
+  router.get('/:tokenId', async (req, res, next) => {
+    const tokenId = parseInt(req.params.tokenId, 10);
+    if (!Number.isInteger(tokenId) || tokenId < 0 || String(tokenId) !== req.params.tokenId) {
+      return res.status(400).json({ error: 'Invalid token id', code: 'INVALID_TOKEN_ID' });
+    }
+
+    const cached = tokenDecodeCache.has(tokenId);
+    if (!cached) {
+      // Single-flight per token, serialized globally. The queue link swallows
+      // upstream errors so one failed decode can't poison the chain.
+      const run = (decodeQueue = decodeQueue
+        .catch(() => {})
+        .then(() => decodeTokenImage(tokenId)));
+      tokenDecodeCache.set(tokenId, run);
+      // A failure (missing token, detector error) shouldn't be cached forever.
+      run.catch(() => tokenDecodeCache.delete(tokenId));
+    }
+
+    try {
+      const result = await tokenDecodeCache.get(tokenId);
+      res.json({ ...result, cached });
+    } catch (error) {
+      if (/does not exist|not found/i.test(error.message)) {
+        return res.status(404).json({ error: 'Token not found', code: 'TOKEN_NOT_FOUND' });
+      }
+      if (error.status) {
+        return res.status(error.status).json({ error: error.message });
+      }
+      next(error);
+    }
+  });
+
+  return router;
+}
+
 /**
  * Run the Rust blind detection binary
  */
@@ -201,3 +295,4 @@ async function runBlindDetection(detectId, imageBuffer) {
 }
 
 module.exports = createRouter;
+module.exports.createPublicRouter = createPublicRouter;

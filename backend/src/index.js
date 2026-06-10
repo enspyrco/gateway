@@ -214,6 +214,8 @@ app.use('/api/gallery', galleryRouter);
 
 // Authenticated routes
 app.use('/api/mint', authMiddleware, mintRouter(upload));
+// Public per-token decode must register before the authed catch-all below.
+app.use('/api/detect/token', detectRouter.createPublicRouter());
 app.use('/api/detect', authMiddleware, detectRouter(upload));
 // Marketplace has mixed auth: GET routes are public, POST routes use authMiddleware internally
 app.use('/api/marketplace', marketplaceRouter);

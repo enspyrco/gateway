@@ -7,6 +7,6 @@ export USE_KMS=false
 export MOCK_PERSISTENCE=false
 
 # Rust blind detection binary
-export BLIND_DETECT_BINARY="../watermark-rs/target/release/detect"
+export BLIND_DETECT_BINARY="./blind-detector/detect_blind3"  # build: see blind-detector/README.md
 
 npm run dev

@@ -119,21 +119,25 @@ Mock services can persist to `.mock-data/` directory via `mock-persistence.js`:
 
 ## Watermark Detection
 
-The system uses **blind detection** - the Rust Legendre detector extracts the `wallet:tokenId` message directly from the watermarked image without needing a reference image.
+The system uses **blind detection** - the C++ Legendre detector (`blind-detector/detect_blind3`) extracts the `wallet:tokenId` message directly from the watermarked image without needing a reference image. It whitens the extracted DFT coefficients before correlation — see `blind-detector/README.md` for the algorithm and provenance.
 
 ```bash
-# Binary location (set via BLIND_DETECT_BINARY env var)
-../watermark-rs/target/release/detect
-
-# Build the detector
-cd ../watermark-rs && cargo build --release --bin detect
+# Binary location (set via BLIND_DETECT_BINARY env var); built automatically
+# in the Docker image. Local build:
+cd blind-detector && g++ -O2 detect_blind3.cpp WatermarkDetection.cpp Utilities.cpp \
+    -o detect_blind3 $(pkg-config --cflags --libs opencv4)
 ```
+
+Endpoints:
+- `POST /api/detect/blind` (auth) — decode an uploaded image
+- `GET /api/detect/token/:tokenId` (public) — decode a minted token's stored image; results cached per token, decodes serialized (CPU-heavy)
 
 Detection returns:
 - `detected`: boolean
 - `message`: "walletAddress:tokenId"
-- `confidence`: detection confidence score
-- `token`: blockchain data if token exists
+- `confidence`: detection confidence score (peak/RMS of weakest sequence)
+- `verified`: message matches on-chain creator:tokenId (token route only)
+- `token`: blockchain data if token exists (blind route only)
 
 ## Authentication
 
