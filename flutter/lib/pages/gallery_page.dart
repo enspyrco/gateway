@@ -176,6 +176,7 @@ class _GalleryPageState extends State<GalleryPage> {
       appBar: AppBar(
         title: Text(_getPageTitle(accounts)),
         leading: IconButton(
+          tooltip: 'Go back',
           icon: const Icon(Icons.arrow_back),
           onPressed: () {
             if (widget.address != null) {
@@ -734,12 +735,17 @@ class _TokenCardState extends State<_TokenCard> {
                 ]
               : null,
         ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.onTap,
-            borderRadius: BorderRadius.circular(16),
-            child: Column(
+        child: Semantics(
+          label: isListed
+              ? '$name — For sale'
+              : name,
+          button: true,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: widget.onTap,
+              borderRadius: BorderRadius.circular(16),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Expanded(
@@ -947,6 +953,7 @@ class _TokenCardState extends State<_TokenCard> {
           ),
         ),
       ),
+    ),
     );
   }
 

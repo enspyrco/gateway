@@ -91,6 +91,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       appBar: AppBar(
         title: Text('Token #${widget.tokenId}'),
         leading: IconButton(
+          tooltip: 'Back to marketplace',
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/'),
         ),
@@ -305,22 +306,30 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
   }
 
   Widget _buildGalleryButton(String address) {
-    return InkWell(
-      onTap: () => context.go('/gallery/$address'),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: NFTmarketColors.primary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: NFTmarketColors.primary.withValues(alpha: 0.3),
+    return Tooltip(
+      message: 'View gallery for ${_shortAddress(address)}',
+      child: InkWell(
+        onTap: () => context.go('/gallery/$address'),
+        borderRadius: BorderRadius.circular(8),
+        child: Semantics(
+          label: 'View gallery for ${_shortAddress(address)}',
+          button: true,
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: NFTmarketColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: NFTmarketColors.primary.withValues(alpha: 0.3),
+              ),
+            ),
+            child: const Icon(
+              Icons.collections,
+              size: 18,
+              color: NFTmarketColors.primary,
+              semanticLabel: 'Gallery',
+            ),
           ),
-        ),
-        child: const Icon(
-          Icons.collections,
-          size: 18,
-          color: NFTmarketColors.primary,
         ),
       ),
     );
@@ -1176,12 +1185,16 @@ class _PremiumActionButtonState extends State<_PremiumActionButton> {
                 ]
               : null,
         ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.onPressed,
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
+        child: Semantics(
+          button: true,
+          label: widget.label,
+          enabled: widget.onPressed != null,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: widget.onPressed,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -1216,6 +1229,7 @@ class _PremiumActionButtonState extends State<_PremiumActionButton> {
           ),
         ),
       ),
+    ),
     );
   }
 }
