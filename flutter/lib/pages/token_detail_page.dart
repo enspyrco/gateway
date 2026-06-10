@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/token.dart';
 import '../services/api_service.dart';
 import '../providers/wallet_provider.dart';
+import '../utils/license_colors.dart';
 import '../widgets/wallet_button.dart';
 import '../theme.dart';
 
@@ -873,16 +874,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     }
   }
 
-  Color _getLicenseColor(LicenseType license) {
-    switch (license) {
-      case LicenseType.display:
-        return NFTmarketColors.displayBlue;
-      case LicenseType.commercial:
-        return NFTmarketColors.commercialOrange;
-      case LicenseType.transfer:
-        return NFTmarketColors.transferPurple;
-    }
-  }
+  Color _getLicenseColor(LicenseType license) => licenseColor(license);
 
   Future<void> _list(String priceEth, LicenseType licenseType) async {
     debugPrint('_list called with price: $priceEth, license: $licenseType');

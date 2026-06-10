@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/token.dart';
 import '../services/api_service.dart';
 import '../providers/wallet_provider.dart';
+import '../utils/license_colors.dart';
 import '../widgets/wallet_button.dart';
 import '../theme.dart';
 
@@ -634,18 +635,7 @@ class _TokenCard extends StatefulWidget {
 class _TokenCardState extends State<_TokenCard> {
   bool _isHovered = false;
 
-  Color _getLicenseColor(String type) {
-    switch (type.toLowerCase()) {
-      case 'display':
-        return NFTmarketColors.displayBlue;
-      case 'commercial':
-        return NFTmarketColors.commercialOrange;
-      case 'transfer':
-        return NFTmarketColors.transferPurple;
-      default:
-        return NFTmarketColors.textMuted;
-    }
-  }
+  Color _getLicenseColor(String type) => licenseColorFromString(type);
 
   String _formatLicenseType(String type) {
     switch (type.toLowerCase()) {

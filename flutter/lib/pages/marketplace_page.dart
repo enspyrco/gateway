@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../models/token.dart';
 import '../services/api_service.dart';
+import '../utils/license_colors.dart';
 import '../widgets/wallet_button.dart';
 import '../theme.dart';
 
@@ -223,18 +224,8 @@ class _ListingCard extends StatefulWidget {
 class _ListingCardState extends State<_ListingCard> {
   bool _isHovered = false;
 
-  Color _getLicenseColor(String? licenseType) {
-    switch (licenseType?.toLowerCase()) {
-      case 'display':
-        return NFTmarketColors.displayBlue;
-      case 'commercial':
-        return NFTmarketColors.commercialOrange;
-      case 'transfer':
-        return NFTmarketColors.transferPurple;
-      default:
-        return NFTmarketColors.textMuted;
-    }
-  }
+  Color _getLicenseColor(String? licenseType) =>
+      licenseColorFromString(licenseType);
 
   String _getLicenseLabel(String? licenseType) {
     switch (licenseType?.toLowerCase()) {
