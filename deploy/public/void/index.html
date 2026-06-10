@@ -158,9 +158,22 @@ async function loadArt(){
       makeArtFrame(pos, url, t);
     });
     console.log('void: hung', toks.length, 'artworks');
+    warmDecodes(toks);
   }catch(e){ console.warn('void: loadArt failed', e); }
 }
 loadArt();
+
+// Warm the decode caches (server + client) one token at a time in the
+// background — the server serializes its CPU-heavy detector anyway, and by
+// the time the ghost wanders up to a piece its mark is usually already hot.
+async function warmDecodes(toks){
+  for(const t of toks){
+    if(markCache.has(t.tokenId)) continue;
+    try{ markCache.set(t.tokenId, await decodeToken(t)); }
+    catch(e){ /* leave cold; contemplate falls back to metadata */ }
+  }
+  console.log('void: decode cache warm for', markCache.size, 'pieces');
+}
 
 // ---------- provenance card: the hidden history surfaces on CONTEMPLATE ----------
 // The watermark is invisible, so the ghost you pilot is see-through; the art is
@@ -188,15 +201,50 @@ function showProvenance(t){
     buy.href='/#/token/'+t.tokenId;
     buy.classList.add('show');
   } else { $('p-market').textContent='not for sale'; buy.classList.remove('show'); }
-  // the invisible mark becoming legible: noise -> the hidden wallet:tokenId resolves
-  const mark=$('p-mark'); mark.classList.add('decoding'); mark.textContent='decoding watermark…';
-  clearTimeout(decodeTimer); const captured=t;
-  decodeTimer=setTimeout(()=>{
-    if(provToken!==captured) return;
-    mark.classList.remove('decoding');
-    mark.innerHTML='◈ <b>'+shortAddr(captured.creator)+':'+captured.tokenId+'</b> · verified';
-  }, 1100);
+  // the invisible mark becoming legible — REAL decode: the backend runs the
+  // Legendre blind detector over the artwork's pixels and returns the message
+  // that has been hiding in plain sight. Cached per token (the stored image
+  // never changes), with the metadata mark as fallback if decode can't.
+  const mark=$('p-mark'); clearTimeout(decodeTimer); const captured=t;
+  const cachedMark=markCache.get(t.tokenId);
+  if(cachedMark){ mark.classList.remove('decoding'); mark.innerHTML=cachedMark; }
+  else {
+    mark.classList.add('decoding'); mark.textContent='decoding watermark…';
+    // first decode of a token is CPU-real (~8s server-side); past 20s give the
+    // metadata answer rather than an endless shimmer (decode keeps warming the
+    // server cache in the background either way)
+    decodeTimer=setTimeout(()=>{
+      if(provToken!==captured) return;
+      mark.classList.remove('decoding');
+      mark.innerHTML=metaMarkHtml(captured)+' <i>(from metadata)</i>';
+    }, 20000);
+    decodeToken(captured).then(html=>{
+      markCache.set(captured.tokenId, html);
+      if(provToken!==captured) return;
+      clearTimeout(decodeTimer);
+      mark.classList.remove('decoding'); mark.innerHTML=html;
+    }).catch(()=>{
+      if(provToken!==captured) return;
+      clearTimeout(decodeTimer);
+      mark.classList.remove('decoding');
+      mark.innerHTML=metaMarkHtml(captured)+' <i>(from metadata)</i>';
+    });
+  }
   prov.classList.add('show');
+}
+const markCache=new Map(); // tokenId -> rendered mark html (decode is immutable)
+function metaMarkHtml(t){ return '◈ <b>'+shortAddr(t.creator)+':'+t.tokenId+'</b>'; }
+async function decodeToken(t){
+  const r=await fetch('/api/detect/token/'+t.tokenId);
+  if(!r.ok) throw new Error('decode http '+r.status);
+  const d=await r.json();
+  if(!d.detected) return metaMarkHtml(t)+' <i>(no mark found — from metadata)</i>';
+  const m=/^(0x[0-9a-fA-F]{40}):(\d+)$/.exec(d.message||'');
+  const pretty=m?shortAddr(m[1])+':'+m[2]:(d.message||'').slice(0,28);
+  const conf=d.confidence?(' · '+Math.round(d.confidence)+'× signal'):'';
+  return '◈ <b>'+pretty+'</b>'+conf+(d.verified
+    ?' · <span style="color:#9fe6b8">decoded from the pixels ✓</span>'
+    :' · decoded (unverified)');
 }
 function hideProvenance(){ provToken=null; clearTimeout(decodeTimer); prov.classList.remove('show'); }
 
