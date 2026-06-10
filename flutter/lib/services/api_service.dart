@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:flutter/foundation.dart' show kDebugMode;
+import 'package:flutter/foundation.dart' show kReleaseMode;
 import 'package:http/http.dart' as http;
 
 import '../models/token.dart';
@@ -27,7 +27,7 @@ class ApiService {
   /// Resolved base URL.  Debug builds may use localhost; release builds must
   /// have API_URL injected at compile time.
   static final String baseUrl = () {
-    if (!kDebugMode && _configuredUrl.contains('localhost')) {
+    if (kReleaseMode && _configuredUrl.contains('localhost')) {
       throw StateError(
         'API_URL is not configured for a release build. '
         'Pass --dart-define=API_URL=https://your-api-host when building. '

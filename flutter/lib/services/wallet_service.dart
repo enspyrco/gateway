@@ -67,7 +67,7 @@ class WalletService {
   /// Resolved base URL.  Debug builds may use localhost; release builds must
   /// have WALLET_URL injected at compile time.
   static final String _baseUrl = () {
-    if (!kDebugMode && _configuredUrl.contains('localhost')) {
+    if (kReleaseMode && _configuredUrl.contains('localhost')) {
       throw StateError(
         'WALLET_URL is not configured for a release build. '
         'Pass --dart-define=WALLET_URL=https://your-wallet-host when building. '
