@@ -16,11 +16,13 @@ class SIWEVerifier {
   /**
    * @param {Object} options
    * @param {string} [options.domain] - Expected domain (optional, passed to siwe.verify)
-   * @param {Map} [options.nonceStore] - Map with TTL for nonce tracking (optional)
+   * @param {Map} [options.nonceStore] - Nonce-tracking Map (nonce → expiry ms).
+   *   Defaults to a module-level store shared across instances; inject a fresh
+   *   Map in tests for isolation.
    */
   constructor({ domain, nonceStore } = {}) {
     this.domain = domain;
-    this.nonceStore = nonceStore;
+    this.nonceStore = nonceStore || usedNonces;
   }
 
   /**
@@ -57,8 +59,8 @@ class SIWEVerifier {
     // Enforce single-use nonce (replay protection)
     const nonce = siweMessage.nonce;
     if (!nonce) throw new Error('Token must include a nonce');
-    if (usedNonces.has(nonce)) throw new Error('Nonce already used (replay rejected)');
-    usedNonces.set(nonce, expiration.getTime());
+    if (this.nonceStore.has(nonce)) throw new Error('Nonce already used (replay rejected)');
+    this.nonceStore.set(nonce, expiration.getTime());
 
     return { address: siweMessage.address, chainId: siweMessage.chainId };
   }

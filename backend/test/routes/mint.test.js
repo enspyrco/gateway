@@ -387,18 +387,38 @@ describe('Magic-byte file validation', () => {
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('INVALID_FILE');
   });
+
+  it('rejects a WAV file masquerading as WebP (RIFF header alone is not enough)', async () => {
+    // WAV: "RIFF" + size + "WAVE" — shares the RIFF prefix with WebP
+    const wavBuffer = Buffer.concat([
+      Buffer.from('RIFF'),
+      Buffer.from([0x24, 0x00, 0x00, 0x00]),
+      Buffer.from('WAVE'),
+      Buffer.alloc(32)
+    ]);
+
+    const res = await request(app)
+      .post('/api/mint')
+      .set('Authorization', `Bearer ${authToken}`)
+      .field('name', 'NotAnImage')
+      .field('licenseType', 'display')
+      .attach('image', wavBuffer, { filename: 'sound.webp', contentType: 'image/webp' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('INVALID_FILE');
+  });
 });
 
-describe('IPFS proxy production guard', () => {
+describe('IPFS proxy in production', () => {
   const originalEnv = process.env.NODE_ENV;
 
   afterEach(() => {
     process.env.NODE_ENV = originalEnv;
   });
 
-  it('returns 404 in production mode', async () => {
+  it('still serves images in production mode (gallery depends on this route under USE_MOCK_IPFS)', async () => {
     process.env.NODE_ENV = 'production';
     const res = await request(app).get('/ipfs/QmTestHash');
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
   });
 });

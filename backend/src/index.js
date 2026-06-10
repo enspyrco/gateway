@@ -39,6 +39,11 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const app = express();
+
+// Behind Caddy in production: trust the first proxy hop so req.ip reflects
+// the client (X-Forwarded-For), not the Docker bridge. Without this, every
+// client shares one rate-limit bucket.
+app.set('trust proxy', 1);
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -58,13 +63,16 @@ app.use(cors({ origin: ALLOWED_ORIGINS }));
 app.use(express.json());
 app.use(requestId);
 
-// Global rate limiting — 100 requests per 15 minutes per IP
+// Global rate limiting — 100 requests per 15 minutes per IP.
+// /ipfs is excluded: image fetches (~30 per gallery load) would exhaust the
+// global budget; it has its own higher per-route limiter below.
 const rateLimit = require('express-rate-limit');
 app.use(rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path.startsWith('/ipfs/'),
   message: { error: 'Too many requests', code: 'RATE_LIMITED' }
 }));
 
@@ -125,11 +133,19 @@ app.get('/api/generate/styles', (req, res) => {
   res.json({ styles: aiService.getStylePresets() });
 });
 
-// Mock IPFS gateway (for development only)
-app.get('/ipfs/:hash', async (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
-    return res.status(404).json({ error: 'Not found' });
-  }
+// IPFS gateway. With USE_MOCK_IPFS=true (the deployed default), every NFT
+// image URL routes through here (see services/ipfs.js getGatewayUrl), so it
+// must stay reachable in production. It serves images to <img> tags, so it
+// cannot be auth-gated; instead it gets its own rate limit to prevent
+// economic drain via the proxy.
+const ipfsGatewayLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600, // a gallery page load fetches ~30 images
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests', code: 'RATE_LIMITED' }
+});
+app.get('/ipfs/:hash', ipfsGatewayLimiter, async (req, res) => {
   try {
     const data = await ipfsService.fetch(`ipfs://${req.params.hash}`);
     // CORS headers for Flutter web

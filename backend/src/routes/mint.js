@@ -91,9 +91,14 @@ function createRouter(upload) {
         [0x89, 0x50, 0x4e, 0x47],          // PNG
         [0xff, 0xd8, 0xff],                 // JPEG
         [0x47, 0x49, 0x46],                 // GIF
-        [0x52, 0x49, 0x46, 0x46],          // WebP (RIFF header)
       ];
-      const matchesMagic = SIGNATURES.some(sig =>
+      // WebP: the RIFF header alone is ambiguous (WAV/AVI share it) —
+      // also require bytes 8-11 to spell "WEBP".
+      const isWebP =
+        imageBuffer.length >= 12 &&
+        [0x52, 0x49, 0x46, 0x46].every((byte, i) => imageBuffer[i] === byte) &&
+        imageBuffer.slice(8, 12).toString('ascii') === 'WEBP';
+      const matchesMagic = isWebP || SIGNATURES.some(sig =>
         sig.every((byte, i) => imageBuffer[i] === byte)
       );
       if (!matchesMagic) {
