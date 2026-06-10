@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:http/http.dart' as http;
 
 import '../models/token.dart';
@@ -16,10 +17,25 @@ class ApiException implements Exception {
 }
 
 class ApiService {
-  static const String baseUrl = String.fromEnvironment(
+  // Baked in at compile time; omitting --dart-define=API_URL in a release
+  // build must fail loudly rather than silently hit the developer's machine.
+  static const String _configuredUrl = String.fromEnvironment(
     'API_URL',
     defaultValue: 'http://localhost:3000',
   );
+
+  /// Resolved base URL.  Debug builds may use localhost; release builds must
+  /// have API_URL injected at compile time.
+  static final String baseUrl = () {
+    if (!kDebugMode && _configuredUrl.contains('localhost')) {
+      throw StateError(
+        'API_URL is not configured for a release build. '
+        'Pass --dart-define=API_URL=https://your-api-host when building. '
+        'Refusing to use localhost in production.',
+      );
+    }
+    return _configuredUrl;
+  }();
 
   final String? authToken;
 
