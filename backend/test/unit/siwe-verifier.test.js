@@ -119,4 +119,19 @@ describe('SIWEVerifier', () => {
       'Signature verification failed',
     );
   });
+
+  test('rejects replayed SIWE token (same nonce used twice)', async () => {
+    const fixedNonce = 'rply' + Date.now().toString(36).slice(-6);
+    const msg1 = makeMessage(wallet.address, { nonce: fixedNonce });
+    const sig1 = await signWith(wallet, msg1);
+
+    // First use should succeed
+    const result = await verifier.verify(msg1, sig1);
+    expect(result.address.toLowerCase()).toBe(wallet.address.toLowerCase());
+
+    // Second use with same nonce should be rejected
+    const msg2 = makeMessage(wallet.address, { nonce: fixedNonce });
+    const sig2 = await signWith(wallet, msg2);
+    await expect(verifier.verify(msg2, sig2)).rejects.toThrow(/nonce already used/i);
+  });
 });

@@ -20,11 +20,16 @@ function loadContractAddress() {
     return process.env.NFTMARKET_CONTRACT_ADDRESS;
   }
 
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('NFTMARKET_CONTRACT_ADDRESS must be set in production');
+  }
+
+  // dev/test: fall through to deployment.json
   const deploymentPath = path.join(__dirname, '..', '..', '..', 'contracts', 'deployment.json');
   try {
     if (fs.existsSync(deploymentPath)) {
       const deployment = JSON.parse(fs.readFileSync(deploymentPath, 'utf8'));
-      console.log(`[Blockchain] Loaded contract address from deployment.json: ${deployment.address}`);
+      console.warn(`[Blockchain] Using deployment.json address — development only: ${deployment.address}`);
       return deployment.address;
     }
   } catch (e) {

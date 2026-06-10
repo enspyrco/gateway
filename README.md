@@ -123,7 +123,7 @@ cp .env.example .env
 
 npm run compile
 npm test
-npm run deploy:mumbai  # Testnet
+npm run deploy:amoy  # Testnet
 ```
 
 Required environment variables (see `contracts/.env.example`):

@@ -350,3 +350,55 @@ describe('Health Check', () => {
     expect(res.body.status).toBe('ok');
   });
 });
+
+describe('Magic-byte file validation', () => {
+  const testWallet = '0x1234567890123456789012345678901234567890';
+  let authToken;
+
+  beforeAll(() => {
+    authToken = createMockAuthToken(testWallet);
+  });
+
+  it('rejects file with invalid magic bytes (ELF binary as image/png)', async () => {
+    // ELF magic bytes: 0x7f454c46
+    const elfBuffer = Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x00, 0x00, 0x00, 0x00]);
+
+    const res = await request(app)
+      .post('/api/mint')
+      .set('Authorization', `Bearer ${authToken}`)
+      .field('name', 'Malicious')
+      .field('licenseType', 'display')
+      .attach('image', elfBuffer, { filename: 'evil.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('INVALID_FILE');
+  });
+
+  it('rejects file with all-zero bytes as image/png', async () => {
+    const zeroBuffer = Buffer.alloc(1024);
+
+    const res = await request(app)
+      .post('/api/mint')
+      .set('Authorization', `Bearer ${authToken}`)
+      .field('name', 'Zero')
+      .field('licenseType', 'display')
+      .attach('image', zeroBuffer, { filename: 'zero.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('INVALID_FILE');
+  });
+});
+
+describe('IPFS proxy production guard', () => {
+  const originalEnv = process.env.NODE_ENV;
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  it('returns 404 in production mode', async () => {
+    process.env.NODE_ENV = 'production';
+    const res = await request(app).get('/ipfs/QmTestHash');
+    expect(res.status).toBe(404);
+  });
+});

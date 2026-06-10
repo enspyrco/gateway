@@ -127,6 +127,9 @@ app.get('/api/generate/styles', (req, res) => {
 
 // Mock IPFS gateway (for development only)
 app.get('/ipfs/:hash', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
   try {
     const data = await ipfsService.fetch(`ipfs://${req.params.hash}`);
     // CORS headers for Flutter web

@@ -1081,8 +1081,9 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       }
 
       await _loadToken(); // Refresh to show new owner
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('Buy error: $e');
+      debugPrint('$stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

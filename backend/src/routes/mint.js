@@ -23,6 +23,19 @@ const { getCachedResult, cacheResult, isInProgress, markInProgress, clearInProgr
 function createRouter(upload) {
   const router = express.Router();
 
+  // Per-route rate limiter for mint endpoint (stricter than global)
+  let mintLimiter;
+  if (process.env.NODE_ENV === 'test') {
+    mintLimiter = (req, res, next) => next();
+  } else {
+    const rateLimit = require('express-rate-limit');
+    mintLimiter = rateLimit({
+      windowMs: 15 * 60 * 1000,
+      max: 5,
+      message: { error: 'Too many mint attempts', code: 'RATE_LIMITED' }
+    });
+  }
+
   /**
    * POST /api/mint
    *
@@ -41,7 +54,7 @@ function createRouter(upload) {
    * - metadataUri: string (Arweave URI for metadata)
    * - imageHash: string (SHA-256 of watermarked image)
    */
-  router.post('/', upload.single('image'), async (req, res, next) => {
+  router.post('/', mintLimiter, upload.single('image'), async (req, res, next) => {
     const mintId = req.body.mintId || uuidv4();
 
     // Idempotency: if this mintId was already processed, return cached result
@@ -70,6 +83,23 @@ function createRouter(upload) {
         return res.status(400).json({
           error: 'Image file required',
           code: 'MISSING_IMAGE'
+        });
+      }
+
+      // Magic-byte validation — reject files whose content doesn't match a supported image type
+      const SIGNATURES = [
+        [0x89, 0x50, 0x4e, 0x47],          // PNG
+        [0xff, 0xd8, 0xff],                 // JPEG
+        [0x47, 0x49, 0x46],                 // GIF
+        [0x52, 0x49, 0x46, 0x46],          // WebP (RIFF header)
+      ];
+      const matchesMagic = SIGNATURES.some(sig =>
+        sig.every((byte, i) => imageBuffer[i] === byte)
+      );
+      if (!matchesMagic) {
+        return res.status(400).json({
+          error: 'File content does not match a supported image type',
+          code: 'INVALID_FILE'
         });
       }
 
