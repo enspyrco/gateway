@@ -3,11 +3,15 @@ import 'package:go_router/go_router.dart';
 
 import '../models/token.dart';
 import '../services/api_service.dart';
+import '../utils/license_colors.dart';
 import '../widgets/wallet_button.dart';
 import '../theme.dart';
 
 class MarketplacePage extends StatefulWidget {
-  const MarketplacePage({super.key});
+  /// Injectable API service — real [ApiService] in production, fake in tests.
+  final ApiService? apiService;
+
+  const MarketplacePage({super.key, this.apiService});
 
   @override
   State<MarketplacePage> createState() => _MarketplacePageState();
@@ -31,7 +35,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
     });
 
     try {
-      final api = ApiService();
+      final api = widget.apiService ?? ApiService();
       final listings = await api.getListings();
       setState(() {
         _listings = listings;
@@ -220,18 +224,8 @@ class _ListingCard extends StatefulWidget {
 class _ListingCardState extends State<_ListingCard> {
   bool _isHovered = false;
 
-  Color _getLicenseColor(String? licenseType) {
-    switch (licenseType?.toLowerCase()) {
-      case 'display':
-        return NFTmarketColors.displayBlue;
-      case 'commercial':
-        return NFTmarketColors.commercialOrange;
-      case 'transfer':
-        return NFTmarketColors.transferPurple;
-      default:
-        return NFTmarketColors.textMuted;
-    }
-  }
+  Color _getLicenseColor(String? licenseType) =>
+      licenseColorFromString(licenseType);
 
   String _getLicenseLabel(String? licenseType) {
     switch (licenseType?.toLowerCase()) {

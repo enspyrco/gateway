@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:nftmarket/providers/mint_provider.dart';
-import 'package:nftmarket/providers/wallet_provider.dart';
 import 'package:nftmarket/models/token.dart';
 
 import '../fixtures/api_responses.dart';

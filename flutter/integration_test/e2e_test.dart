@@ -13,6 +13,8 @@
 /// Run with:
 ///   flutter test integration_test/e2e_test.dart -d chrome
 ///
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
@@ -20,7 +22,6 @@ import 'package:provider/provider.dart';
 
 import 'package:nftmarket/main.dart' as app;
 import 'package:nftmarket/providers/wallet_provider.dart';
-import 'package:nftmarket/providers/mint_provider.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();

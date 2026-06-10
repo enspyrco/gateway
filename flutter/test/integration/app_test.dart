@@ -206,14 +206,11 @@ void main() {
     });
 
     testWidgets('Owner sees list instead of buy', (tester) async {
-      final isOwner = true;
-
+      // Simulate the owner branch: the conditional renders 'List for Sale'.
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
-            body: isOwner
-                ? const Text('List for Sale')
-                : const Text('Buy for 1.0 ETH'),
+            body: Text('List for Sale'),
           ),
         ),
       );

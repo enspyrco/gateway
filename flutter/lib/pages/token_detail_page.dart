@@ -7,13 +7,19 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/token.dart';
 import '../services/api_service.dart';
 import '../providers/wallet_provider.dart';
+import '../utils/license_colors.dart';
+import '../widgets/premium_action_button.dart';
 import '../widgets/wallet_button.dart';
 import '../theme.dart';
+import 'token_actions.dart';
 
 class TokenDetailPage extends StatefulWidget {
   final int tokenId;
 
-  const TokenDetailPage({super.key, required this.tokenId});
+  /// Injectable for tests; defaults to a real [ApiService] when null.
+  final ApiService? apiService;
+
+  const TokenDetailPage({super.key, required this.tokenId, this.apiService});
 
   @override
   State<TokenDetailPage> createState() => _TokenDetailPageState();
@@ -36,8 +42,13 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
   }
 
   Future<void> _loadToken() async {
+    // Reset state so the Retry button actually recovers from a prior error.
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final api = ApiService();
+      final api = widget.apiService ?? ApiService();
       final token = await api.getTokenInfo(widget.tokenId);
 
       // Try to get listing info (public endpoint, no auth needed)
@@ -72,7 +83,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     if (!wallet.isConnected || wallet.authToken == null) return;
 
     try {
-      final api = ApiService(authToken: wallet.authToken);
+      final api = widget.apiService ?? ApiService(authToken: wallet.authToken);
       final status = await api.getLicenseStatus(widget.tokenId);
       debugPrint('License status for token ${widget.tokenId}: $status');
       setState(() {
@@ -90,6 +101,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       appBar: AppBar(
         title: Text('Token #${widget.tokenId}'),
         leading: IconButton(
+          tooltip: 'Back to marketplace',
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/'),
         ),
@@ -281,8 +293,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
           ),
           if (isListed && listingLicenseType != null) ...[
             _buildDivider(),
-            _buildInfoRow(
-                'License Offered', _getLicenseDisplayName(listingLicenseType)),
+            _buildInfoRow('License Offered',
+                LicenseType.fromString(listingLicenseType).displayName),
           ],
           _buildDivider(),
           _buildInfoRow('Minted', _formatDate(token.mintedAt)),
@@ -304,22 +316,30 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
   }
 
   Widget _buildGalleryButton(String address) {
-    return InkWell(
-      onTap: () => context.go('/gallery/$address'),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: NFTmarketColors.primary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: NFTmarketColors.primary.withValues(alpha: 0.3),
+    return Tooltip(
+      message: 'View gallery for ${_shortAddress(address)}',
+      child: InkWell(
+        onTap: () => context.go('/gallery/$address'),
+        borderRadius: BorderRadius.circular(8),
+        child: Semantics(
+          label: 'View gallery for ${_shortAddress(address)}',
+          button: true,
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: NFTmarketColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: NFTmarketColors.primary.withValues(alpha: 0.3),
+              ),
+            ),
+            child: const Icon(
+              Icons.collections,
+              size: 18,
+              color: NFTmarketColors.primary,
+              semanticLabel: 'Gallery',
+            ),
           ),
-        ),
-        child: const Icon(
-          Icons.collections,
-          size: 18,
-          color: NFTmarketColors.primary,
         ),
       ),
     );
@@ -344,19 +364,6 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
         ),
       ),
     );
-  }
-
-  String _getLicenseDisplayName(String licenseType) {
-    switch (licenseType) {
-      case 'display':
-        return 'Display Only';
-      case 'commercial':
-        return 'Commercial';
-      case 'transfer':
-        return 'Full Transfer';
-      default:
-        return licenseType;
-    }
   }
 
   Widget _buildInfoRow(String label, String value, {Widget? trailing}) {
@@ -394,7 +401,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       children: [
         // Marketplace actions
         if (isOwner && !isListed) ...[
-          _PremiumActionButton(
+          PremiumActionButton(
             onPressed: _actionLoading ? null : () => _showListDialog(),
             icon: _actionLoading ? null : Icons.sell,
             label: 'List for Sale',
@@ -406,7 +413,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
         if (isOwner && isListed) ...[
           _buildListedStatus(price),
           const SizedBox(height: 8),
-          _PremiumActionButton(
+          PremiumActionButton(
             onPressed: _actionLoading ? null : () => _delist(),
             icon: Icons.remove_shopping_cart,
             label: 'Remove Listing',
@@ -425,7 +432,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
           const SizedBox(height: 8),
           // Check if user can buy this specific license type
           if (_canBuyListedLicense()) ...[
-            _PremiumActionButton(
+            PremiumActionButton(
               onPressed: _actionLoading ? null : () => _buy(),
               icon: _actionLoading ? null : Icons.shopping_cart,
               label: _getBuyButtonLabel(price),
@@ -438,7 +445,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
           const SizedBox(height: 8),
         ],
         if (!isOwner && isListed && !wallet.isConnected) ...[
-          _PremiumActionButton(
+          PremiumActionButton(
             onPressed: () => wallet.connect(),
             icon: Icons.account_balance_wallet,
             label: 'Connect Wallet to Buy ($price ETH)',
@@ -451,7 +458,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
           margin: const EdgeInsets.symmetric(vertical: 8),
           color: NFTmarketColors.surfaceBorder,
         ),
-        _PremiumActionButton(
+        PremiumActionButton(
           onPressed: () => context.go('/verify/${widget.tokenId}'),
           icon: Icons.verified,
           label: 'Verify Authenticity',
@@ -459,7 +466,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
           color: NFTmarketColors.accent,
         ),
         const SizedBox(height: 8),
-        _PremiumActionButton(
+        PremiumActionButton(
           onPressed: () => _copyLink(),
           icon: Icons.share,
           label: 'Share',
@@ -468,7 +475,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
         ),
         if (token.transactionHash != null) ...[
           const SizedBox(height: 8),
-          _PremiumActionButton(
+          PremiumActionButton(
             onPressed: () => _openExplorer(token.transactionHash!),
             icon: Icons.open_in_new,
             label: 'View on Polygonscan',
@@ -521,8 +528,9 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
   /// Check if user can buy the currently listed license type
   bool _canBuyListedLicense() {
-    if (_licenseStatus == null)
+    if (_licenseStatus == null) {
       return true; // No status loaded yet, allow attempt
+    }
     final canBuy = _licenseStatus!['canBuy'] as Map<String, dynamic>?;
     if (canBuy == null) return true;
 
@@ -710,12 +718,12 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                       color: NFTmarketColors.warning.withValues(alpha: 0.3),
                     ),
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
                       Icon(Icons.edit_document,
                           color: NFTmarketColors.warning, size: 20),
-                      const SizedBox(width: 8),
-                      const Expanded(
+                      SizedBox(width: 8),
+                      Expanded(
                         child: Text(
                           'You will sign a binding agreement to sell under the chosen license terms.',
                           style: TextStyle(
@@ -872,227 +880,110 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     }
   }
 
-  Color _getLicenseColor(LicenseType license) {
-    switch (license) {
-      case LicenseType.display:
-        return NFTmarketColors.displayBlue;
-      case LicenseType.commercial:
-        return NFTmarketColors.commercialOrange;
-      case LicenseType.transfer:
-        return NFTmarketColors.transferPurple;
-    }
-  }
+  Color _getLicenseColor(LicenseType license) => licenseColor(license);
 
+  TokenActions _buildActions(WalletProvider wallet) => TokenActions(
+        tokenId: widget.tokenId,
+        api: widget.apiService ?? ApiService(authToken: wallet.authToken),
+        wallet: wallet,
+      );
+
+  /// List token — delegates transaction logic to [TokenActions].
   Future<void> _list(String priceEth, LicenseType licenseType) async {
     debugPrint('_list called with price: $priceEth, license: $licenseType');
     setState(() => _actionLoading = true);
-
-    try {
-      final wallet = context.read<WalletProvider>();
-
-      // Step 1: Call backend to prepare listing (backend handles all logic)
-      final api = ApiService(authToken: wallet.authToken);
-      final prepareResult = await api.prepareListing(
-        tokenId: widget.tokenId,
-        priceEth: priceEth,
-        licenseType: licenseType.name,
+    final wallet = context.read<WalletProvider>();
+    final result = await _buildActions(wallet).list(priceEth, licenseType);
+    if (!mounted) return;
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Listed for $priceEth ETH with ${licenseType.displayName} license!'),
+          backgroundColor: NFTmarketColors.surfaceLight,
+        ),
       );
-
-      debugPrint('Prepare result: $prepareResult');
-
-      // Step 2: Sign the typed data via wallet service
-      final typedData = prepareResult['typedData'] as Map<String, dynamic>;
-      final contractCall =
-          prepareResult['contractCall'] as Map<String, dynamic>;
-
-      final signatureBytes = await wallet.signTypedData(typedData);
-      final signatureHex =
-          '0x${signatureBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
-
-      // Step 3: Call backend to encode transaction (backend handles ABI encoding)
-      final encodeResult = await api.encodeListTransaction(
-        tokenId: contractCall['params']['tokenId'] as int,
-        price: contractCall['params']['price'].toString(),
-        licenseType: contractCall['params']['licenseType'] as int,
-        licenseHash: contractCall['params']['licenseHash'] as String,
-        expiry: contractCall['params']['expiry'] as int,
-        signature: signatureHex,
+      await _loadToken();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to list: ${result.errorMessage}'),
+          backgroundColor: NFTmarketColors.error.withValues(alpha: 0.9),
+        ),
       );
-
-      // Step 4: Submit transaction via wallet service
-      final contractAddress = await api.getContractAddress();
-
-      final txResult = await wallet.sendTransaction(
-        to: contractAddress,
-        data: encodeResult['txData'] as String,
-      );
-
-      debugPrint('List transaction hash: ${txResult.hash}');
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-                'Listed for $priceEth ETH with ${licenseType.displayName} license!'),
-            backgroundColor: NFTmarketColors.surfaceLight,
-          ),
-        );
-      }
-
-      await _loadToken(); // Refresh
-    } catch (e, stackTrace) {
-      debugPrint('List error: $e');
-      debugPrint('Stack trace: $stackTrace');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to list: $e'),
-            backgroundColor: NFTmarketColors.error.withValues(alpha: 0.9),
-          ),
-        );
-      }
-    } finally {
-      setState(() => _actionLoading = false);
     }
+    setState(() => _actionLoading = false);
   }
 
+  /// Delist token — delegates transaction logic to [TokenActions].
   Future<void> _delist() async {
-    setState(() => _actionLoading = true);
-
-    try {
-      final wallet = context.read<WalletProvider>();
-
-      // Get the license type from the listing
-      final licenseType = _listing?['licenseType'] as String?;
-      if (licenseType == null) {
-        throw Exception('No license type found for this listing');
-      }
-
-      // Step 1: Call backend to validate and prepare delisting
-      final api = ApiService(authToken: wallet.authToken);
-      final prepareResult = await api.prepareDelisting(
-        tokenId: widget.tokenId,
-        licenseType: licenseType,
-      );
-
-      debugPrint('Delist prepare result: $prepareResult');
-
-      // Step 2: Call backend to encode transaction (backend handles ABI encoding)
-      final contractCall =
-          prepareResult['contractCall'] as Map<String, dynamic>;
-
-      final encodeResult = await api.encodeDelistTransaction(
-        tokenId: contractCall['params']['tokenId'] as int,
-        licenseType: licenseType,
-      );
-
-      // Step 3: Submit transaction via wallet service
-      final contractAddress = await api.getContractAddress();
-
-      final txResult = await wallet.sendTransaction(
-        to: contractAddress,
-        data: encodeResult['txData'] as String,
-      );
-
-      debugPrint('Delist transaction hash: ${txResult.hash}');
-
+    final licenseType = _listing?['licenseType'] as String?;
+    if (licenseType == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Listing removed'),
-            backgroundColor: NFTmarketColors.surfaceLight,
-          ),
+          const SnackBar(
+              content: Text('No license type found for this listing')),
         );
       }
-
-      await _loadToken(); // Refresh
-    } catch (e) {
-      debugPrint('Delist error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to delist: $e'),
-            backgroundColor: NFTmarketColors.error.withValues(alpha: 0.9),
-          ),
-        );
-      }
-    } finally {
-      setState(() => _actionLoading = false);
+      return;
     }
+    setState(() => _actionLoading = true);
+    final wallet = context.read<WalletProvider>();
+    final result = await _buildActions(wallet).delist(licenseType);
+    if (!mounted) return;
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Listing removed'),
+          backgroundColor: NFTmarketColors.surfaceLight,
+        ),
+      );
+      await _loadToken();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delist: ${result.errorMessage}'),
+          backgroundColor: NFTmarketColors.error.withValues(alpha: 0.9),
+        ),
+      );
+    }
+    setState(() => _actionLoading = false);
   }
 
+  /// Buy token — delegates transaction logic to [TokenActions].
   Future<void> _buy() async {
-    setState(() => _actionLoading = true);
-
-    try {
-      final wallet = context.read<WalletProvider>();
-
-      // Get the license type from the listing
-      final licenseType = _listing?['licenseType'] as String?;
-      if (licenseType == null) {
-        throw Exception('No license type found for this listing');
-      }
-
-      // Step 1: Call backend to prepare purchase (backend handles all logic)
-      final api = ApiService(authToken: wallet.authToken);
-      final prepareResult = await api.preparePurchase(
-        tokenId: widget.tokenId,
-        licenseType: licenseType,
-      );
-
-      if (prepareResult['success'] != true) {
-        throw Exception(prepareResult['error'] ?? 'Failed to prepare purchase');
-      }
-
-      // Step 2: Sign the typed data via wallet service
-      final typedData = prepareResult['typedData'] as Map<String, dynamic>;
-
-      final signatureBytes = await wallet.signTypedData(typedData);
-      final signatureHex =
-          '0x${signatureBytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join()}';
-
-      // Step 3: Call backend to encode transaction (backend handles ABI encoding)
-      final encodeResult = await api.encodeBuyTransaction(
-        tokenId: widget.tokenId,
-        licenseType: licenseType,
-        signature: signatureHex,
-      );
-
-      // Step 4: Submit transaction via wallet service
-      final contractAddress = await api.getContractAddress();
-
-      final txResult = await wallet.sendTransaction(
-        to: contractAddress,
-        data: encodeResult['txData'] as String,
-        value: encodeResult['value'] as String,
-      );
-
-      debugPrint('Buy transaction hash: ${txResult.hash}');
-
+    final licenseType = _listing?['licenseType'] as String?;
+    if (licenseType == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text(
-                'Purchase successful! Bilateral agreement recorded on-chain.'),
-            backgroundColor: NFTmarketColors.success.withValues(alpha: 0.9),
-          ),
+          const SnackBar(
+              content: Text('No license type found for this listing')),
         );
       }
-
-      await _loadToken(); // Refresh to show new owner
-    } catch (e) {
-      debugPrint('Buy error: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to buy: $e'),
-            backgroundColor: NFTmarketColors.error.withValues(alpha: 0.9),
-          ),
-        );
-      }
-    } finally {
-      setState(() => _actionLoading = false);
+      return;
     }
+    setState(() => _actionLoading = true);
+    final wallet = context.read<WalletProvider>();
+    final result = await _buildActions(wallet).buy(licenseType);
+    if (!mounted) return;
+    if (result.success) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+              'Purchase successful! Bilateral agreement recorded on-chain.'),
+          backgroundColor: NFTmarketColors.success.withValues(alpha: 0.9),
+        ),
+      );
+      await _loadToken();
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to buy: ${result.errorMessage}'),
+          backgroundColor: NFTmarketColors.error.withValues(alpha: 0.9),
+        ),
+      );
+    }
+    setState(() => _actionLoading = false);
   }
 
   String _shortAddress(String address) {
@@ -1107,8 +998,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     final url = 'https://nftmarket.com/token/${widget.tokenId}';
     Clipboard.setData(ClipboardData(text: url));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Link copied to clipboard'),
+      const SnackBar(
+        content: Text('Link copied to clipboard'),
         backgroundColor: NFTmarketColors.surfaceLight,
       ),
     );
@@ -1119,108 +1010,5 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     if (await canLaunchUrl(url)) {
       await launchUrl(url);
     }
-  }
-}
-
-class _PremiumActionButton extends StatefulWidget {
-  final VoidCallback? onPressed;
-  final IconData? icon;
-  final String label;
-  final bool isOutlined;
-  final bool isLoading;
-  final Color color;
-
-  const _PremiumActionButton({
-    required this.onPressed,
-    this.icon,
-    required this.label,
-    this.isOutlined = false,
-    this.isLoading = false,
-    required this.color,
-  });
-
-  @override
-  State<_PremiumActionButton> createState() => _PremiumActionButtonState();
-}
-
-class _PremiumActionButtonState extends State<_PremiumActionButton> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(
-          gradient: widget.isOutlined
-              ? null
-              : LinearGradient(
-                  colors: [
-                    widget.color,
-                    widget.color.withValues(alpha: 0.8),
-                  ],
-                ),
-          color: widget.isOutlined ? Colors.transparent : null,
-          borderRadius: BorderRadius.circular(12),
-          border: widget.isOutlined
-              ? Border.all(
-                  color: _isHovered
-                      ? widget.color
-                      : widget.color.withValues(alpha: 0.5),
-                  width: _isHovered ? 1.5 : 1,
-                )
-              : null,
-          boxShadow: _isHovered && !widget.isOutlined
-              ? [
-                  BoxShadow(
-                    color: widget.color.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                  ),
-                ]
-              : null,
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.onPressed,
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (widget.isLoading)
-                    SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: widget.isOutlined ? widget.color : Colors.white,
-                      ),
-                    )
-                  else if (widget.icon != null)
-                    Icon(
-                      widget.icon,
-                      size: 18,
-                      color: widget.isOutlined ? widget.color : Colors.white,
-                    ),
-                  if ((widget.icon != null || widget.isLoading))
-                    const SizedBox(width: 10),
-                  Text(
-                    widget.label,
-                    style: TextStyle(
-                      color: widget.isOutlined ? widget.color : Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

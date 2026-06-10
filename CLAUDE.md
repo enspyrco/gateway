@@ -107,7 +107,7 @@ npm test                           # Run all tests
 npx hardhat test test/NFTmarketNFT.test.js  # Single test file
 npm run node                       # Start local Hardhat node
 npm run deploy:local               # Deploy to local node
-npm run deploy:mumbai              # Deploy to Polygon Mumbai testnet
+npm run deploy:amoy               # Deploy to Polygon Amoy testnet (chainId 80002)
 npm run deploy:polygon             # Deploy to Polygon mainnet
 ```
 

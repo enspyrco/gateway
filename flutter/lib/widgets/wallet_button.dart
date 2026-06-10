@@ -20,19 +20,6 @@ class WalletButton extends StatelessWidget {
       },
     );
   }
-
-  void _showConnectDialog(BuildContext context, WalletProvider wallet) {
-    if (wallet.isLocalDevMode) {
-      // Show test account picker in dev mode
-      showDialog(
-        context: context,
-        builder: (context) => _TestAccountPickerDialog(wallet: wallet),
-      );
-    } else {
-      // Regular wallet connect in production
-      wallet.connect();
-    }
-  }
 }
 
 class _ConnectButton extends StatefulWidget {
@@ -55,7 +42,7 @@ class _ConnectButtonState extends State<_ConnectButton> {
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
-          gradient: LinearGradient(
+          gradient: const LinearGradient(
             colors: [
               NFTmarketColors.surfaceLight,
               NFTmarketColors.surface,
@@ -362,7 +349,7 @@ class _ConnectedButtonState extends State<_ConnectedButton> {
           duration: const Duration(milliseconds: 200),
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            gradient: LinearGradient(
+            gradient: const LinearGradient(
               colors: [
                 NFTmarketColors.surfaceLight,
                 NFTmarketColors.surface,
@@ -448,10 +435,10 @@ class _ConnectedButtonState extends State<_ConnectedButton> {
           } else if (value == 'copy') {
             Clipboard.setData(ClipboardData(text: widget.wallet.address ?? ''));
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: const Text('Address copied to clipboard'),
+              const SnackBar(
+                content: Text('Address copied to clipboard'),
                 backgroundColor: NFTmarketColors.surfaceLight,
-                duration: const Duration(seconds: 2),
+                duration: Duration(seconds: 2),
               ),
             );
           }
@@ -519,17 +506,17 @@ class _ConnectedButtonState extends State<_ConnectedButton> {
           ),
           const PopupMenuDivider(),
           if (widget.wallet.isLocalDevMode)
-            PopupMenuItem(
+            const PopupMenuItem(
               value: 'switch',
               child: Row(
                 children: [
-                  const Icon(
+                  Icon(
                     Icons.swap_horiz,
                     size: 18,
                     color: NFTmarketColors.textSecondary,
                   ),
-                  const SizedBox(width: 10),
-                  const Text(
+                  SizedBox(width: 10),
+                  Text(
                     'Switch Account',
                     style: TextStyle(color: NFTmarketColors.textPrimary),
                   ),

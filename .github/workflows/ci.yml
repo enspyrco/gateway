@@ -34,8 +34,12 @@ jobs:
             contracts:
               - 'contracts/**'
 
-  # Required status check that always passes
-  # Allows PRs with non-code changes (docs, config) to be merged
+  # Required status check — gates on failures AND on unexpected skips.
+  # Charge 3.4 fix (UNEMPLOYED.md): previously a skipped Flutter job counted
+  # as success, so a README change + Dart compile error would pass CI.
+  # Fix: if the changes filter detected flutter/backend/contracts files changed
+  # but the corresponding job was skipped (i.e., it never ran), that is a bug
+  # in the CI configuration — fail loudly.
   ci-status:
     name: CI Status
     runs-on: ubuntu-latest
@@ -44,10 +48,41 @@ jobs:
     steps:
       - name: Check status
         run: |
-          if [[ "${{ needs.flutter.result }}" == "failure" ]] || \
-             [[ "${{ needs.backend.result }}" == "failure" ]] || \
-             [[ "${{ needs.contracts.result }}" == "failure" ]]; then
-            echo "One or more jobs failed"
+          FAIL=0
+
+          # Fail on explicit failures
+          if [[ "${{ needs.flutter.result }}" == "failure" ]]; then
+            echo "Flutter job failed"
+            FAIL=1
+          fi
+          if [[ "${{ needs.backend.result }}" == "failure" ]]; then
+            echo "Backend job failed"
+            FAIL=1
+          fi
+          if [[ "${{ needs.contracts.result }}" == "failure" ]]; then
+            echo "Contracts job failed"
+            FAIL=1
+          fi
+
+          # Fail when code changed but the CI job was skipped unexpectedly.
+          # A skipped job only makes sense when the path filter says no files changed.
+          if [[ "${{ needs.changes.outputs.flutter }}" == "true" ]] && \
+             [[ "${{ needs.flutter.result }}" == "skipped" ]]; then
+            echo "Flutter files changed but Flutter job was skipped — CI gate is broken"
+            FAIL=1
+          fi
+          if [[ "${{ needs.changes.outputs.backend }}" == "true" ]] && \
+             [[ "${{ needs.backend.result }}" == "skipped" ]]; then
+            echo "Backend files changed but backend job was skipped — CI gate is broken"
+            FAIL=1
+          fi
+          if [[ "${{ needs.changes.outputs.contracts }}" == "true" ]] && \
+             [[ "${{ needs.contracts.result }}" == "skipped" ]]; then
+            echo "Contracts files changed but contracts job was skipped — CI gate is broken"
+            FAIL=1
+          fi
+
+          if [[ $FAIL -eq 1 ]]; then
             exit 1
           fi
           echo "All required checks passed"
@@ -78,7 +113,11 @@ jobs:
         run: dart format --set-exit-if-changed .
 
       - name: Analyze code
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        # --no-fatal-infos: infos are informational only, not actionable in CI.
+        # --no-fatal-warnings flag removed: all warnings surfaced by the
+        # analyzer must be fixed or explicitly inline-ignored with a reason
+        # (charge 3.4 fix from UNEMPLOYED.md). Warnings are now fatal.
+        run: flutter analyze --no-fatal-infos
 
       - name: Run tests
         run: flutter test --reporter expanded
@@ -102,10 +141,10 @@ jobs:
           node-version: "20"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run tests
-        run: npm test -- --passWithNoTests
+        run: npm test
 
   contracts:
     name: Contract Tests
@@ -128,7 +167,7 @@ jobs:
           cache-dependency-path: contracts/package-lock.json
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Compile contracts
         run: npx hardhat clean && npm run compile

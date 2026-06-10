@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
 
 import 'package:nftmarket/models/token.dart';
-import 'package:nftmarket/providers/wallet_provider.dart';
 import 'package:nftmarket/theme.dart';
 
 import '../fixtures/api_responses.dart';
-import '../mocks/mock_http_client.dart';
 import '../utils/test_app.dart';
 
 /// Regression tests for the Token Detail page.
@@ -45,7 +41,7 @@ void main() {
       testWidgets('shows error message when loading fails', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _ErrorStateWidget(error: 'Token not found'),
+            const _ErrorStateWidget(error: 'Token not found'),
           ),
         );
 
@@ -158,7 +154,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _OwnerActionsWidget(isOwner: true, isListed: false),
+            const _OwnerActionsWidget(isOwner: true, isListed: false),
             walletProvider: connectedAsAlice(),
           ),
         );
@@ -194,7 +190,7 @@ void main() {
       testWidgets('shows listed status with price', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            Scaffold(
+            const Scaffold(
               body: Center(
                 child: _ListedStatusWidget(priceEth: '2.5'),
               ),
@@ -209,7 +205,8 @@ void main() {
       testWidgets('shows "Remove Listing" button when listed', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _OwnerActionsWidget(isOwner: true, isListed: true, priceEth: '1.0'),
+            const _OwnerActionsWidget(
+                isOwner: true, isListed: true, priceEth: '1.0'),
             walletProvider: connectedAsAlice(),
           ),
         );
@@ -224,7 +221,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _BuyActionWidget(
+            const _BuyActionWidget(
               isConnected: true,
               isListed: true,
               priceEth: '1.5',
@@ -241,7 +238,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _BuyActionWidget(
+            const _BuyActionWidget(
               isConnected: false,
               isListed: true,
               priceEth: '1.5',
@@ -277,7 +274,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _ExistingLicenseWidget(existingLicense: 'display'),
+            const _ExistingLicenseWidget(existingLicense: 'display'),
             walletProvider: connectedAsBob(),
           ),
         );
@@ -292,7 +289,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _UpgradeBuyButtonWidget(
+            const _UpgradeBuyButtonWidget(
               existingLicense: 'display',
               targetLicense: 'commercial',
               priceEth: '5.0',
@@ -307,7 +304,7 @@ void main() {
       testWidgets('shows cannot downgrade message', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _CannotBuyWidget(
+            const _CannotBuyWidget(
               existingLicense: 'commercial',
               listingLicense: 'display',
             ),
@@ -325,7 +322,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _CannotBuyWidget(
+            const _CannotBuyWidget(
               existingLicense: 'display',
               listingLicense: 'display',
             ),
@@ -399,7 +396,7 @@ void main() {
       testWidgets('shows Verify Authenticity button', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _CommonActionsWidget(tokenId: 1),
+            const _CommonActionsWidget(tokenId: 1),
           ),
         );
 
@@ -410,7 +407,7 @@ void main() {
       testWidgets('shows Share button', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _CommonActionsWidget(tokenId: 1),
+            const _CommonActionsWidget(tokenId: 1),
           ),
         );
 
@@ -422,7 +419,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _CommonActionsWidget(
+            const _CommonActionsWidget(
               tokenId: 1,
               transactionHash: '0xabc123',
             ),
@@ -439,7 +436,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _LoadingActionButtonWidget(
+            const _LoadingActionButtonWidget(
               label: 'List for Sale',
               isLoading: true,
             ),
@@ -453,7 +450,7 @@ void main() {
       testWidgets('disables button while loading', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _LoadingActionButtonWidget(
+            const _LoadingActionButtonWidget(
               label: 'Buy',
               isLoading: true,
             ),
@@ -470,7 +467,7 @@ void main() {
       testWidgets('shows license type when listing is active', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _ListingInfoWidget(
+            const _ListingInfoWidget(
               licenseType: 'display',
               priceEth: '1.0',
             ),
@@ -478,13 +475,13 @@ void main() {
         );
 
         expect(find.text('License Offered'), findsOneWidget);
-        expect(find.text('Display Only'), findsOneWidget);
+        expect(find.text('Display'), findsOneWidget);
       });
 
       testWidgets('shows commercial license name correctly', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _ListingInfoWidget(
+            const _ListingInfoWidget(
               licenseType: 'commercial',
               priceEth: '5.0',
             ),
@@ -497,7 +494,7 @@ void main() {
       testWidgets('shows full transfer license name correctly', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _ListingInfoWidget(
+            const _ListingInfoWidget(
               licenseType: 'transfer',
               priceEth: '10.0',
             ),
@@ -512,7 +509,7 @@ void main() {
       testWidgets('creator address has gallery button', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _AddressWithGalleryButton(
+            const _AddressWithGalleryButton(
               label: 'Creator',
               address: TestAddresses.alice,
             ),
@@ -526,7 +523,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _AddressWithGalleryButton(
+            const _AddressWithGalleryButton(
               label: 'Owner',
               address: TestAddresses.bob,
               isCurrentUser: false,
@@ -799,14 +796,14 @@ class _BilateralAgreementWidget extends StatelessWidget {
           color: NFTmarketColors.info.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Column(
+        child: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                const Icon(Icons.verified_user, color: NFTmarketColors.info),
-                const SizedBox(width: 10),
-                const Text(
+                Icon(Icons.verified_user, color: NFTmarketColors.info),
+                SizedBox(width: 10),
+                Text(
                   'Bilateral Agreement Required',
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
@@ -815,8 +812,8 @@ class _BilateralAgreementWidget extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            const Text(
+            SizedBox(height: 8),
+            Text(
               'By clicking Buy, you will sign a license agreement that will be recorded on-chain.',
             ),
           ],
@@ -1073,18 +1070,8 @@ class _ListingInfoWidget extends StatelessWidget {
     required this.priceEth,
   });
 
-  String get _displayName {
-    switch (licenseType) {
-      case 'display':
-        return 'Display Only';
-      case 'commercial':
-        return 'Commercial';
-      case 'transfer':
-        return 'Full Transfer';
-      default:
-        return licenseType;
-    }
-  }
+  // Mirrors the page, which now renders LicenseType.fromString(x).displayName.
+  String get _displayName => LicenseType.fromString(licenseType).displayName;
 
   @override
   Widget build(BuildContext context) {
@@ -1151,10 +1138,10 @@ class _AddressWithGalleryButton extends StatelessWidget {
 class _SimplifiedListDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return const Scaffold(
       body: Column(
         children: [
-          const TextField(
+          TextField(
             decoration: InputDecoration(
               labelText: 'Price in ETH',
               hintText: '0.1',
@@ -1170,14 +1157,14 @@ class _SimplifiedListDialog extends StatelessWidget {
 class _LicenseOptionsWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return const Scaffold(
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('License Type'),
-          const Text('Display'),
-          const Text('Commercial'),
-          const Text('Full Transfer'),
+          Text('License Type'),
+          Text('Display'),
+          Text('Commercial'),
+          Text('Full Transfer'),
         ],
       ),
     );
