@@ -42,8 +42,9 @@ class WalletProvider extends ChangeNotifier {
   int _chainId = kDebugMode ? 31337 : 137; // Hardhat local or Polygon mainnet
   TestAccount? _testAccount;
 
-  // Wallet service for signing and transactions
-  final WalletService _walletService = WalletService();
+  // Wallet service for signing and transactions.
+  // Injectable for testing — defaults to real WalletService in production.
+  final WalletService _walletService;
 
   // Cached list of available accounts from wallet service
   List<TestAccount> _availableAccounts = [];
@@ -72,7 +73,8 @@ class WalletProvider extends ChangeNotifier {
     return '${_address!.substring(0, 6)}...${_address!.substring(_address!.length - 4)}';
   }
 
-  WalletProvider() {
+  WalletProvider({WalletService? walletService})
+      : _walletService = walletService ?? WalletService() {
     // Use hardcoded accounts immediately for fast startup
     _availableAccounts = _defaultAccounts;
     _loadSavedSession();
