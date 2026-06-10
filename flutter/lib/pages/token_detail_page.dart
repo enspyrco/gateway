@@ -999,8 +999,9 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       }
 
       await _loadToken(); // Refresh
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('Delist error: $e');
+      debugPrint('$stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
