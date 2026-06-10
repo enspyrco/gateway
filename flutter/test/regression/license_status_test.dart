@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
 
 import 'package:nftmarket/models/token.dart';
-import 'package:nftmarket/providers/wallet_provider.dart';
 import 'package:nftmarket/theme.dart';
 
 import '../fixtures/api_responses.dart';
-import '../mocks/mock_http_client.dart';
 import '../utils/test_app.dart';
 
 /// Regression tests for the license upgrade/downgrade logic.
@@ -165,7 +162,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _ExistingLicenseInfoWidget(
+            const _ExistingLicenseInfoWidget(
               existingLicense: 'display',
             ),
             walletProvider: connectedAsBob(),
@@ -181,7 +178,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _ExistingLicenseInfoWidget(
+            const _ExistingLicenseInfoWidget(
               existingLicense: 'commercial',
             ),
             walletProvider: connectedAsBob(),
@@ -195,7 +192,7 @@ void main() {
       testWidgets('does not show when no existing license', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _ExistingLicenseInfoWidget(
+            const _ExistingLicenseInfoWidget(
               existingLicense: null,
             ),
             walletProvider: connectedAsBob(),
@@ -211,7 +208,7 @@ void main() {
       testWidgets('shows downgrade blocked message', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _CannotBuyMessageWidget(
+            const _CannotBuyMessageWidget(
               existingLicense: 'commercial',
               listingLicense: 'display',
             ),
@@ -230,7 +227,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _CannotBuyMessageWidget(
+            const _CannotBuyMessageWidget(
               existingLicense: 'display',
               listingLicense: 'display',
             ),
@@ -250,7 +247,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _BuyButtonWidget(
+            const _BuyButtonWidget(
               existingLicense: null,
               listingLicense: 'display',
               priceEth: '1.5',
@@ -266,7 +263,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _BuyButtonWidget(
+            const _BuyButtonWidget(
               existingLicense: 'display',
               listingLicense: 'commercial',
               priceEth: '5.0',
@@ -283,7 +280,7 @@ void main() {
       testWidgets('buy button enabled when can purchase', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            Scaffold(
+            const Scaffold(
               body: _BuyButtonWidget(
                 existingLicense: null,
                 listingLicense: 'display',
@@ -305,7 +302,7 @@ void main() {
       testWidgets('buy button disabled when cannot purchase', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            Scaffold(
+            const Scaffold(
               body: _BuyButtonWidget(
                 existingLicense: 'commercial',
                 listingLicense: 'display',
@@ -340,7 +337,7 @@ void main() {
     testWidgets('license badge shows correct label for display',
         (tester) async {
       await tester.pumpWidget(
-        MaterialApp(
+        const MaterialApp(
           home: Scaffold(
             body: _LicenseBadge(licenseType: 'display'),
           ),

@@ -8,7 +8,6 @@ import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:nftmarket/providers/wallet_provider.dart';
 import 'package:nftmarket/providers/fee_simulation_provider.dart';
-import 'package:nftmarket/models/test_account.dart';
 import 'package:nftmarket/services/wallet_service.dart';
 
 // ── Fake wallet service ───────────────────────────────────────────────────────

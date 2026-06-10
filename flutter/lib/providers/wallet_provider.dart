@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -39,7 +38,7 @@ class WalletProvider extends ChangeNotifier {
   String? _address;
   String? _error;
   String? _authToken;
-  int _chainId = kDebugMode ? 31337 : 137; // Hardhat local or Polygon mainnet
+  final int _chainId = kDebugMode ? 31337 : 137; // Hardhat local or Polygon mainnet
   TestAccount? _testAccount;
 
   // Wallet service for signing and transactions.

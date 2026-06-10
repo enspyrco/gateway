@@ -37,16 +37,16 @@ void main() {
       testWidgets('shows token name and description', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            Scaffold(
+            const Scaffold(
               body: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'My Art NFT',
                     style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24),
                   ),
-                  const SizedBox(height: 8),
-                  const Text('A beautiful piece of digital art'),
+                  SizedBox(height: 8),
+                  Text('A beautiful piece of digital art'),
                 ],
               ),
             ),
@@ -60,25 +60,25 @@ void main() {
       testWidgets('shows creator and owner info', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            Scaffold(
+            const Scaffold(
               body: Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(16),
                   child: Column(
                     children: [
                       Row(
                         children: [
-                          const Text('Creator'),
-                          const Spacer(),
-                          const Text('0x1234...7890'),
+                          Text('Creator'),
+                          Spacer(),
+                          Text('0x1234...7890'),
                         ],
                       ),
-                      const Divider(),
+                      Divider(),
                       Row(
                         children: [
-                          const Text('Owner'),
-                          const Spacer(),
-                          const Text('0xabcd...ef01'),
+                          Text('Owner'),
+                          Spacer(),
+                          Text('0xabcd...ef01'),
                         ],
                       ),
                     ],
@@ -99,17 +99,17 @@ void main() {
         // Test UI without actually connecting wallet (avoids SharedPreferences issues)
         await tester.pumpWidget(
           buildTestWidget(
-            Scaffold(
+            const Scaffold(
               body: Card(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.all(16),
                   child: Row(
                     children: [
-                      const Text('Owner'),
-                      const Spacer(),
-                      const Text('0x7099...79C8'),
-                      const SizedBox(width: 8),
-                      const Chip(
+                      Text('Owner'),
+                      Spacer(),
+                      Text('0x7099...79C8'),
+                      SizedBox(width: 8),
+                      Chip(
                         label: Text('You', style: TextStyle(fontSize: 12)),
                         backgroundColor: Colors.green,
                         labelStyle: TextStyle(color: Colors.white),
@@ -166,8 +166,8 @@ void main() {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      TextField(
-                        decoration: const InputDecoration(
+                      const TextField(
+                        decoration: InputDecoration(
                           labelText: 'Price in ETH',
                           hintText: '0.1',
                           suffixText: 'ETH',
@@ -236,13 +236,13 @@ void main() {
                 children: [
                   Card(
                     color: Colors.green.shade50,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
+                    child: const Padding(
+                      padding: EdgeInsets.all(12),
                       child: Row(
                         children: [
-                          const Icon(Icons.local_offer, color: Colors.green),
-                          const SizedBox(width: 8),
-                          const Text('Listed for 1.5 ETH',
+                          Icon(Icons.local_offer, color: Colors.green),
+                          SizedBox(width: 8),
+                          Text('Listed for 1.5 ETH',
                               style: TextStyle(fontWeight: FontWeight.bold)),
                         ],
                       ),

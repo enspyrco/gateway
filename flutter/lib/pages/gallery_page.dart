@@ -144,8 +144,8 @@ class _GalleryPageState extends State<GalleryPage> {
       context.go('/gallery/$address');
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
+        const SnackBar(
+          content: Text(
               'Enter a wallet address (0x...) or name (Alice, Bob, etc.)'),
           backgroundColor: NFTmarketColors.surfaceLight,
         ),
@@ -785,9 +785,9 @@ class _TokenCardState extends State<_TokenCard> {
                                       .withValues(alpha: 0.95),
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: Row(
+                                child: const Row(
                                   mainAxisSize: MainAxisSize.min,
-                                  children: const [
+                                  children: [
                                     Icon(
                                       Icons.local_offer,
                                       size: 10,

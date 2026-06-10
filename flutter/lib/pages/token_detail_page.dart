@@ -521,8 +521,9 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
   /// Check if user can buy the currently listed license type
   bool _canBuyListedLicense() {
-    if (_licenseStatus == null)
+    if (_licenseStatus == null) {
       return true; // No status loaded yet, allow attempt
+    }
     final canBuy = _licenseStatus!['canBuy'] as Map<String, dynamic>?;
     if (canBuy == null) return true;
 
@@ -710,12 +711,12 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                       color: NFTmarketColors.warning.withValues(alpha: 0.3),
                     ),
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
                       Icon(Icons.edit_document,
                           color: NFTmarketColors.warning, size: 20),
-                      const SizedBox(width: 8),
-                      const Expanded(
+                      SizedBox(width: 8),
+                      Expanded(
                         child: Text(
                           'You will sign a binding agreement to sell under the chosen license terms.',
                           style: TextStyle(
@@ -998,8 +999,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Listing removed'),
+          const SnackBar(
+            content: Text('Listing removed'),
             backgroundColor: NFTmarketColors.surfaceLight,
           ),
         );
@@ -1107,8 +1108,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     final url = 'https://nftmarket.com/token/${widget.tokenId}';
     Clipboard.setData(ClipboardData(text: url));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Link copied to clipboard'),
+      const SnackBar(
+        content: Text('Link copied to clipboard'),
         backgroundColor: NFTmarketColors.surfaceLight,
       ),
     );

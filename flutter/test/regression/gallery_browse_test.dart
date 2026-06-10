@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
 
-import 'package:nftmarket/providers/wallet_provider.dart';
 import 'package:nftmarket/theme.dart';
 
 import '../fixtures/api_responses.dart';
-import '../mocks/mock_http_client.dart';
 import '../utils/test_app.dart';
 
 /// Regression tests for the Gallery page browsing functionality.
@@ -45,7 +42,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _GalleryHeaderWidget(
+            const _GalleryHeaderWidget(
               address: TestAddresses.alice,
               isOwnGallery: true,
             ),
@@ -60,7 +57,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _GalleryHeaderWidget(
+            const _GalleryHeaderWidget(
               address: TestAddresses.bob,
               isOwnGallery: false,
               displayName: 'Bob',
@@ -79,7 +76,7 @@ void main() {
 
         await tester.pumpWidget(
           buildTestWidget(
-            _GalleryHeaderWidget(
+            const _GalleryHeaderWidget(
               address: unknownAddress,
               isOwnGallery: false,
               displayName: '0x1234...7890',
@@ -97,7 +94,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _EmptyGalleryWidget(
+            const _EmptyGalleryWidget(
               isOwnGallery: true,
               isConnected: true,
             ),
@@ -114,7 +111,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _EmptyGalleryWidget(
+            const _EmptyGalleryWidget(
               isOwnGallery: false,
               isConnected: true,
             ),
@@ -142,7 +139,7 @@ void main() {
       testWidgets('shows error with retry button', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _ErrorStateWidget(error: 'Failed to load gallery'),
+            const _ErrorStateWidget(error: 'Failed to load gallery'),
           ),
         );
 
@@ -305,11 +302,9 @@ void main() {
 
     group('License Type Display', () {
       testWidgets('shows display license badge', (tester) async {
-        final token = TokenFixtures.tokenWithLicense(ownerLicense: 'display');
-
         await tester.pumpWidget(
           buildTestWidget(
-            _OwnerLicenseBadgeWidget(licenseType: 'display'),
+            const _OwnerLicenseBadgeWidget(licenseType: 'display'),
           ),
         );
 
@@ -319,7 +314,7 @@ void main() {
       testWidgets('shows commercial license badge', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _OwnerLicenseBadgeWidget(licenseType: 'commercial'),
+            const _OwnerLicenseBadgeWidget(licenseType: 'commercial'),
           ),
         );
 
@@ -329,7 +324,7 @@ void main() {
       testWidgets('shows full copyright badge', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _OwnerLicenseBadgeWidget(licenseType: 'transfer'),
+            const _OwnerLicenseBadgeWidget(licenseType: 'transfer'),
           ),
         );
 
@@ -484,7 +479,7 @@ void main() {
       testWidgets('shows section header with gold accent', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _SectionHeaderWidget(title: 'Browse Galleries'),
+            const _SectionHeaderWidget(title: 'Browse Galleries'),
           ),
         );
 
