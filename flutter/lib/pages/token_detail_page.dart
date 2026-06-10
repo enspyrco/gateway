@@ -16,7 +16,10 @@ import 'token_actions.dart';
 class TokenDetailPage extends StatefulWidget {
   final int tokenId;
 
-  const TokenDetailPage({super.key, required this.tokenId});
+  /// Injectable for tests; defaults to a real [ApiService] when null.
+  final ApiService? apiService;
+
+  const TokenDetailPage({super.key, required this.tokenId, this.apiService});
 
   @override
   State<TokenDetailPage> createState() => _TokenDetailPageState();
@@ -39,8 +42,13 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
   }
 
   Future<void> _loadToken() async {
+    // Reset state so the Retry button actually recovers from a prior error.
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
     try {
-      final api = ApiService();
+      final api = widget.apiService ?? ApiService();
       final token = await api.getTokenInfo(widget.tokenId);
 
       // Try to get listing info (public endpoint, no auth needed)
@@ -75,7 +83,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     if (!wallet.isConnected || wallet.authToken == null) return;
 
     try {
-      final api = ApiService(authToken: wallet.authToken);
+      final api = widget.apiService ?? ApiService(authToken: wallet.authToken);
       final status = await api.getLicenseStatus(widget.tokenId);
       debugPrint('License status for token ${widget.tokenId}: $status');
       setState(() {
@@ -285,8 +293,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
           ),
           if (isListed && listingLicenseType != null) ...[
             _buildDivider(),
-            _buildInfoRow(
-                'License Offered', _getLicenseDisplayName(listingLicenseType)),
+            _buildInfoRow('License Offered',
+                LicenseType.fromString(listingLicenseType).displayName),
           ],
           _buildDivider(),
           _buildInfoRow('Minted', _formatDate(token.mintedAt)),
@@ -356,19 +364,6 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
         ),
       ),
     );
-  }
-
-  String _getLicenseDisplayName(String licenseType) {
-    switch (licenseType) {
-      case 'display':
-        return 'Display Only';
-      case 'commercial':
-        return 'Commercial';
-      case 'transfer':
-        return 'Full Transfer';
-      default:
-        return licenseType;
-    }
   }
 
   Widget _buildInfoRow(String label, String value, {Widget? trailing}) {
@@ -889,7 +884,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
   TokenActions _buildActions(WalletProvider wallet) => TokenActions(
         tokenId: widget.tokenId,
-        api: ApiService(authToken: wallet.authToken),
+        api: widget.apiService ?? ApiService(authToken: wallet.authToken),
         wallet: wallet,
       );
 
@@ -926,7 +921,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     if (licenseType == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No license type found for this listing')),
+          const SnackBar(
+              content: Text('No license type found for this listing')),
         );
       }
       return;
@@ -960,7 +956,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     if (licenseType == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No license type found for this listing')),
+          const SnackBar(
+              content: Text('No license type found for this listing')),
         );
       }
       return;

@@ -475,7 +475,7 @@ void main() {
         );
 
         expect(find.text('License Offered'), findsOneWidget);
-        expect(find.text('Display Only'), findsOneWidget);
+        expect(find.text('Display'), findsOneWidget);
       });
 
       testWidgets('shows commercial license name correctly', (tester) async {
@@ -1070,18 +1070,8 @@ class _ListingInfoWidget extends StatelessWidget {
     required this.priceEth,
   });
 
-  String get _displayName {
-    switch (licenseType) {
-      case 'display':
-        return 'Display Only';
-      case 'commercial':
-        return 'Commercial';
-      case 'transfer':
-        return 'Full Transfer';
-      default:
-        return licenseType;
-    }
-  }
+  // Mirrors the page, which now renders LicenseType.fromString(x).displayName.
+  String get _displayName => LicenseType.fromString(licenseType).displayName;
 
   @override
   Widget build(BuildContext context) {

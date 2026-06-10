@@ -97,11 +97,18 @@ class _PremiumActionButtonState extends State<PremiumActionButton> {
                       ),
                     if ((widget.icon != null || widget.isLoading))
                       const SizedBox(width: 10),
-                    Text(
-                      widget.label,
-                      style: TextStyle(
-                        color: widget.isOutlined ? widget.color : Colors.white,
-                        fontWeight: FontWeight.w600,
+                    // Flexible + ellipsis: long labels (e.g. "Connect Wallet
+                    // to Buy (1.0 ETH)") must truncate, not overflow, in the
+                    // fixed-width detail column.
+                    Flexible(
+                      child: Text(
+                        widget.label,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color:
+                              widget.isOutlined ? widget.color : Colors.white,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ],
