@@ -176,8 +176,13 @@ app.get('/ipfs/:hash', ipfsGatewayLimiter, async (req, res) => {
   }
 });
 
-// Mock Arweave gateway (for development only)
+// Mock Arweave gateway (development only). Unlike /ipfs/:hash, nothing in the
+// Flutter app fetches this route — metadata is read server-side via
+// arweaveService — so it is safe to disable in production.
 app.get('/arweave/:txId', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ error: 'Not found' });
+  }
   try {
     const data = await arweaveService.fetchData(req.params.txId);
     res.type('application/json');
@@ -233,6 +238,8 @@ app.use('/api/gallery', galleryRouter);
 
 // Authenticated routes
 app.use('/api/mint', authMiddleware, mintRouter(upload));
+// Public per-token decode must register before the authed catch-all below.
+app.use('/api/detect/token', detectRouter.createPublicRouter());
 app.use('/api/detect', authMiddleware, detectRouter(upload));
 // Marketplace has mixed auth: GET routes are public, POST routes use authMiddleware internally
 app.use('/api/marketplace', marketplaceRouter);

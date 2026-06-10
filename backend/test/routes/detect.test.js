@@ -208,4 +208,51 @@ describe('Detection Routes', () => {
       expect(typeof response.body.confidence).toBe('number');
     });
   });
+
+  describe('GET /api/detect/token/:tokenId (public)', () => {
+    it('should not require authentication', async () => {
+      const res = await request(app).get('/api/detect/token/999999');
+      // 404 (unknown token), NOT 401 — the route is public
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('TOKEN_NOT_FOUND');
+    });
+
+    it('should reject non-numeric token ids', async () => {
+      const res = await request(app).get('/api/detect/token/abc');
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe('INVALID_TOKEN_ID');
+    });
+
+    it('should reject negative and non-canonical ids', async () => {
+      expect((await request(app).get('/api/detect/token/-1')).status).toBe(400);
+      expect((await request(app).get('/api/detect/token/1.5')).status).toBe(400);
+      expect((await request(app).get('/api/detect/token/01')).status).toBe(400);
+    });
+
+    it('should decode a minted token and cache the result', async () => {
+      // Mint a token through the mock pipeline first
+      const mintRes = await request(app)
+        .post('/api/mint')
+        .set('Authorization', `Bearer ${authToken}`)
+        .attach('image', createTestImage(1, 2, 3), 'decode-target.png')
+        .field('name', 'Decode target')
+        .field('licenseType', 'display')
+        .field('licenseSignature', '0x' + 'a'.repeat(64));
+      expect(mintRes.status).toBe(201);
+      const tokenId = mintRes.body.tokenId;
+
+      const first = await request(app).get(`/api/detect/token/${tokenId}`);
+      expect(first.status).toBe(200);
+      expect(first.body.tokenId).toBe(tokenId);
+      expect(typeof first.body.detected).toBe('boolean');
+      expect(typeof first.body.verified).toBe('boolean');
+      expect(first.body.cached).toBe(false);
+      // Mock watermark mode can't really decode; verified must not be claimed
+      expect(first.body.verified).toBe(false);
+
+      const second = await request(app).get(`/api/detect/token/${tokenId}`);
+      expect(second.status).toBe(200);
+      expect(second.body.cached).toBe(true);
+    });
+  });
 });

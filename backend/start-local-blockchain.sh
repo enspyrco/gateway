@@ -31,7 +31,7 @@ export USE_MOCK_FIRESTORE=true
 export MOCK_PERSISTENCE=true
 
 # Rust blind detection binary
-export BLIND_DETECT_BINARY="../watermark-rs/target/release/detect"
+export BLIND_DETECT_BINARY="./blind-detector/detect_blind3"  # build: see blind-detector/README.md
 
 echo "Starting with LOCAL HARDHAT BLOCKCHAIN"
 echo "Contract: $NFTMARKET_CONTRACT_ADDRESS"
