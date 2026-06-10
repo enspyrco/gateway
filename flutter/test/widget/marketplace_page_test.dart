@@ -1,210 +1,184 @@
+// Charge 3.1 fix: tests now instantiate the real MarketplacePage(), not a hand-rolled stub.
+// HTTP blocking is solved by injecting a fake http.Client (package:http/testing.dart) via
+// ApiService(httpClient: ...) — real widget, fake transport.
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:provider/provider.dart';
 
+import 'package:nftmarket/pages/marketplace_page.dart';
 import 'package:nftmarket/providers/wallet_provider.dart';
 import 'package:nftmarket/providers/mint_provider.dart';
+import 'package:nftmarket/services/api_service.dart';
+
+// ── helpers ─────────────────────────────────────────────────────────────────
+
+/// Build an [ApiService] whose HTTP transport replies with [listings].
+ApiService _apiWithListings(List<Map<String, dynamic>> listings) {
+  final client = MockClient((request) async {
+    return http.Response(
+      jsonEncode({'listings': listings}),
+      200,
+      headers: {'content-type': 'application/json'},
+    );
+  });
+  return ApiService(httpClient: client);
+}
+
+/// Build an [ApiService] whose HTTP transport always throws a network error.
+ApiService _apiWithError() {
+  final client = MockClient((_) async {
+    throw Exception('Connection refused');
+  });
+  return ApiService(httpClient: client);
+}
+
+Widget _wrap(Widget child, WalletProvider wallet) {
+  return MultiProvider(
+    providers: [
+      ChangeNotifierProvider<WalletProvider>.value(value: wallet),
+      ChangeNotifierProxyProvider<WalletProvider, MintProvider>(
+        create: (_) => MintProvider(),
+        update: (_, w, m) => m!..updateWallet(w),
+      ),
+    ],
+    child: MaterialApp(home: child),
+  );
+}
+
+// ── tests ────────────────────────────────────────────────────────────────────
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  group('MarketplacePage Widget', () {
-    late WalletProvider walletProvider;
+  late WalletProvider wallet;
 
-    setUp(() {
-      walletProvider = WalletProvider();
+  setUp(() => wallet = WalletProvider());
+  tearDown(() => wallet.disconnect());
+
+  group('MarketplacePage — loading state', () {
+    testWidgets('shows CircularProgressIndicator before data arrives',
+        (tester) async {
+      // Use a Completer so we control exactly when the response arrives.
+      final completer = Completer<http.Response>();
+      final client = MockClient((_) => completer.future);
+      final api = ApiService(httpClient: client);
+
+      await tester.pumpWidget(_wrap(MarketplacePage(apiService: api), wallet));
+      // Don't settle — just process the first frame.
+      await tester.pump();
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      // Clean up: resolve so no pending timers remain.
+      completer.complete(http.Response(
+        jsonEncode({'listings': []}),
+        200,
+        headers: {'content-type': 'application/json'},
+      ));
+      await tester.pumpAndSettle();
     });
+  });
 
-    tearDown(() {
-      walletProvider.disconnect();
+  group('MarketplacePage — empty state', () {
+    testWidgets('shows "No NFTs for sale" when listings array is empty',
+        (tester) async {
+      final api = _apiWithListings([]);
+
+      await tester.pumpWidget(_wrap(MarketplacePage(apiService: api), wallet));
+      // Pump until async work settles.
+      await tester.pumpAndSettle();
+
+      expect(find.text('No NFTs for sale'), findsOneWidget);
+      expect(find.text('Be the first to list your artwork!'), findsOneWidget);
     });
+  });
 
-    Widget buildTestWidget(Widget child) {
-      return MultiProvider(
-        providers: [
-          ChangeNotifierProvider.value(value: walletProvider),
-          ChangeNotifierProxyProvider<WalletProvider, MintProvider>(
-            create: (_) => MintProvider(),
-            update: (_, wallet, mint) => mint!..updateWallet(wallet),
-          ),
-        ],
-        child: MaterialApp(home: child),
-      );
-    }
-
-    group('Listing Display', () {
-      testWidgets('shows loading indicator initially', (tester) async {
-        await tester.pumpWidget(
-          buildTestWidget(
-            const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            ),
-          ),
-        );
-
-        expect(find.byType(CircularProgressIndicator), findsOneWidget);
-      });
-
-      testWidgets('shows empty state when no listings', (tester) async {
-        await tester.pumpWidget(
-          buildTestWidget(
-            Scaffold(
-              body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.storefront,
-                        size: 64, color: Colors.grey.shade400),
-                    const SizedBox(height: 16),
-                    const Text('No NFTs for sale'),
-                    const SizedBox(height: 8),
-                    const Text('Be the first to list one!'),
-                    const SizedBox(height: 24),
-                    ElevatedButton.icon(
-                      onPressed: () {},
-                      icon: const Icon(Icons.add),
-                      label: const Text('Mint an NFT'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-
-        expect(find.text('No NFTs for sale'), findsOneWidget);
-        expect(find.text('Be the first to list one!'), findsOneWidget);
-        expect(find.text('Mint an NFT'), findsOneWidget);
-      });
-
-      testWidgets('displays listing cards with price and seller',
-          (tester) async {
-        final mockListing = {
+  group('MarketplacePage — success state', () {
+    testWidgets('renders a listing card with name and price', (tester) async {
+      final api = _apiWithListings([
+        {
           'tokenId': 1,
-          'name': 'Test NFT',
-          'priceEth': '1.5',
-          'seller': '0x1234567890123456789012345678901234567890',
-        };
+          'name': 'Golden Sunrise',
+          'priceEth': '2.5',
+          'seller': '0xAbCd1234AbCd1234AbCd1234AbCd1234AbCd1234',
+          'licenseType': 'display',
+          'imageUrl': null,
+        }
+      ]);
 
-        await tester.pumpWidget(
-          buildTestWidget(
-            Scaffold(
-              body: Card(
-                child: InkWell(
-                  onTap: () {},
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          mockListing['name'] as String,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 4),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.green.shade100,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text('${mockListing['priceEth']} ETH'),
-                        ),
-                        const SizedBox(height: 4),
-                        const Text('Seller: 0x1234...7890'),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
+      await tester.pumpWidget(_wrap(MarketplacePage(apiService: api), wallet));
+      await tester.pumpAndSettle();
 
-        expect(find.text('Test NFT'), findsOneWidget);
-        expect(find.text('1.5 ETH'), findsOneWidget);
-        expect(find.text('Seller: 0x1234...7890'), findsOneWidget);
-      });
-
-      testWidgets('shows error state with retry button', (tester) async {
-        bool retried = false;
-
-        await tester.pumpWidget(
-          buildTestWidget(
-            Scaffold(
-              body: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline,
-                        size: 48, color: Colors.grey.shade400),
-                    const SizedBox(height: 16),
-                    const Text('Error loading marketplace'),
-                    const SizedBox(height: 8),
-                    const Text('Connection refused'),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: () => retried = true,
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
-
-        expect(find.text('Error loading marketplace'), findsOneWidget);
-        expect(find.text('Retry'), findsOneWidget);
-
-        await tester.tap(find.text('Retry'));
-        expect(retried, isTrue);
-      });
+      expect(find.text('Golden Sunrise'), findsOneWidget);
+      expect(find.textContaining('2.5'), findsWidgets);
     });
 
-    group('Buy Functionality', () {
-      testWidgets('shows buy button for listed tokens when connected',
-          (tester) async {
-        // Test UI without actually connecting wallet (avoids SharedPreferences issues)
-        await tester.pumpWidget(
-          buildTestWidget(
-            Scaffold(
-              body: Center(
-                child: ElevatedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.shopping_cart),
-                  label: const Text('Buy for 1.0 ETH'),
-                ),
-              ),
-            ),
-          ),
+    testWidgets('renders multiple listing cards', (tester) async {
+      final api = _apiWithListings([
+        {
+          'tokenId': 1,
+          'name': 'Alpha',
+          'priceEth': '1.0',
+          'seller': '0x1111111111111111111111111111111111111111',
+          'licenseType': 'display',
+          'imageUrl': null,
+        },
+        {
+          'tokenId': 2,
+          'name': 'Beta',
+          'priceEth': '2.0',
+          'seller': '0x2222222222222222222222222222222222222222',
+          'licenseType': 'commercial',
+          'imageUrl': null,
+        },
+      ]);
+
+      await tester.pumpWidget(_wrap(MarketplacePage(apiService: api), wallet));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Alpha'), findsOneWidget);
+      expect(find.text('Beta'), findsOneWidget);
+    });
+  });
+
+  group('MarketplacePage — error state', () {
+    testWidgets('shows error message and Retry button on network failure',
+        (tester) async {
+      final api = _apiWithError();
+
+      await tester.pumpWidget(_wrap(MarketplacePage(apiService: api), wallet));
+      await tester.pumpAndSettle();
+
+      // The real page shows an error column when _error is non-null.
+      expect(find.text('Retry'), findsOneWidget);
+    });
+
+    testWidgets('Retry button triggers a second load', (tester) async {
+      int callCount = 0;
+      final client = MockClient((request) async {
+        callCount++;
+        if (callCount == 1) throw Exception('first call fails');
+        return http.Response(
+          jsonEncode({'listings': []}),
+          200,
+          headers: {'content-type': 'application/json'},
         );
-
-        expect(find.text('Buy for 1.0 ETH'), findsOneWidget);
-        expect(find.byIcon(Icons.shopping_cart), findsOneWidget);
       });
+      final api = ApiService(httpClient: client);
 
-      testWidgets('shows connect wallet prompt when not connected',
-          (tester) async {
-        expect(walletProvider.isConnected, isFalse);
+      await tester.pumpWidget(_wrap(MarketplacePage(apiService: api), wallet));
+      await tester.pumpAndSettle();
 
-        await tester.pumpWidget(
-          buildTestWidget(
-            Scaffold(
-              body: Center(
-                child: ElevatedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.account_balance_wallet),
-                  label: const Text('Connect Wallet to Buy (1.0 ETH)'),
-                ),
-              ),
-            ),
-          ),
-        );
+      expect(find.text('Retry'), findsOneWidget);
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
 
-        expect(find.text('Connect Wallet to Buy (1.0 ETH)'), findsOneWidget);
-      });
+      // After retry the second call succeeded → empty state, not error.
+      expect(find.text('No NFTs for sale'), findsOneWidget);
+      expect(callCount, equals(2));
     });
   });
 }

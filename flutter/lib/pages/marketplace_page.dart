@@ -7,7 +7,10 @@ import '../widgets/wallet_button.dart';
 import '../theme.dart';
 
 class MarketplacePage extends StatefulWidget {
-  const MarketplacePage({super.key});
+  /// Injectable API service — real [ApiService] in production, fake in tests.
+  final ApiService? apiService;
+
+  const MarketplacePage({super.key, this.apiService});
 
   @override
   State<MarketplacePage> createState() => _MarketplacePageState();
@@ -31,7 +34,7 @@ class _MarketplacePageState extends State<MarketplacePage> {
     });
 
     try {
-      final api = ApiService();
+      final api = widget.apiService ?? ApiService();
       final listings = await api.getListings();
       setState(() {
         _listings = listings;
