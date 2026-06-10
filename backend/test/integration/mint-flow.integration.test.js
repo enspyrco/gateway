@@ -229,19 +229,15 @@ describe('Mint Flow Integration Tests', () => {
         body: formData
       });
 
-      // The mint might fail due to watermarking or IPFS issues in test env
-      // but we should at least get a proper response
+      // Charge 3.4 fix (UNEMPLOYED.md): a test that passes when the feature fails
+      // is not a test — it is a lie. When RUN_INTEGRATION_TESTS=true, the mint
+      // MUST succeed. If it doesn't, we have a real failure.
       const data = await res.json();
 
-      if (res.ok) {
-        expect(data).toHaveProperty('tokenId');
-        expect(typeof data.tokenId).toBe('number');
-        console.log(`Minted token #${data.tokenId}`);
-      } else {
-        // If it fails, make sure it's not a minter authorization error
-        expect(data.error).not.toContain('NotAuthorizedMinter');
-        console.log('Mint failed (expected in some test environments):', data.error);
-      }
+      expect(res.ok).toBe(true);
+      expect(data).toHaveProperty('tokenId');
+      expect(typeof data.tokenId).toBe('number');
+      console.log(`Minted token #${data.tokenId}`);
     }, 60000); // 60 second timeout for mint
 
     test('Gallery shows minted tokens', async () => {

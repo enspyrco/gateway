@@ -70,12 +70,15 @@ async function applyWatermarkViaAPI(imageBuffer, message) {
 
   // Use node-fetch or http request for proper form-data streaming
   const response = await new Promise((resolve, reject) => {
-    const https = require("https");
     const url = new URL(`${WATERMARK_API_URL}/watermark`);
+    // Honor the URL scheme — the engine may be plain HTTP (e.g. on an internal
+    // docker network). Forcing https here caused EPROTO against an http engine.
+    const isHttps = url.protocol === "https:";
+    const httpLib = require(isHttps ? "https" : "http");
 
     const options = {
       hostname: url.hostname,
-      port: url.port || 443,
+      port: url.port || (isHttps ? 443 : 80),
       path: url.pathname,
       method: "POST",
       headers: {
@@ -84,7 +87,7 @@ async function applyWatermarkViaAPI(imageBuffer, message) {
       },
     };
 
-    const req = https.request(options, (res) => {
+    const req = httpLib.request(options, (res) => {
       let data = "";
       res.on("data", (chunk) => {
         data += chunk;

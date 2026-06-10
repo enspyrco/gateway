@@ -13,20 +13,22 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const WALLET_SERVICE = 'http://localhost:3001';
-const BACKEND = 'http://localhost:3000';
+const WALLET_SERVICE = process.env.WALLET_SERVICE || 'http://localhost:3001';
+const BACKEND = process.env.BACKEND || 'http://localhost:3000';
 const IMAGE_DIR = process.env.IMAGE_DIR || __dirname + '/test-images';
 
-// Get contract address from deployment
-let CONTRACT;
-try {
-  const deployment = JSON.parse(fs.readFileSync(path.join(__dirname, 'contracts/deployment.json'), 'utf8'));
-  CONTRACT = deployment.address;
-  console.log('Contract address:', CONTRACT);
-} catch (e) {
-  console.error('Could not read contract address from contracts/deployment.json:', e.message);
-  process.exit(1);
+// Contract address: env override (for containerized runs) or deployment.json
+let CONTRACT = process.env.CONTRACT;
+if (!CONTRACT) {
+  try {
+    const deployment = JSON.parse(fs.readFileSync(path.join(__dirname, 'contracts/deployment.json'), 'utf8'));
+    CONTRACT = deployment.address;
+  } catch (e) {
+    console.error('No CONTRACT env and could not read contracts/deployment.json:', e.message);
+    process.exit(1);
+  }
 }
+console.log('Contract address:', CONTRACT);
 
 // Test accounts
 const accounts = {

@@ -350,3 +350,75 @@ describe('Health Check', () => {
     expect(res.body.status).toBe('ok');
   });
 });
+
+describe('Magic-byte file validation', () => {
+  const testWallet = '0x1234567890123456789012345678901234567890';
+  let authToken;
+
+  beforeAll(() => {
+    authToken = createMockAuthToken(testWallet);
+  });
+
+  it('rejects file with invalid magic bytes (ELF binary as image/png)', async () => {
+    // ELF magic bytes: 0x7f454c46
+    const elfBuffer = Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0x00, 0x00, 0x00, 0x00]);
+
+    const res = await request(app)
+      .post('/api/mint')
+      .set('Authorization', `Bearer ${authToken}`)
+      .field('name', 'Malicious')
+      .field('licenseType', 'display')
+      .attach('image', elfBuffer, { filename: 'evil.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('INVALID_FILE');
+  });
+
+  it('rejects file with all-zero bytes as image/png', async () => {
+    const zeroBuffer = Buffer.alloc(1024);
+
+    const res = await request(app)
+      .post('/api/mint')
+      .set('Authorization', `Bearer ${authToken}`)
+      .field('name', 'Zero')
+      .field('licenseType', 'display')
+      .attach('image', zeroBuffer, { filename: 'zero.png', contentType: 'image/png' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('INVALID_FILE');
+  });
+
+  it('rejects a WAV file masquerading as WebP (RIFF header alone is not enough)', async () => {
+    // WAV: "RIFF" + size + "WAVE" — shares the RIFF prefix with WebP
+    const wavBuffer = Buffer.concat([
+      Buffer.from('RIFF'),
+      Buffer.from([0x24, 0x00, 0x00, 0x00]),
+      Buffer.from('WAVE'),
+      Buffer.alloc(32)
+    ]);
+
+    const res = await request(app)
+      .post('/api/mint')
+      .set('Authorization', `Bearer ${authToken}`)
+      .field('name', 'NotAnImage')
+      .field('licenseType', 'display')
+      .attach('image', wavBuffer, { filename: 'sound.webp', contentType: 'image/webp' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('INVALID_FILE');
+  });
+});
+
+describe('IPFS proxy in production', () => {
+  const originalEnv = process.env.NODE_ENV;
+
+  afterEach(() => {
+    process.env.NODE_ENV = originalEnv;
+  });
+
+  it('still serves images in production mode (gallery depends on this route under USE_MOCK_IPFS)', async () => {
+    process.env.NODE_ENV = 'production';
+    const res = await request(app).get('/ipfs/QmTestHash');
+    expect(res.status).toBe(200);
+  });
+});

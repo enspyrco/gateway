@@ -1,0 +1,133 @@
+# NFTmarket gateway — full stack on Robin's OCI (aarch64), self-contained.
+#
+# Topology:
+#   caddy (edge, TLS) ── /api/*    ─> backend:3000
+#                     ── /wallet/* ─> wallet-service:3001
+#                     ── /*        ─> flutter-web:80
+#   backend ─> watermark-engine:8080, hardhat:8545 (chain)
+#   hardhat publishes deployment.json to the `deployment` volume; backend reads it.
+#
+# Data layer is per-service (see .env): mock by default, flip individual
+# services to real managed backends (Pinata, Stability, Firestore) as needed.
+
+name: gateway
+
+services:
+  hardhat:
+    build:
+      context: ../contracts
+    environment:
+      SHARED_DIR: /shared
+      STATE_FILE: /state/anvil-state.json
+    volumes:
+      - deployment:/shared
+      # Persistent Anvil chain state — survives `docker compose restart` so the
+      # contract + minter + all minted NFTs reload intact. Wipe this volume
+      # (docker compose down -v, or rm the volume) to force a fresh chain, e.g.
+      # after a contract code change.
+      - chain:/state
+    networks: [gateway-net]
+    restart: unless-stopped
+    healthcheck:
+      # Healthy only once the contract address has been published.
+      test: ["CMD", "test", "-f", "/shared/deployment.json"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+      start_period: 30s
+
+  wallet-service:
+    build:
+      context: ../wallet-service
+    environment:
+      PORT: 3001
+      RPC_URL: http://hardhat:8545
+      CHAIN_ID: 31337
+      # SIWE token domain/URI must match the backend's SIWE_DOMAIN
+      SIWE_DOMAIN: ${SITE_HOST:-gateway.imagineering.cc}
+      SIWE_URI: https://${SITE_HOST:-gateway.imagineering.cc}
+    networks: [gateway-net]
+    restart: unless-stopped
+    depends_on:
+      hardhat:
+        condition: service_healthy
+
+  watermark-engine:
+    # Built separately from enspyrco/watermarking (arm64). See deploy/build-watermark.sh.
+    image: ${WATERMARK_IMAGE:-watermark-engine:local}
+    environment:
+      PORT: 8080
+      API_KEY: ${WATERMARK_API_KEY:?set WATERMARK_API_KEY in .env}
+      CORS_ORIGIN: "*"
+    networks: [gateway-net]
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ../backend
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      SHARED_DIR: /shared
+      # Local-Hardhat chain
+      USE_MOCK_BLOCKCHAIN: "false"
+      POLYGON_RPC_URL: http://hardhat:8545
+      # On-box watermark engine
+      WATERMARK_API_URL: http://watermark-engine:8080
+      USE_MOCK_WATERMARK: "false"
+      # Persist the in-memory mock stores (IPFS images + Arweave metadata) to a
+      # volume so token art/names survive a backend rebuild or reboot — the
+      # off-chain twin of the persistent Anvil chain. Without this, the chain
+      # keeps the tokens but their image/metadata bytes vanish on restart.
+      MOCK_PERSISTENCE: "true"
+    volumes:
+      - deployment:/shared:ro
+      - mockdata:/app/.mock-data
+    networks: [gateway-net]
+    restart: unless-stopped
+    depends_on:
+      hardhat:
+        condition: service_healthy
+      watermark-engine:
+        condition: service_started
+
+  flutter-web:
+    build:
+      context: ../flutter
+      args:
+        API_URL: ${PUBLIC_URL:-https://gateway.imagineering.cc}
+        WALLET_URL: ${WALLET_PUBLIC_URL:-https://gateway.imagineering.cc/wallet}
+    networks: [gateway-net]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./public:/srv/public:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      SITE_HOST: ${SITE_HOST:-gateway.imagineering.cc}
+    networks: [gateway-net]
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - flutter-web
+      - wallet-service
+
+networks:
+  gateway-net:
+
+volumes:
+  deployment:
+  chain:
+  mockdata:
+  caddy_data:
+  caddy_config:

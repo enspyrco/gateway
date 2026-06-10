@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -39,11 +38,13 @@ class WalletProvider extends ChangeNotifier {
   String? _address;
   String? _error;
   String? _authToken;
-  int _chainId = kDebugMode ? 31337 : 137; // Hardhat local or Polygon mainnet
+  final int _chainId =
+      kDebugMode ? 31337 : 137; // Hardhat local or Polygon mainnet
   TestAccount? _testAccount;
 
-  // Wallet service for signing and transactions
-  final WalletService _walletService = WalletService();
+  // Wallet service for signing and transactions.
+  // Injectable for testing — defaults to real WalletService in production.
+  final WalletService _walletService;
 
   // Cached list of available accounts from wallet service
   List<TestAccount> _availableAccounts = [];
@@ -72,7 +73,8 @@ class WalletProvider extends ChangeNotifier {
     return '${_address!.substring(0, 6)}...${_address!.substring(_address!.length - 4)}';
   }
 
-  WalletProvider() {
+  WalletProvider({WalletService? walletService})
+      : _walletService = walletService ?? WalletService() {
     // Use hardcoded accounts immediately for fast startup
     _availableAccounts = _defaultAccounts;
     _loadSavedSession();

@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
 
 import 'package:nftmarket/providers/wallet_provider.dart';
 import 'package:nftmarket/providers/fee_simulation_provider.dart';
-import 'package:nftmarket/models/test_account.dart';
 import 'package:nftmarket/theme.dart';
 
 import '../fixtures/api_responses.dart';
@@ -268,7 +266,7 @@ void main() {
       testWidgets('wallet button shows connected state', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _WalletStatusWidget(
+            const _WalletStatusWidget(
               isConnected: true,
               shortAddress: '0x3C44...93BC',
             ),
@@ -283,7 +281,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _WalletStatusWidget(
+            const _WalletStatusWidget(
               isConnected: false,
             ),
             walletProvider: disconnected(),

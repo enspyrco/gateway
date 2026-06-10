@@ -9,7 +9,7 @@ npm run compile              # Compile contracts
 npm test                     # Run all tests
 npm run node                 # Start local Hardhat node
 npm run deploy:local         # Deploy to local node (requires node running)
-npm run deploy:mumbai        # Deploy to Mumbai testnet
+npm run deploy:amoy          # Deploy to Amoy testnet (chainId 80002, Mumbai successor)
 npm run deploy:polygon       # Deploy to Polygon mainnet
 
 # Run single test file

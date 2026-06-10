@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -54,7 +53,29 @@ class TransactionResult {
 
 /// Service for communicating with the wallet microservice
 class WalletService {
-  static const String _baseUrl = 'http://localhost:3001';
+  // Baked at build time (Flutter web freezes String.fromEnvironment into the JS).
+  // In production this is the Caddy edge route
+  // (https://gateway.imagineering.cc/wallet → wallet-service:3001); dev defaults
+  // to the local wallet service.  A bare localhost default shipped to prod means
+  // every visitor's browser hits THEIR own machine — the connect-wallet failure
+  // that prompted charge 4.4.
+  static const String _configuredUrl = String.fromEnvironment(
+    'WALLET_URL',
+    defaultValue: 'http://localhost:3001',
+  );
+
+  /// Resolved base URL.  Debug builds may use localhost; release builds must
+  /// have WALLET_URL injected at compile time.
+  static final String _baseUrl = () {
+    if (!kDebugMode && _configuredUrl.contains('localhost')) {
+      throw StateError(
+        'WALLET_URL is not configured for a release build. '
+        'Pass --dart-define=WALLET_URL=https://your-wallet-host when building. '
+        'Refusing to use localhost in production.',
+      );
+    }
+    return _configuredUrl;
+  }();
 
   String? _sessionId;
 

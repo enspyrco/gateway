@@ -1,0 +1,37 @@
+# Edge reverse proxy + automatic TLS (Let's Encrypt) for the gateway.
+# SITE_HOST is injected from the environment (default gateway.imagineering.cc).
+#
+# A real hostname is required: WalletConnect + SIWE are secure-context features,
+# so the Flutter app only works over HTTPS. Caddy provisions the cert
+# automatically once gateway.imagineering.cc resolves to this box.
+
+{$SITE_HOST} {
+	encode gzip zstd
+
+	# Backend API
+	handle /api/* {
+		reverse_proxy backend:3000
+	}
+
+	# IPFS image proxy (backend serves watermarked previews at /ipfs/:hash)
+	handle /ipfs/* {
+		reverse_proxy backend:3000
+	}
+
+	# Wallet service (signing). Strip the /wallet prefix before forwarding.
+	handle_path /wallet/* {
+		reverse_proxy wallet-service:3001
+	}
+
+	# Void Gallery — static WebGL prototype (camera shootout). Served from a
+	# mounted host dir so we can iterate without rebuilding a container.
+	handle /void* {
+		root * /srv/public
+		file_server
+	}
+
+	# Flutter web app (SPA) — everything else.
+	handle {
+		reverse_proxy flutter-web:80
+	}
+}

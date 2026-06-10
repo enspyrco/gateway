@@ -135,7 +135,7 @@ class NFTmarketTheme {
     return ThemeData(
       useMaterial3: true,
       scaffoldBackgroundColor: NFTmarketColors.background,
-      colorScheme: ColorScheme.dark(
+      colorScheme: const ColorScheme.dark(
         surface: NFTmarketColors.surface,
         primary: NFTmarketColors.primary,
         secondary: NFTmarketColors.accent,
