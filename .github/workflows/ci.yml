@@ -141,10 +141,10 @@ jobs:
           node-version: "20"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run tests
-        run: npm test -- --passWithNoTests
+        run: npm test
 
   contracts:
     name: Contract Tests
@@ -167,7 +167,7 @@ jobs:
           cache-dependency-path: contracts/package-lock.json
 
       - name: Install dependencies
-        run: npm ci || npm install
+        run: npm ci
 
       - name: Compile contracts
         run: npx hardhat clean && npm run compile
