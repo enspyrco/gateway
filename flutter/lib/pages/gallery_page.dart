@@ -146,8 +146,8 @@ class _GalleryPageState extends State<GalleryPage> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-              'Enter a wallet address (0x...) or name (Alice, Bob, etc.)'),
+          content:
+              Text('Enter a wallet address (0x...) or name (Alice, Bob, etc.)'),
           backgroundColor: NFTmarketColors.surfaceLight,
         ),
       );
@@ -736,9 +736,7 @@ class _TokenCardState extends State<_TokenCard> {
               : null,
         ),
         child: Semantics(
-          label: isListed
-              ? '$name — For sale'
-              : name,
+          label: isListed ? '$name — For sale' : name,
           button: true,
           child: Material(
             color: Colors.transparent,
@@ -746,214 +744,217 @@ class _TokenCardState extends State<_TokenCard> {
               onTap: widget.onTap,
               borderRadius: BorderRadius.circular(16),
               child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      ClipRRect(
-                        borderRadius: const BorderRadius.vertical(
-                          top: Radius.circular(15),
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(15),
+                          ),
+                          child: imageUrl != null
+                              ? Image.network(
+                                  imageUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => _placeholder(),
+                                )
+                              : _placeholder(),
                         ),
-                        child: imageUrl != null
-                            ? Image.network(
-                                imageUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _placeholder(),
-                              )
-                            : _placeholder(),
-                      ),
-                      // Show "For Sale" badges if listed (top-left) - multi-license support
-                      if (isListed)
-                        Positioned(
-                          top: 8,
-                          left: 8,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // "FOR SALE" header
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: NFTmarketColors.accent
-                                      .withValues(alpha: 0.95),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(
-                                      Icons.local_offer,
-                                      size: 10,
-                                      color: Colors.white,
-                                    ),
-                                    SizedBox(width: 3),
-                                    Text(
-                                      'FOR SALE',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 8,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 0.5,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              // Show each listing type with price
-                              if (listings.isNotEmpty)
-                                ...listings.map<Widget>((listing) {
-                                  final type =
-                                      listing['licenseType'] as String? ?? '';
-                                  final priceEth =
-                                      listing['priceEth'] as String?;
-                                  final color = _getLicenseColor(type);
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 2),
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: color.withValues(alpha: 0.9),
-                                        borderRadius: BorderRadius.circular(4),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: color.withValues(alpha: 0.3),
-                                            blurRadius: 4,
-                                          ),
-                                        ],
-                                      ),
-                                      child: Text(
-                                        '${_formatListingLabel(type)}: ${_formatPriceShort(priceEth)}',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                })
-                              else if (listingLicenseType != null)
-                                // Legacy single listing fallback
+                        // Show "For Sale" badges if listed (top-left) - multi-license support
+                        if (isListed)
+                          Positioned(
+                            top: 8,
+                            left: 8,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // "FOR SALE" header
                                 Container(
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 3),
+                                      horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: listingColor.withValues(alpha: 0.9),
+                                    color: NFTmarketColors.accent
+                                        .withValues(alpha: 0.95),
                                     borderRadius: BorderRadius.circular(4),
                                   ),
-                                  child: Text(
-                                    _formatListingLabel(listingLicenseType),
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w600,
-                                    ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        Icons.local_offer,
+                                        size: 10,
+                                        color: Colors.white,
+                                      ),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'FOR SALE',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 8,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
-                            ],
+                                const SizedBox(height: 4),
+                                // Show each listing type with price
+                                if (listings.isNotEmpty)
+                                  ...listings.map<Widget>((listing) {
+                                    final type =
+                                        listing['licenseType'] as String? ?? '';
+                                    final priceEth =
+                                        listing['priceEth'] as String?;
+                                    final color = _getLicenseColor(type);
+                                    return Padding(
+                                      padding: const EdgeInsets.only(bottom: 2),
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 6, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: color.withValues(alpha: 0.9),
+                                          borderRadius:
+                                              BorderRadius.circular(4),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color:
+                                                  color.withValues(alpha: 0.3),
+                                              blurRadius: 4,
+                                            ),
+                                          ],
+                                        ),
+                                        child: Text(
+                                          '${_formatListingLabel(type)}: ${_formatPriceShort(priceEth)}',
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  })
+                                else if (listingLicenseType != null)
+                                  // Legacy single listing fallback
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          listingColor.withValues(alpha: 0.9),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      _formatListingLabel(listingLicenseType),
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        // Show badge for original vs license (top-right)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: (isOriginal
+                                      ? NFTmarketColors.success
+                                      : NFTmarketColors.info)
+                                  .withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: isOriginal
+                                    ? NFTmarketColors.success
+                                    : NFTmarketColors.info,
+                                width: 1,
+                              ),
+                            ),
+                            child: Text(
+                              isOriginal ? 'Original' : 'License',
+                              style: TextStyle(
+                                color: isOriginal
+                                    ? NFTmarketColors.success
+                                    : NFTmarketColors.info,
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
-                      // Show badge for original vs license (top-right)
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Container(
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: NFTmarketColors.textPrimary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 8),
+                        // License badge with premium styling
+                        Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 4),
+                              horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(
-                            color: (isOriginal
-                                    ? NFTmarketColors.success
-                                    : NFTmarketColors.info)
-                                .withValues(alpha: 0.15),
+                            color: licenseColor.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: isOriginal
-                                  ? NFTmarketColors.success
-                                  : NFTmarketColors.info,
+                              color: licenseColor.withValues(alpha: 0.4),
                               width: 1,
                             ),
                           ),
                           child: Text(
-                            isOriginal ? 'Original' : 'License',
+                            _formatLicenseType(ownerLicense),
                             style: TextStyle(
-                              color: isOriginal
-                                  ? NFTmarketColors.success
-                                  : NFTmarketColors.info,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
+                              color: licenseColor,
+                              fontWeight: FontWeight.w500,
+                              fontSize: 11,
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w600,
-                          color: NFTmarketColors.textPrimary,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 8),
-                      // License badge with premium styling
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: licenseColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: licenseColor.withValues(alpha: 0.4),
-                            width: 1,
-                          ),
-                        ),
-                        child: Text(
-                          _formatLicenseType(ownerLicense),
-                          style: TextStyle(
-                            color: licenseColor,
-                            fontWeight: FontWeight.w500,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Creator: $creatorName',
-                        style: const TextStyle(
-                          color: NFTmarketColors.textSecondary,
-                          fontSize: 11,
-                        ),
-                      ),
-                      if (copyrightOwner != creator)
+                        const SizedBox(height: 8),
                         Text(
-                          'Copyright: $copyrightOwnerName',
+                          'Creator: $creatorName',
                           style: const TextStyle(
                             color: NFTmarketColors.textSecondary,
                             fontSize: 11,
                           ),
                         ),
-                    ],
+                        if (copyrightOwner != creator)
+                          Text(
+                            'Copyright: $copyrightOwnerName',
+                            style: const TextStyle(
+                              color: NFTmarketColors.textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 

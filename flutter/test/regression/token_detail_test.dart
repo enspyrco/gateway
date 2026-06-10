@@ -205,7 +205,8 @@ void main() {
       testWidgets('shows "Remove Listing" button when listed', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            const _OwnerActionsWidget(isOwner: true, isListed: true, priceEth: '1.0'),
+            const _OwnerActionsWidget(
+                isOwner: true, isListed: true, priceEth: '1.0'),
             walletProvider: connectedAsAlice(),
           ),
         );

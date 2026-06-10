@@ -1195,41 +1195,43 @@ class _PremiumActionButtonState extends State<_PremiumActionButton> {
               onTap: widget.onPressed,
               borderRadius: BorderRadius.circular(12),
               child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (widget.isLoading)
-                    SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (widget.isLoading)
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color:
+                              widget.isOutlined ? widget.color : Colors.white,
+                        ),
+                      )
+                    else if (widget.icon != null)
+                      Icon(
+                        widget.icon,
+                        size: 18,
                         color: widget.isOutlined ? widget.color : Colors.white,
                       ),
-                    )
-                  else if (widget.icon != null)
-                    Icon(
-                      widget.icon,
-                      size: 18,
-                      color: widget.isOutlined ? widget.color : Colors.white,
+                    if ((widget.icon != null || widget.isLoading))
+                      const SizedBox(width: 10),
+                    Text(
+                      widget.label,
+                      style: TextStyle(
+                        color: widget.isOutlined ? widget.color : Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  if ((widget.icon != null || widget.isLoading))
-                    const SizedBox(width: 10),
-                  Text(
-                    widget.label,
-                    style: TextStyle(
-                      color: widget.isOutlined ? widget.color : Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
-    ),
     );
   }
 }

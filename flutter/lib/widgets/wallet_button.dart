@@ -20,7 +20,6 @@ class WalletButton extends StatelessWidget {
       },
     );
   }
-
 }
 
 class _ConnectButton extends StatefulWidget {

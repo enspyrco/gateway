@@ -131,7 +131,9 @@ void main() {
         // Must start with first 6 chars and end with last 4 chars
         expect(short, startsWith(provider.address!.substring(0, 6)));
         expect(
-            short, endsWith(provider.address!.substring(provider.address!.length - 4)));
+            short,
+            endsWith(
+                provider.address!.substring(provider.address!.length - 4)));
       });
 
       test('can switch accounts', () async {
