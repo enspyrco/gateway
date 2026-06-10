@@ -7,7 +7,6 @@ import 'package:go_router/go_router.dart';
 
 import 'package:nftmarket/providers/wallet_provider.dart';
 import 'package:nftmarket/providers/mint_provider.dart';
-import 'package:nftmarket/models/test_account.dart';
 import 'package:nftmarket/services/wallet_service.dart';
 import 'package:nftmarket/theme.dart';
 
@@ -92,7 +91,7 @@ class TestWalletProvider extends ChangeNotifier implements WalletProvider {
   String? _address;
   String? _error;
   String? _authToken;
-  int _chainId = 31337;
+  final int _chainId = 31337;
   TestAccount? _testAccount;
   List<TestAccount> _availableAccounts = const [];
 

@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
 
-import 'package:nftmarket/providers/wallet_provider.dart';
-import 'package:nftmarket/providers/mint_provider.dart';
 import 'package:nftmarket/theme.dart';
 
 import '../fixtures/api_responses.dart';
-import '../mocks/mock_http_client.dart';
 import '../utils/test_app.dart';
 
 /// Regression tests for the Marketplace page browsing functionality.
@@ -110,7 +106,7 @@ void main() {
       testWidgets('shows error message when loading fails', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _ErrorStateWidget(error: 'Connection refused'),
+            const _ErrorStateWidget(error: 'Connection refused'),
           ),
         );
 
@@ -122,7 +118,7 @@ void main() {
       testWidgets('error state has retry button', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _ErrorStateWidget(error: 'Network error'),
+            const _ErrorStateWidget(error: 'Network error'),
           ),
         );
 
@@ -316,7 +312,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _BuyButtonForListingWidget(isConnected: false, price: '1.0'),
+            const _BuyButtonForListingWidget(isConnected: false, price: '1.0'),
             walletProvider: disconnected(),
           ),
         );
@@ -328,7 +324,7 @@ void main() {
       testWidgets('shows buy button when connected', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            _BuyButtonForListingWidget(isConnected: true, price: '1.0'),
+            const _BuyButtonForListingWidget(isConnected: true, price: '1.0'),
             walletProvider: connectedAsAlice(),
           ),
         );

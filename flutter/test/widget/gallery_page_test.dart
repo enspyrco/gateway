@@ -103,7 +103,7 @@ void main() {
         // Test UI without actually connecting wallet (avoids SharedPreferences issues)
         await tester.pumpWidget(
           buildTestWidget(
-            Scaffold(
+            const Scaffold(
               body: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -127,7 +127,7 @@ void main() {
           (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            Scaffold(
+            const Scaffold(
               body: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -140,7 +140,7 @@ void main() {
                           fontSize: 20,
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       Chip(
                         label: Text('0x1234...7890',
                             style: TextStyle(fontSize: 12)),
@@ -241,7 +241,7 @@ void main() {
       testWidgets('shows Browse Galleries section', (tester) async {
         await tester.pumpWidget(
           buildTestWidget(
-            Scaffold(
+            const Scaffold(
               body: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:http/http.dart' as http;
 
 import '../models/token.dart';
@@ -16,14 +17,34 @@ class ApiException implements Exception {
 }
 
 class ApiService {
-  static const String baseUrl = String.fromEnvironment(
+  // Baked in at compile time; omitting --dart-define=API_URL in a release
+  // build must fail loudly rather than silently hit the developer's machine.
+  static const String _configuredUrl = String.fromEnvironment(
     'API_URL',
     defaultValue: 'http://localhost:3000',
   );
 
+  /// Resolved base URL.  Debug builds may use localhost; release builds must
+  /// have API_URL injected at compile time.
+  static final String baseUrl = () {
+    if (!kDebugMode && _configuredUrl.contains('localhost')) {
+      throw StateError(
+        'API_URL is not configured for a release build. '
+        'Pass --dart-define=API_URL=https://your-api-host when building. '
+        'Refusing to use localhost in production.',
+      );
+    }
+    return _configuredUrl;
+  }();
+
   final String? authToken;
 
-  ApiService({this.authToken});
+  /// Injectable HTTP client — real [http.Client] in production, fake in tests.
+  /// Keeping this field internal avoids leaking test infrastructure to callers.
+  final http.Client _httpClient;
+
+  ApiService({this.authToken, http.Client? httpClient})
+      : _httpClient = httpClient ?? http.Client();
 
   Map<String, String> get _headers {
     final headers = <String, String>{
@@ -53,7 +74,7 @@ class ApiService {
 
   /// Get license text for signing (used when listing for sale)
   Future<String> getLicenseText(LicenseType licenseType) async {
-    final response = await http.get(
+    final response = await _httpClient.get(
       Uri.parse('$baseUrl/api/mint/license/${licenseType.name}'),
       headers: _headers,
     );
@@ -102,7 +123,7 @@ class ApiService {
 
   /// Get token verification info (public)
   Future<Token> getTokenInfo(int tokenId) async {
-    final response = await http.get(
+    final response = await _httpClient.get(
       Uri.parse('$baseUrl/api/verify/$tokenId'),
     );
     final data = await _handleResponse(response);
@@ -111,7 +132,7 @@ class ApiService {
 
   /// Check if image hash is registered (public)
   Future<bool> isImageRegistered(String imageHash) async {
-    final response = await http.get(
+    final response = await _httpClient.get(
       Uri.parse('$baseUrl/api/verify/check/$imageHash'),
     );
     final data = await _handleResponse(response);
@@ -120,7 +141,7 @@ class ApiService {
 
   /// Get platform stats (public)
   Future<Map<String, dynamic>> getStats() async {
-    final response = await http.get(
+    final response = await _httpClient.get(
       Uri.parse('$baseUrl/api/verify/stats'),
     );
     return _handleResponse(response);
@@ -202,7 +223,7 @@ class ApiService {
 
   /// Get list of galleries (wallets with NFTs)
   Future<List<Map<String, dynamic>>> getGalleryList() async {
-    final response = await http.get(
+    final response = await _httpClient.get(
       Uri.parse('$baseUrl/api/gallery'),
     );
     final data = await _handleResponse(response);
@@ -211,7 +232,7 @@ class ApiService {
 
   /// Get all tokens owned by an address (public)
   Future<List<Map<String, dynamic>>> getGallery(String address) async {
-    final response = await http.get(
+    final response = await _httpClient.get(
       Uri.parse('$baseUrl/api/gallery/$address'),
     );
     final data = await _handleResponse(response);
@@ -226,7 +247,7 @@ class ApiService {
   /// Get contract address from backend's EIP-712 domain
   /// This is the single source of truth for the contract address
   Future<String> getContractAddress() async {
-    final response = await http.get(
+    final response = await _httpClient.get(
       Uri.parse('$baseUrl/api/marketplace/eip712/domain'),
     );
     final data = await _handleResponse(response);
@@ -236,7 +257,7 @@ class ApiService {
 
   /// Get all active listings (public)
   Future<List<Map<String, dynamic>>> getListings() async {
-    final response = await http.get(
+    final response = await _httpClient.get(
       Uri.parse('$baseUrl/api/marketplace'),
     );
     final data = await _handleResponse(response);
@@ -245,7 +266,7 @@ class ApiService {
 
   /// Get listing for a specific token
   Future<Map<String, dynamic>> getListing(int tokenId) async {
-    final response = await http.get(
+    final response = await _httpClient.get(
       Uri.parse('$baseUrl/api/marketplace/$tokenId'),
       headers: _headers,
     );
@@ -255,7 +276,7 @@ class ApiService {
   /// Get user's license status for a token (what they already own, what they can buy)
   /// Returns: { existingLicense, canBuy: { display, commercial, transfer } }
   Future<Map<String, dynamic>> getLicenseStatus(int tokenId) async {
-    final response = await http.get(
+    final response = await _httpClient.get(
       Uri.parse('$baseUrl/api/marketplace/$tokenId/license-status'),
       headers: _headers,
     );
@@ -269,7 +290,7 @@ class ApiService {
     required String priceEth,
     required String licenseType,
   }) async {
-    final response = await http.post(
+    final response = await _httpClient.post(
       Uri.parse('$baseUrl/api/marketplace/list'),
       headers: _headers,
       body: jsonEncode({
@@ -288,7 +309,7 @@ class ApiService {
     required int tokenId,
     required String licenseType,
   }) async {
-    final response = await http.post(
+    final response = await _httpClient.post(
       Uri.parse('$baseUrl/api/marketplace/delist'),
       headers: _headers,
       body: jsonEncode({
@@ -306,7 +327,7 @@ class ApiService {
     required int tokenId,
     required String licenseType,
   }) async {
-    final response = await http.post(
+    final response = await _httpClient.post(
       Uri.parse('$baseUrl/api/marketplace/buy'),
       headers: _headers,
       body: jsonEncode({
@@ -329,7 +350,7 @@ class ApiService {
     required int expiry,
     required String signature,
   }) async {
-    final response = await http.post(
+    final response = await _httpClient.post(
       Uri.parse('$baseUrl/api/marketplace/list/encode'),
       headers: _headers,
       body: jsonEncode({
@@ -351,7 +372,7 @@ class ApiService {
     required String licenseType,
     required String signature,
   }) async {
-    final response = await http.post(
+    final response = await _httpClient.post(
       Uri.parse('$baseUrl/api/marketplace/buy/encode'),
       headers: _headers,
       body: jsonEncode({
@@ -370,7 +391,7 @@ class ApiService {
     String? licenseType,
     bool all = false,
   }) async {
-    final response = await http.post(
+    final response = await _httpClient.post(
       Uri.parse('$baseUrl/api/marketplace/delist/encode'),
       headers: _headers,
       body: jsonEncode({
@@ -385,7 +406,7 @@ class ApiService {
 
   /// Get available style presets (public)
   Future<List<Map<String, dynamic>>> getGenerationStyles() async {
-    final response = await http.get(
+    final response = await _httpClient.get(
       Uri.parse('$baseUrl/api/generate/styles'),
     );
     final data = await _handleResponse(response);
@@ -399,9 +420,8 @@ class ApiService {
     String style = 'photographic',
     int count = 4,
   }) async {
-    final client = http.Client();
     try {
-      final response = await client
+      final response = await _httpClient
           .post(
             Uri.parse('$baseUrl/api/generate'),
             headers: _headers,
@@ -414,8 +434,8 @@ class ApiService {
           .timeout(const Duration(minutes: 2));
       final data = await _handleResponse(response);
       return GenerationResult.fromJson(data);
-    } finally {
-      client.close();
+    } catch (e) {
+      return GenerationResult.error(e.toString());
     }
   }
 

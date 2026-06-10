@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/token.dart';
 import '../services/api_service.dart';
 import '../providers/wallet_provider.dart';
+import '../utils/license_colors.dart';
 import '../widgets/wallet_button.dart';
 import '../theme.dart';
 
@@ -90,6 +91,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       appBar: AppBar(
         title: Text('Token #${widget.tokenId}'),
         leading: IconButton(
+          tooltip: 'Back to marketplace',
           icon: const Icon(Icons.arrow_back),
           onPressed: () => context.go('/'),
         ),
@@ -304,22 +306,30 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
   }
 
   Widget _buildGalleryButton(String address) {
-    return InkWell(
-      onTap: () => context.go('/gallery/$address'),
-      borderRadius: BorderRadius.circular(8),
-      child: Container(
-        padding: const EdgeInsets.all(6),
-        decoration: BoxDecoration(
-          color: NFTmarketColors.primary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: NFTmarketColors.primary.withValues(alpha: 0.3),
+    return Tooltip(
+      message: 'View gallery for ${_shortAddress(address)}',
+      child: InkWell(
+        onTap: () => context.go('/gallery/$address'),
+        borderRadius: BorderRadius.circular(8),
+        child: Semantics(
+          label: 'View gallery for ${_shortAddress(address)}',
+          button: true,
+          child: Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: NFTmarketColors.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: NFTmarketColors.primary.withValues(alpha: 0.3),
+              ),
+            ),
+            child: const Icon(
+              Icons.collections,
+              size: 18,
+              color: NFTmarketColors.primary,
+              semanticLabel: 'Gallery',
+            ),
           ),
-        ),
-        child: const Icon(
-          Icons.collections,
-          size: 18,
-          color: NFTmarketColors.primary,
         ),
       ),
     );
@@ -521,8 +531,9 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
   /// Check if user can buy the currently listed license type
   bool _canBuyListedLicense() {
-    if (_licenseStatus == null)
+    if (_licenseStatus == null) {
       return true; // No status loaded yet, allow attempt
+    }
     final canBuy = _licenseStatus!['canBuy'] as Map<String, dynamic>?;
     if (canBuy == null) return true;
 
@@ -710,12 +721,12 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
                       color: NFTmarketColors.warning.withValues(alpha: 0.3),
                     ),
                   ),
-                  child: Row(
+                  child: const Row(
                     children: [
                       Icon(Icons.edit_document,
                           color: NFTmarketColors.warning, size: 20),
-                      const SizedBox(width: 8),
-                      const Expanded(
+                      SizedBox(width: 8),
+                      Expanded(
                         child: Text(
                           'You will sign a binding agreement to sell under the chosen license terms.',
                           style: TextStyle(
@@ -872,16 +883,7 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     }
   }
 
-  Color _getLicenseColor(LicenseType license) {
-    switch (license) {
-      case LicenseType.display:
-        return NFTmarketColors.displayBlue;
-      case LicenseType.commercial:
-        return NFTmarketColors.commercialOrange;
-      case LicenseType.transfer:
-        return NFTmarketColors.transferPurple;
-    }
-  }
+  Color _getLicenseColor(LicenseType license) => licenseColor(license);
 
   Future<void> _list(String priceEth, LicenseType licenseType) async {
     debugPrint('_list called with price: $priceEth, license: $licenseType');
@@ -998,16 +1000,17 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Listing removed'),
+          const SnackBar(
+            content: Text('Listing removed'),
             backgroundColor: NFTmarketColors.surfaceLight,
           ),
         );
       }
 
       await _loadToken(); // Refresh
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('Delist error: $e');
+      debugPrint('$stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1080,8 +1083,9 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
       }
 
       await _loadToken(); // Refresh to show new owner
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('Buy error: $e');
+      debugPrint('$stackTrace');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1107,8 +1111,8 @@ class _TokenDetailPageState extends State<TokenDetailPage> {
     final url = 'https://nftmarket.com/token/${widget.tokenId}';
     Clipboard.setData(ClipboardData(text: url));
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Link copied to clipboard'),
+      const SnackBar(
+        content: Text('Link copied to clipboard'),
         backgroundColor: NFTmarketColors.surfaceLight,
       ),
     );
@@ -1181,41 +1185,48 @@ class _PremiumActionButtonState extends State<_PremiumActionButton> {
                 ]
               : null,
         ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: widget.onPressed,
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (widget.isLoading)
-                    SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
+        child: Semantics(
+          button: true,
+          label: widget.label,
+          enabled: widget.onPressed != null,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: widget.onPressed,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (widget.isLoading)
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color:
+                              widget.isOutlined ? widget.color : Colors.white,
+                        ),
+                      )
+                    else if (widget.icon != null)
+                      Icon(
+                        widget.icon,
+                        size: 18,
                         color: widget.isOutlined ? widget.color : Colors.white,
                       ),
-                    )
-                  else if (widget.icon != null)
-                    Icon(
-                      widget.icon,
-                      size: 18,
-                      color: widget.isOutlined ? widget.color : Colors.white,
+                    if ((widget.icon != null || widget.isLoading))
+                      const SizedBox(width: 10),
+                    Text(
+                      widget.label,
+                      style: TextStyle(
+                        color: widget.isOutlined ? widget.color : Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  if ((widget.icon != null || widget.isLoading))
-                    const SizedBox(width: 10),
-                  Text(
-                    widget.label,
-                    style: TextStyle(
-                      color: widget.isOutlined ? widget.color : Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

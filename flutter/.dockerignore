@@ -1,0 +1,15 @@
+build
+.dart_tool
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache
+.pub
+ios
+android
+macos
+windows
+linux
+.git
+Dockerfile
+.dockerignore

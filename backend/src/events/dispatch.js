@@ -43,6 +43,11 @@ function clearSinks() {
 
 /**
  * Dispatch events to all registered sinks.
+ *
+ * The bus contract is an array of events (the Writer-monad case). Every caller
+ * — including the blockchain event listeners in real-service startEventListener,
+ * which wrap their single event as `dispatch([event])` — passes an array. Sink
+ * failures are caught per-sink so a bad sink never breaks the caller.
  * @param {AppEvent[]} events
  */
 async function dispatch(events) {

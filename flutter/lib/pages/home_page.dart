@@ -208,7 +208,7 @@ class HomePage extends StatelessWidget {
       children: [
         _buildSectionHeader(context, 'How We Protect Your Art'),
         const SizedBox(height: 32),
-        Wrap(
+        const Wrap(
           spacing: 24,
           runSpacing: 24,
           alignment: WrapAlignment.center,
@@ -252,23 +252,23 @@ class HomePage extends StatelessWidget {
               runSpacing: 24,
               alignment: WrapAlignment.center,
               children: [
-                _StepCard(
+                const _StepCard(
                     number: '1',
                     title: 'Upload',
                     description: 'Select your AI artwork',
                     isFirst: true),
                 if (isWide) _buildConnector(),
-                _StepCard(
+                const _StepCard(
                     number: '2',
                     title: 'Choose License',
                     description: 'Display, commercial, or transfer'),
                 if (isWide) _buildConnector(),
-                _StepCard(
+                const _StepCard(
                     number: '3',
                     title: 'Sign & Mint',
                     description: 'Watermark applied, NFT created'),
                 if (isWide) _buildConnector(),
-                _StepCard(
+                const _StepCard(
                     number: '4',
                     title: 'Sell or Verify',
                     description: 'Trade or prove authenticity',
