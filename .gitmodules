@@ -4,3 +4,6 @@
 [submodule "contracts/lib/openzeppelin-contracts"]
 	path = contracts/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "backend/watermarking-functions"]
+	path = backend/watermarking-functions
+	url = git@github.com:nickmeinhold/watermarking-functions.git

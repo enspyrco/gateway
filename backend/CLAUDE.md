@@ -119,7 +119,7 @@ Mock services can persist to `.mock-data/` directory via `mock-persistence.js`:
 
 ## Watermark Detection
 
-The system uses **blind detection** - the C++ blind detector (`blind-detector/detect_blind3`) extracts the `wallet:tokenId` message directly from the watermarked image without needing a reference image. It normalizes the extracted coefficients before correlation — see `blind-detector/README.md` for the algorithm and provenance.
+The system uses **blind detection** - the C++ blind detector (`blind-detector/detect_blind3`) extracts the `wallet:tokenId` message directly from the watermarked image without needing a reference image. It normalizes the extracted coefficients before correlation — detector source lives in the private watermarking-functions submodule.
 
 ```bash
 # Binary location (set via BLIND_DETECT_BINARY env var); built automatically

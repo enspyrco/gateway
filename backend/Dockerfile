@@ -5,7 +5,8 @@
 # safe base (musl/alpine occasionally trips sharp up).
 
 # ── Stage 1: compile the blind watermark detector ───────────────────────────
-# C++ blind detector for /api/detect (see blind-detector/README.md).
+# C++ blind detector for /api/detect, built from the private `watermarking-functions`
+# submodule (run `git submodule update --init` before building — private repo).
 # Built from source so the binary always matches the container's arch/libs.
 FROM debian:bookworm-slim AS detector-build
 
@@ -15,7 +16,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
-COPY blind-detector/ ./
+COPY watermarking-functions/ ./
 RUN g++ -O2 detect_blind3.cpp WatermarkDetection.cpp Utilities.cpp \
     -o detect_blind3 $(pkg-config --cflags --libs opencv4)
 
@@ -36,6 +37,9 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY . .
+# Only the compiled binary is needed at runtime; drop the algo source so it
+# doesn't ride along in the deployed image.
+RUN rm -rf /app/watermarking-functions
 COPY --from=detector-build /build/detect_blind3 /app/blind-detector/detect_blind3
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
